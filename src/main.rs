@@ -5,7 +5,9 @@ use rand::{rngs::StdRng, RngCore, SeedableRng};
 use std::path::PathBuf;
 
 use eframe::egui;
-use egui::{Color32, FontDefinitions, FontFamily, FontId, FontSelection, RichText, TextEdit, Vec2};
+use egui::{
+    Color32, FontDefinitions, FontFamily, FontId, FontSelection, Key, RichText, TextEdit, Vec2,
+};
 use font_kit::source::SystemSource;
 use serde::{Deserialize, Serialize};
 
@@ -438,7 +440,7 @@ impl MyApp {
             {
                 self.add_new_passage = Some(("".to_string(), selected_index + 1))
             }
-            if ui
+            if (ui
                 .add(
                     egui::Button::new(egui::WidgetText::RichText(
                         RichText::from("Save").size(18.0).color(if self.dirty {
@@ -451,7 +453,8 @@ impl MyApp {
                     .fill(Color32::LIGHT_GREEN),
                 )
                 .clicked()
-                || !self.dirty
+                || ctx.input(|i| i.key_pressed(Key::S) && i.modifiers.mac_cmd))
+                && self.dirty
             {
                 self.save(filename.clone(), plaintext);
             }
@@ -466,6 +469,7 @@ impl MyApp {
                     .fill(Color32::LIGHT_RED),
                 )
                 .clicked()
+                || ctx.input(|i| i.key_pressed(Key::L) && i.modifiers.mac_cmd)
             {
                 self.save_and_lock(filename.clone(), plaintext);
             }
