@@ -451,10 +451,36 @@ impl MyApp {
                     .fill(Color32::LIGHT_GREEN),
                 )
                 .clicked()
+                || !self.dirty
             {
                 let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", filename));
                 std::fs::write(path, encrypt(&self.password, plaintext.clone())).unwrap();
                 self.dirty = false;
+            }
+            if ui
+                .add(
+                    egui::Button::new(egui::WidgetText::RichText(
+                        RichText::from("Save & Lock")
+                            .size(18.0)
+                            .color(Color32::BLACK),
+                    ))
+                    .min_size(Vec2::new(width, 24.0))
+                    .fill(Color32::LIGHT_RED),
+                )
+                .clicked()
+            {
+                let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", filename));
+                let ciphertext = encrypt(&self.password, plaintext.clone());
+                std::fs::write(path, &ciphertext).unwrap();
+                self.dirty = false;
+                let ciphertext: Vec<_> = ciphertext.split("\n").collect();
+                self.content = Content::Encrypted(
+                    filename.clone(),
+                    ciphertext[0].to_string(),
+                    ciphertext[1].to_string(),
+                    ciphertext[2].to_string(),
+                );
+                self.password = "".to_string();
             }
             egui::ScrollArea::vertical()
                 .id_source("passage_list")
