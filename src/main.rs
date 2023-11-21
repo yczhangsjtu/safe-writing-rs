@@ -234,148 +234,13 @@ impl eframe::App for MyApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.label(self.data_dir.as_str());
             ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
-                egui::Frame::none()
-                    .fill(Color32::LIGHT_GRAY)
-                    .inner_margin(5.0)
-                    .show(ui, |ui| {
-                        ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
-                            if ui
-                                .add(
-                                    egui::Button::new(egui::WidgetText::RichText(
-                                        RichText::from("Create New File").size(18.0),
-                                    ))
-                                    .min_size(Vec2::new(200.0, 24.0))
-                                    .fill(Color32::LIGHT_GREEN),
-                                )
-                                .clicked()
-                            {
-                                if self.creating_new_file.is_none() {
-                                    self.creating_new_file = Some("".to_string());
-                                } else {
-                                    self.creating_new_file = None;
-                                }
-                                self.error_creating_new_file = None;
-                            }
-                            if let Some(ref mut filename) = self.creating_new_file {
-                                ui.add(
-                                    egui::TextEdit::singleline(filename)
-                                        .font(FontSelection::FontId(FontId::new(
-                                            18.0,
-                                            FontFamily::Proportional,
-                                        )))
-                                        .desired_width(200.0),
-                                );
-                                if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-                                    println!("Create file {}", filename);
-                                    let path = PathBuf::from(self.data_dir.clone())
-                                        .join(format!("{}.safe", filename));
-                                    if path.exists() {
-                                        self.error_creating_new_file =
-                                            Some(format!("File {} already exists", filename));
-                                    } else {
-                                        std::fs::write(path, "").unwrap();
-                                        self.file_names.push(filename.clone());
-                                    }
-                                    self.creating_new_file = None;
-                                }
-                            }
-                            if let Some(error) = &self.error_creating_new_file {
-                                ui.add(egui::Label::new(egui::WidgetText::RichText(
-                                    RichText::from(error).color(Color32::RED),
-                                )));
-                            }
-                            egui::ScrollArea::vertical()
-                                .id_source("file_name_list")
-                                .max_height(f32::INFINITY)
-                                .auto_shrink([true, false])
-                                .max_width(200.0)
-                                .show(ui, |ui| {
-                                    self.file_names.iter().for_each(|file_name| {
-                                        if ui
-                                            .add(
-                                                egui::Button::new(egui::WidgetText::RichText(
-                                                    RichText::from(file_name).size(18.0),
-                                                ))
-                                                .min_size(Vec2::new(200.0, 24.0))
-                                                .fill(Color32::LIGHT_BLUE),
-                                            )
-                                            .clicked()
-                                        {
-                                            println!("Clicked on {}", file_name);
-                                            self.password = "".to_string();
-                                            let path = PathBuf::from(self.data_dir.clone())
-                                                .join(format!("{}.safe", file_name));
-                                            match std::fs::read(path) {
-                                                Ok(content) => {
-                                                    let content =
-                                                        String::from_utf8(content).unwrap();
-                                                    if content.is_empty() {
-                                                        self.content =
-                                                            Content::NewFile(file_name.clone());
-                                                    } else {
-                                                        let content: Vec<_> =
-                                                            content.split("\n").collect();
-                                                        if content.len() < 3 {
-                                                            self.content = Content::Error(
-                                                                "Invalid format".to_string(),
-                                                            );
-                                                        } else {
-                                                            self.content = Content::Encrypted(
-                                                                file_name.clone(),
-                                                                content[0].to_string(),
-                                                                content[1].to_string(),
-                                                                content[2].to_string(),
-                                                            );
-                                                        }
-                                                    }
-                                                }
-                                                Err(err) => {
-                                                    println!(
-                                                        "Failed to open file {}: {:?}",
-                                                        file_name, err
-                                                    );
-                                                }
-                                            }
-                                        }
-                                    });
-                                });
-                        });
-                    });
+                self.build_file_list(200.0, ctx, ui);
                 match self.content.clone() {
                     Content::NewFile(filename) => {
-                        ui.add(
-                            TextEdit::singleline(&mut self.password)
-                                .password(true)
-                                .hint_text("New Password"),
-                        );
-                        if ui.button("Create").clicked() {
-                            if self.password.len() > 0 {
-                                self.content =
-                                    Content::PlainText(filename, PlainText { content: vec![] }, 0)
-                            }
-                        }
+                        self.build_uninitialized_file(filename, ui);
                     }
                     Content::Encrypted(ref filename, ref iv, ref data, ref mac) => {
-                        ui.add(
-                            TextEdit::singleline(&mut self.password)
-                                .password(true)
-                                .hint_text("Password"),
-                        );
-                        if ui.button("Decrypt").clicked() {
-                            match decrypt(&self.password, iv, data, mac) {
-                                Ok(plaintext) => {
-                                    if plaintext.content.len() > 0 {
-                                        self.edited_text = plaintext.content[0].content.clone();
-                                    }
-                                    self.content =
-                                        Content::PlainText(filename.clone(), plaintext, 0);
-                                    self.dirty = false;
-                                }
-                                Err(err) => {
-                                    self.content = Content::Error(format!("{:?}", err));
-                                }
-                            }
-                        }
+                        self.build_encrypted_file(filename, ui, iv, data, mac);
                     }
                     Content::None => {
                         ui.add(egui::Label::new(egui::WidgetText::RichText(
@@ -383,192 +248,7 @@ impl eframe::App for MyApp {
                         )));
                     }
                     Content::PlainText(filename, plaintext, selected_index) => {
-                        egui::Frame::none()
-                            .fill(Color32::LIGHT_GRAY)
-                            .inner_margin(5.0)
-                            .show(ui, |ui| {
-                                ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
-                                    if ui
-                                        .add(
-                                            egui::Button::new(egui::WidgetText::RichText(
-                                                RichText::from("Add").size(18.0),
-                                            ))
-                                            .min_size(Vec2::new(100.0, 24.0))
-                                            .fill(Color32::LIGHT_GREEN),
-                                        )
-                                        .clicked()
-                                    {
-                                        self.add_new_passage =
-                                            Some(("".to_string(), selected_index + 1))
-                                    }
-                                    if ui
-                                        .add(
-                                            egui::Button::new(egui::WidgetText::RichText(
-                                                RichText::from("Save").size(18.0).color(
-                                                    if self.dirty {
-                                                        Color32::BLACK
-                                                    } else {
-                                                        Color32::LIGHT_GRAY
-                                                    },
-                                                ),
-                                            ))
-                                            .min_size(Vec2::new(100.0, 24.0))
-                                            .fill(Color32::LIGHT_GREEN),
-                                        )
-                                        .clicked()
-                                    {
-                                        let path = PathBuf::from(self.data_dir.clone())
-                                            .join(format!("{}.safe", filename));
-                                        std::fs::write(
-                                            path,
-                                            encrypt(&self.password, plaintext.clone()),
-                                        )
-                                        .unwrap();
-                                        self.dirty = false;
-                                    }
-                                    egui::ScrollArea::vertical()
-                                        .id_source("passage_list")
-                                        .max_height(f32::INFINITY)
-                                        .auto_shrink([true, false])
-                                        .max_width(100.0)
-                                        .show(ui, |ui| {
-                                            if plaintext.content.is_empty() {
-                                                if let Some((ref mut title, _)) =
-                                                    self.add_new_passage
-                                                {
-                                                    ui.add(
-                                                        egui::TextEdit::singleline(title)
-                                                            .font(FontSelection::FontId(
-                                                                FontId::new(
-                                                                    18.0,
-                                                                    FontFamily::Proportional,
-                                                                ),
-                                                            ))
-                                                            .desired_width(100.0),
-                                                    );
-                                                    if ctx
-                                                        .input(|i| i.key_pressed(egui::Key::Enter))
-                                                    {
-                                                        println!("Create passage {}", title);
-                                                        self.content
-                                                            .get_plaintext_mut()
-                                                            .unwrap()
-                                                            .content
-                                                            .insert(
-                                                                0,
-                                                                Passage {
-                                                                    title: title.clone(),
-                                                                    content: "".to_string(),
-                                                                },
-                                                            );
-                                                        self.add_new_passage = None;
-                                                        self.dirty = true;
-                                                    }
-                                                }
-                                            }
-                                            plaintext.content.iter().enumerate().for_each(
-                                                |(i, passage)| {
-                                                    if ui
-                                                        .add(
-                                                            egui::Button::new(
-                                                                egui::WidgetText::RichText(
-                                                                    RichText::from(
-                                                                        passage.title.clone(),
-                                                                    )
-                                                                    .size(18.0),
-                                                                ),
-                                                            )
-                                                            .min_size(Vec2::new(100.0, 24.0))
-                                                            .fill(if i == selected_index {
-                                                                Color32::LIGHT_BLUE
-                                                            } else {
-                                                                Color32::LIGHT_GRAY
-                                                            }),
-                                                        )
-                                                        .clicked()
-                                                    {
-                                                        if i != selected_index {
-                                                            self.content = Content::PlainText(
-                                                                filename.clone(),
-                                                                plaintext.clone(),
-                                                                i,
-                                                            );
-                                                            self.edited_text = plaintext.content[i]
-                                                                .content
-                                                                .clone();
-                                                        }
-                                                    }
-                                                    if let Some((ref mut title, index)) =
-                                                        self.add_new_passage
-                                                    {
-                                                        if index == i + 1 {
-                                                            ui.add(
-                                                            egui::TextEdit::singleline(title)
-                                                                .font(FontSelection::FontId(
-                                                                    FontId::new(
-                                                                        18.0,
-                                                                        FontFamily::Proportional,
-                                                                    ),
-                                                                ))
-                                                                .desired_width(100.0),
-                                                        );
-                                                            if ctx.input(|i| {
-                                                                i.key_pressed(egui::Key::Enter)
-                                                            }) {
-                                                                println!(
-                                                                    "Create passage {}",
-                                                                    title
-                                                                );
-                                                                self.content
-                                                                    .get_plaintext_mut()
-                                                                    .unwrap()
-                                                                    .content
-                                                                    .insert(
-                                                                        index,
-                                                                        Passage {
-                                                                            title: title.clone(),
-                                                                            content: "".to_string(),
-                                                                        },
-                                                                    );
-                                                                self.add_new_passage = None;
-                                                            }
-                                                        }
-                                                    }
-                                                },
-                                            );
-                                        });
-                                })
-                            });
-
-                        egui::ScrollArea::vertical()
-                            .id_source("editor")
-                            .show(ui, |ui| {
-                                if plaintext.content.is_empty() {
-                                    ui.add(egui::Label::new(egui::WidgetText::RichText(
-                                        RichText::from("Empty file").size(18.0),
-                                    )));
-                                } else {
-                                    if ui
-                                        .add(
-                                            TextEdit::multiline(&mut self.edited_text)
-                                                .frame(false)
-                                                .desired_width(f32::INFINITY)
-                                                .desired_rows(1000) // Infinite
-                                                .font(FontSelection::FontId(FontId::new(
-                                                    self.font_size,
-                                                    FontFamily::Proportional,
-                                                ))),
-                                        )
-                                        .changed()
-                                    {
-                                        self.content.get_plaintext_mut().map(|plaintext| {
-                                            plaintext.content[selected_index].content =
-                                                self.edited_text.clone();
-                                            self.dirty = true;
-                                        });
-                                    }
-                                }
-                            });
+                        self.build_editor(&filename, &plaintext, selected_index, ctx, ui);
                     }
                     Content::Error(err) => {
                         ui.add(egui::Label::new(egui::WidgetText::RichText(
@@ -578,6 +258,321 @@ impl eframe::App for MyApp {
                 }
             })
         });
+    }
+}
+
+impl MyApp {
+    fn build_file_list(&mut self, width: f32, ctx: &egui::Context, ui: &mut egui::Ui) {
+        egui::Frame::none()
+            .fill(Color32::LIGHT_GRAY)
+            .inner_margin(5.0)
+            .show(ui, |ui| {
+                ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+                    if ui
+                        .add(
+                            egui::Button::new(egui::WidgetText::RichText(
+                                RichText::from("Create New File").size(18.0),
+                            ))
+                            .min_size(Vec2::new(width, 24.0))
+                            .fill(Color32::LIGHT_GREEN),
+                        )
+                        .clicked()
+                    {
+                        if self.creating_new_file.is_none() {
+                            self.creating_new_file = Some("".to_string());
+                        } else {
+                            self.creating_new_file = None;
+                        }
+                        self.error_creating_new_file = None;
+                    }
+                    if let Some(ref mut filename) = self.creating_new_file {
+                        ui.add(
+                            egui::TextEdit::singleline(filename)
+                                .font(FontSelection::FontId(FontId::new(
+                                    18.0,
+                                    FontFamily::Proportional,
+                                )))
+                                .desired_width(width),
+                        );
+                        if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+                            println!("Create file {}", filename);
+                            let path = PathBuf::from(self.data_dir.clone())
+                                .join(format!("{}.safe", filename));
+                            if path.exists() {
+                                self.error_creating_new_file =
+                                    Some(format!("File {} already exists", filename));
+                            } else {
+                                std::fs::write(path, "").unwrap();
+                                self.file_names.push(filename.clone());
+                            }
+                            self.creating_new_file = None;
+                        }
+                    }
+                    if let Some(error) = &self.error_creating_new_file {
+                        ui.add(egui::Label::new(egui::WidgetText::RichText(
+                            RichText::from(error).color(Color32::RED),
+                        )));
+                    }
+                    egui::ScrollArea::vertical()
+                        .id_source("file_name_list")
+                        .max_height(f32::INFINITY)
+                        .auto_shrink([true, false])
+                        .max_width(width)
+                        .show(ui, |ui| {
+                            self.file_names.iter().for_each(|file_name| {
+                                if ui
+                                    .add(
+                                        egui::Button::new(egui::WidgetText::RichText(
+                                            RichText::from(file_name).size(18.0),
+                                        ))
+                                        .min_size(Vec2::new(width, 24.0))
+                                        .fill(Color32::LIGHT_BLUE),
+                                    )
+                                    .clicked()
+                                {
+                                    println!("Clicked on {}", file_name);
+                                    self.password = "".to_string();
+                                    let path = PathBuf::from(self.data_dir.clone())
+                                        .join(format!("{}.safe", file_name));
+                                    match std::fs::read(path) {
+                                        Ok(content) => {
+                                            let content = String::from_utf8(content).unwrap();
+                                            if content.is_empty() {
+                                                self.content = Content::NewFile(file_name.clone());
+                                            } else {
+                                                let content: Vec<_> = content.split("\n").collect();
+                                                if content.len() < 3 {
+                                                    self.content = Content::Error(
+                                                        "Invalid format".to_string(),
+                                                    );
+                                                } else {
+                                                    self.content = Content::Encrypted(
+                                                        file_name.clone(),
+                                                        content[0].to_string(),
+                                                        content[1].to_string(),
+                                                        content[2].to_string(),
+                                                    );
+                                                }
+                                            }
+                                        }
+                                        Err(err) => {
+                                            println!(
+                                                "Failed to open file {}: {:?}",
+                                                file_name, err
+                                            );
+                                        }
+                                    }
+                                }
+                            });
+                        });
+                });
+            });
+    }
+
+    fn build_uninitialized_file(&mut self, filename: String, ui: &mut egui::Ui) {
+        ui.add(
+            TextEdit::singleline(&mut self.password)
+                .password(true)
+                .hint_text("New Password"),
+        );
+        if ui.button("Create").clicked() {
+            if self.password.len() > 0 {
+                self.content = Content::PlainText(filename, PlainText { content: vec![] }, 0)
+            }
+        }
+    }
+
+    fn build_encrypted_file(
+        &mut self,
+        filename: &String,
+        ui: &mut egui::Ui,
+        iv: &str,
+        data: &str,
+        mac: &str,
+    ) {
+        ui.add(
+            TextEdit::singleline(&mut self.password)
+                .password(true)
+                .hint_text("Password"),
+        );
+        if ui.button("Decrypt").clicked() {
+            match decrypt(&self.password, iv, data, mac) {
+                Ok(plaintext) => {
+                    if plaintext.content.len() > 0 {
+                        self.edited_text = plaintext.content[0].content.clone();
+                    }
+                    self.content = Content::PlainText(filename.clone(), plaintext, 0);
+                    self.dirty = false;
+                }
+                Err(err) => {
+                    self.content = Content::Error(format!("{:?}", err));
+                }
+            }
+        }
+    }
+
+    fn build_editor(
+        &mut self,
+        filename: &String,
+        plaintext: &PlainText,
+        selected_index: usize,
+        ctx: &egui::Context,
+        ui: &mut egui::Ui,
+    ) {
+        egui::Frame::none()
+            .fill(Color32::LIGHT_GRAY)
+            .inner_margin(5.0)
+            .show(ui, |ui| {
+                self.build_passage_list(150.0, filename, plaintext, selected_index, ctx, ui);
+            });
+
+        egui::ScrollArea::vertical()
+            .id_source("editor")
+            .show(ui, |ui| {
+                if plaintext.content.is_empty() {
+                    ui.add(egui::Label::new(egui::WidgetText::RichText(
+                        RichText::from("Empty file").size(18.0),
+                    )));
+                } else {
+                    if ui
+                        .add(
+                            TextEdit::multiline(&mut self.edited_text)
+                                .frame(false)
+                                .desired_width(f32::INFINITY)
+                                .desired_rows(1000) // Infinite
+                                .font(FontSelection::FontId(FontId::new(
+                                    self.font_size,
+                                    FontFamily::Proportional,
+                                ))),
+                        )
+                        .changed()
+                    {
+                        self.content.get_plaintext_mut().map(|plaintext| {
+                            plaintext.content[selected_index].content = self.edited_text.clone();
+                            self.dirty = true;
+                        });
+                    }
+                }
+            });
+    }
+
+    fn build_passage_list(
+        &mut self,
+        width: f32,
+        filename: &String,
+        plaintext: &PlainText,
+        selected_index: usize,
+        ctx: &egui::Context,
+        ui: &mut egui::Ui,
+    ) {
+        ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+            if ui
+                .add(
+                    egui::Button::new(egui::WidgetText::RichText(RichText::from("Add").size(18.0)))
+                        .min_size(Vec2::new(width, 24.0))
+                        .fill(Color32::LIGHT_GREEN),
+                )
+                .clicked()
+            {
+                self.add_new_passage = Some(("".to_string(), selected_index + 1))
+            }
+            if ui
+                .add(
+                    egui::Button::new(egui::WidgetText::RichText(
+                        RichText::from("Save").size(18.0).color(if self.dirty {
+                            Color32::BLACK
+                        } else {
+                            Color32::LIGHT_GRAY
+                        }),
+                    ))
+                    .min_size(Vec2::new(width, 24.0))
+                    .fill(Color32::LIGHT_GREEN),
+                )
+                .clicked()
+            {
+                let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", filename));
+                std::fs::write(path, encrypt(&self.password, plaintext.clone())).unwrap();
+                self.dirty = false;
+            }
+            egui::ScrollArea::vertical()
+                .id_source("passage_list")
+                .max_height(f32::INFINITY)
+                .auto_shrink([true, false])
+                .max_width(width)
+                .show(ui, |ui| {
+                    if plaintext.content.is_empty() {
+                        self.build_new_passage_add(0, width, ctx, ui);
+                    }
+                    plaintext
+                        .content
+                        .iter()
+                        .enumerate()
+                        .for_each(|(i, passage)| {
+                            if ui
+                                .add(
+                                    egui::Button::new(egui::WidgetText::RichText(
+                                        RichText::from(passage.title.clone()).size(18.0),
+                                    ))
+                                    .min_size(Vec2::new(width, 24.0))
+                                    .fill(
+                                        if i == selected_index {
+                                            Color32::LIGHT_BLUE
+                                        } else {
+                                            Color32::LIGHT_GRAY
+                                        },
+                                    ),
+                                )
+                                .clicked()
+                            {
+                                if i != selected_index {
+                                    self.content =
+                                        Content::PlainText(filename.clone(), plaintext.clone(), i);
+                                    self.edited_text = plaintext.content[i].content.clone();
+                                }
+                            }
+                            self.build_new_passage_add(i + 1, width, ctx, ui);
+                        });
+                });
+        });
+    }
+
+    fn build_new_passage_add(
+        &mut self,
+        current_index: usize,
+        width: f32,
+        ctx: &egui::Context,
+        ui: &mut egui::Ui,
+    ) {
+        if let Some((ref mut title, to_insert_index)) = self.add_new_passage {
+            if current_index > 0 && current_index != to_insert_index {
+                // When current_index is 0, this function must be called when the plaintext is
+                // empty. In this case, we will build this text field.
+                // When current_index is not zero, this function is called after building the
+                // passage at index current_index-1. In this case, we must check if this is
+                // indeed the target index to insert.
+                return;
+            }
+            ui.add(
+                egui::TextEdit::singleline(title)
+                    .font(FontSelection::FontId(FontId::new(
+                        18.0,
+                        FontFamily::Proportional,
+                    )))
+                    .desired_width(width),
+            );
+            if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+                println!("Create passage {}", title);
+                self.content.get_plaintext_mut().unwrap().content.insert(
+                    current_index,
+                    Passage {
+                        title: title.clone(),
+                        content: "".to_string(),
+                    },
+                );
+                self.add_new_passage = None;
+                self.dirty = true;
+            }
+        }
     }
 }
 
