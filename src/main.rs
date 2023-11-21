@@ -5,14 +5,14 @@ use rand::{rngs::StdRng, RngCore, SeedableRng};
 use std::path::PathBuf;
 
 use eframe::egui;
-use egui::{Color32, FontFamily, FontId, FontSelection, RichText, TextEdit, Vec2};
+use egui::{Color32, FontDefinitions, FontFamily, FontId, FontSelection, RichText, TextEdit, Vec2};
 use font_kit::source::SystemSource;
 use serde::{Deserialize, Serialize};
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
-        initial_window_size: Some(egui::vec2(800.0, 600.0)),
-        min_window_size: Some(egui::vec2(800.0, 600.0)),
+        initial_window_size: Some(egui::vec2(1000.0, 800.0)),
+        min_window_size: Some(egui::vec2(1000.0, 800.0)),
         ..Default::default()
     };
     eframe::run_native(
@@ -121,101 +121,11 @@ impl MyApp {
 
         let mut fonts = egui::FontDefinitions::default();
 
-        let font = SystemSource::new()
-            .select_by_postscript_name("Hei".into())
-            .unwrap()
-            .load()
-            .unwrap()
-            .copy_font_data()
-            .unwrap();
-
-        // Install my own font (maybe supporting non-latin characters).
-        // .ttf and .otf files supported.
-        fonts.font_data.insert(
-            "heiti".to_owned(),
-            egui::FontData::from_owned(font.to_vec()),
-        );
-
-        let font = SystemSource::new()
-            .select_by_postscript_name("Heiti SC".into())
-            .unwrap()
-            .load()
-            .unwrap()
-            .copy_font_data()
-            .unwrap();
-        fonts.font_data.insert(
-            "heiti sc".to_owned(),
-            egui::FontData::from_owned(font.to_vec()),
-        );
-
-        let font = SystemSource::new()
-            .select_by_postscript_name("PingFang SC".into())
-            .unwrap()
-            .load()
-            .unwrap()
-            .copy_font_data()
-            .unwrap();
-        fonts.font_data.insert(
-            "pingfang sc".to_owned(),
-            egui::FontData::from_owned(font.to_vec()),
-        );
-
-        let font = SystemSource::new()
-            .select_by_postscript_name("SimSong".into())
-            .unwrap()
-            .load()
-            .unwrap()
-            .copy_font_data()
-            .unwrap();
-        fonts.font_data.insert(
-            "simsong".to_owned(),
-            egui::FontData::from_owned(font.to_vec()),
-        );
-
-        let font = SystemSource::new()
-            .select_by_postscript_name("Songti SC".into())
-            .unwrap()
-            .load()
-            .unwrap()
-            .copy_font_data()
-            .unwrap();
-        fonts.font_data.insert(
-            "songti sc".to_owned(),
-            egui::FontData::from_owned(font.to_vec()),
-        );
-
-        fonts
-            .families
-            .entry(egui::FontFamily::Proportional)
-            .or_default()
-            .insert(0, "heiti".to_owned());
-        fonts
-            .families
-            .entry(egui::FontFamily::Proportional)
-            .or_default()
-            .insert(0, "heiti sc".to_owned());
-        fonts
-            .families
-            .entry(egui::FontFamily::Proportional)
-            .or_default()
-            .insert(0, "pingfang sc".to_owned());
-        fonts
-            .families
-            .entry(egui::FontFamily::Proportional)
-            .or_default()
-            .insert(1, "songti sc".to_owned());
-        fonts
-            .families
-            .entry(egui::FontFamily::Proportional)
-            .or_default()
-            .insert(1, "simsong".to_owned());
-
-        // Put my font as last fallback for monospace:
-        fonts
-            .families
-            .entry(egui::FontFamily::Monospace)
-            .or_default()
-            .push("heiti".to_owned());
+        Self::load_font_and_insert("Hei", "heiti", 0, &mut fonts);
+        Self::load_font_and_insert("Heiti SC", "heiti sc", 0, &mut fonts);
+        Self::load_font_and_insert("PingFang SC", "pingfang sc", 0, &mut fonts);
+        Self::load_font_and_insert("Songti SC", "songti sc", 1, &mut fonts);
+        Self::load_font_and_insert("SimSong", "simsong", 1, &mut fonts);
 
         // Tell egui to use these fonts:
         cc.egui_ctx.set_fonts(fonts);
@@ -226,6 +136,35 @@ impl MyApp {
             data_dir: config.data_dir,
             ..Default::default()
         }
+    }
+
+    fn load_font_and_insert(
+        name: &'static str,
+        id: &'static str,
+        index: usize,
+        fonts: &mut FontDefinitions,
+    ) {
+        let font = SystemSource::new()
+            .select_by_postscript_name(name.into())
+            .unwrap()
+            .load()
+            .unwrap()
+            .copy_font_data()
+            .unwrap();
+        fonts
+            .font_data
+            .insert(id.to_owned(), egui::FontData::from_owned(font.to_vec()));
+
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default()
+            .insert(index, id.to_owned());
+        fonts
+            .families
+            .entry(egui::FontFamily::Monospace)
+            .or_default()
+            .push(id.to_owned());
     }
 }
 
