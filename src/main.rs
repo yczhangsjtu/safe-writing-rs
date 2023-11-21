@@ -68,6 +68,24 @@ impl<T: Clone, P: Clone> Content<T, P> {
         }
     }
 
+    fn decrease_selected_index(&mut self) {
+        match self {
+            Content::PlainText(_, _, index) => {
+                *index = (*index).saturating_sub(1);
+            }
+            _ => {}
+        }
+    }
+
+    fn increase_selected_index(&mut self) {
+        match self {
+            Content::PlainText(_, _, index) => {
+                *index = (*index).saturating_add(1);
+            }
+            _ => {}
+        }
+    }
+
     fn get_file_name(&self) -> Option<&T> {
         match self {
             Content::Encrypted(filename, _, _, _) => Some(filename),
@@ -488,6 +506,62 @@ impl MyApp {
                 || ctx.input(|i| i.key_pressed(Key::L) && i.modifiers.mac_cmd)
             {
                 self.save_and_lock(filename.clone(), plaintext);
+            }
+            if ui
+                .add(
+                    egui::Button::new(egui::WidgetText::RichText(
+                        RichText::from("Move Up").size(18.0).color(Color32::BLACK),
+                    ))
+                    .min_size(Vec2::new(width, 24.0))
+                    .fill(Color32::LIGHT_GREEN),
+                )
+                .clicked()
+                || ctx.input(|i| i.key_pressed(Key::ArrowUp) && i.modifiers.mac_cmd)
+            {
+                if self
+                    .content
+                    .get_plaintext_mut()
+                    .and_then(|plaintext| {
+                        if selected_index > 0 {
+                            plaintext.content.swap(selected_index, selected_index - 1);
+                            self.dirty = true;
+                            Some(())
+                        } else {
+                            None
+                        }
+                    })
+                    .is_some()
+                {
+                    self.content.decrease_selected_index();
+                };
+            }
+            if ui
+                .add(
+                    egui::Button::new(egui::WidgetText::RichText(
+                        RichText::from("Move Down").size(18.0).color(Color32::BLACK),
+                    ))
+                    .min_size(Vec2::new(width, 24.0))
+                    .fill(Color32::LIGHT_GREEN),
+                )
+                .clicked()
+                || ctx.input(|i| i.key_pressed(Key::ArrowDown) && i.modifiers.mac_cmd)
+            {
+                if self
+                    .content
+                    .get_plaintext_mut()
+                    .and_then(|plaintext| {
+                        if selected_index < plaintext.content.len() - 1 {
+                            plaintext.content.swap(selected_index, selected_index + 1);
+                            self.dirty = true;
+                            Some(())
+                        } else {
+                            None
+                        }
+                    })
+                    .is_some()
+                {
+                    self.content.increase_selected_index();
+                };
             }
             egui::ScrollArea::vertical()
                 .id_source("passage_list")
