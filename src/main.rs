@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(1000.0, 800.0)),
-        min_window_size: Some(egui::vec2(1000.0, 800.0)),
+        min_window_size: Some(egui::vec2(800.0, 600.0)),
         ..Default::default()
     };
     eframe::run_native(
@@ -503,29 +503,16 @@ impl MyApp {
                         .iter()
                         .enumerate()
                         .for_each(|(i, passage)| {
-                            if ui
-                                .add(
-                                    egui::Button::new(egui::WidgetText::RichText(
-                                        RichText::from(passage.title.clone()).size(18.0),
-                                    ))
-                                    .min_size(Vec2::new(width, 24.0))
-                                    .fill(
-                                        if i == selected_index {
-                                            Color32::LIGHT_BLUE
-                                        } else {
-                                            Color32::LIGHT_GRAY
-                                        },
-                                    ),
-                                )
-                                .clicked()
-                            {
-                                if i != selected_index {
-                                    self.content =
-                                        Content::PlainText(filename.clone(), plaintext.clone(), i);
-                                    self.edited_text = plaintext.content[i].content.clone();
-                                }
-                            }
-                            self.build_new_passage_add(i + 1, width, ctx, ui);
+                            self.build_passage_button(
+                                i,
+                                selected_index,
+                                passage,
+                                width,
+                                filename,
+                                plaintext,
+                                ctx,
+                                ui,
+                            );
                         });
                 });
         });
@@ -586,6 +573,39 @@ impl MyApp {
                 self.dirty = true;
             }
         }
+    }
+
+    fn build_passage_button(
+        &mut self,
+        curr_index: usize,
+        selected_index: usize,
+        passage: &Passage,
+        width: f32,
+        filename: &String,
+        plaintext: &PlainText,
+        ctx: &egui::Context,
+        ui: &mut egui::Ui,
+    ) {
+        if ui
+            .add(
+                egui::Button::new(egui::WidgetText::RichText(
+                    RichText::from(passage.title.clone()).size(18.0),
+                ))
+                .min_size(Vec2::new(width, 24.0))
+                .fill(if curr_index == selected_index {
+                    Color32::LIGHT_BLUE
+                } else {
+                    Color32::LIGHT_GRAY
+                }),
+            )
+            .clicked()
+        {
+            if curr_index != selected_index {
+                self.content = Content::PlainText(filename.clone(), plaintext.clone(), curr_index);
+                self.edited_text = plaintext.content[curr_index].content.clone();
+            }
+        }
+        self.build_new_passage_add(curr_index + 1, width, ctx, ui);
     }
 }
 
