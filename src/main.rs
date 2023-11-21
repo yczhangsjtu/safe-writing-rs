@@ -453,9 +453,7 @@ impl MyApp {
                 .clicked()
                 || !self.dirty
             {
-                let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", filename));
-                std::fs::write(path, encrypt(&self.password, plaintext.clone())).unwrap();
-                self.dirty = false;
+                self.save(filename.clone(), plaintext);
             }
             if ui
                 .add(
@@ -469,18 +467,7 @@ impl MyApp {
                 )
                 .clicked()
             {
-                let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", filename));
-                let ciphertext = encrypt(&self.password, plaintext.clone());
-                std::fs::write(path, &ciphertext).unwrap();
-                self.dirty = false;
-                let ciphertext: Vec<_> = ciphertext.split("\n").collect();
-                self.content = Content::Encrypted(
-                    filename.clone(),
-                    ciphertext[0].to_string(),
-                    ciphertext[1].to_string(),
-                    ciphertext[2].to_string(),
-                );
-                self.password = "".to_string();
+                self.save_and_lock(filename.clone(), plaintext);
             }
             egui::ScrollArea::vertical()
                 .id_source("passage_list")
@@ -522,6 +509,27 @@ impl MyApp {
                         });
                 });
         });
+    }
+
+    fn save(&mut self, filename: String, plaintext: &PlainText) {
+        let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", filename));
+        std::fs::write(path, encrypt(&self.password, plaintext.clone())).unwrap();
+        self.dirty = false;
+    }
+
+    fn save_and_lock(&mut self, filename: String, plaintext: &PlainText) {
+        let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", filename));
+        let ciphertext = encrypt(&self.password, plaintext.clone());
+        std::fs::write(path, &ciphertext).unwrap();
+        self.dirty = false;
+        let ciphertext: Vec<_> = ciphertext.split("\n").collect();
+        self.content = Content::Encrypted(
+            filename.clone(),
+            ciphertext[0].to_string(),
+            ciphertext[1].to_string(),
+            ciphertext[2].to_string(),
+        );
+        self.password = "".to_string();
     }
 
     fn build_new_passage_add(
