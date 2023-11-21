@@ -54,6 +54,13 @@ impl<T: Clone, P: Clone> Content<T, P> {
         }
     }
 
+    fn get_plaintext(&mut self) -> Option<&P> {
+        match self {
+            Content::PlainText(_, ref a, _) => Some(a),
+            _ => None,
+        }
+    }
+
     fn get_plaintext_mut(&mut self) -> Option<&mut P> {
         match self {
             Content::PlainText(_, ref mut a, _) => Some(a),
@@ -341,7 +348,14 @@ impl MyApp {
         );
         if ui.button("Create").clicked() {
             if self.password.len() > 0 {
-                self.content = Content::PlainText(filename, PlainText { content: vec![] }, 0)
+                self.content = Content::PlainText(
+                    filename,
+                    PlainText {
+                        next_id: 0,
+                        content: vec![],
+                    },
+                    0,
+                )
             }
         }
     }
@@ -389,15 +403,17 @@ impl MyApp {
             .show(ui, |ui| {
                 self.build_passage_list(150.0, filename, plaintext, selected_index, ctx, ui);
             });
-
-        egui::ScrollArea::vertical()
-            .id_source("editor")
-            .show(ui, |ui| {
-                if plaintext.content.is_empty() {
-                    ui.add(egui::Label::new(egui::WidgetText::RichText(
-                        RichText::from("Empty file").size(18.0),
-                    )));
-                } else {
+        if plaintext.content.is_empty() {
+            ui.add(egui::Label::new(egui::WidgetText::RichText(
+                RichText::from("Empty file").size(18.0),
+            )));
+        } else {
+            egui::ScrollArea::vertical()
+                .id_source(format!(
+                    "editor:{}:{}",
+                    filename, plaintext.content[selected_index].id
+                ))
+                .show(ui, |ui| {
                     if ui
                         .add(
                             TextEdit::multiline(&mut self.edited_text)
@@ -416,8 +432,8 @@ impl MyApp {
                             self.dirty = true;
                         });
                     }
-                }
-            });
+                });
+        }
     }
 
     fn build_passage_list(
@@ -562,13 +578,10 @@ impl MyApp {
             );
             if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
                 println!("Create passage {}", title);
-                self.content.get_plaintext_mut().unwrap().content.insert(
-                    current_index,
-                    Passage {
-                        title: title.clone(),
-                        content: "".to_string(),
-                    },
-                );
+                self.content
+                    .get_plaintext_mut()
+                    .unwrap()
+                    .insert_new_passage(current_index, title.clone());
                 self.add_new_passage = None;
                 self.dirty = true;
             }
@@ -604,6 +617,7 @@ fn encrypt(password: &str, data: PlainText) -> String {
 
 #[derive(Debug, Clone)]
 struct Passage {
+    id: usize,
     title: String,
     content: String,
 }
@@ -618,6 +632,7 @@ impl Passage {
 
 #[derive(Debug, Clone)]
 struct PlainText {
+    next_id: usize,
     content: Vec<Passage>,
 }
 
@@ -632,6 +647,18 @@ impl PlainText {
             + ":FontSize=24")
             .as_bytes()
             .to_vec()
+    }
+
+    fn insert_new_passage(&mut self, index: usize, title: String) {
+        self.content.insert(
+            index,
+            Passage {
+                id: self.next_id,
+                title,
+                content: "".to_string(),
+            },
+        );
+        self.next_id += 1;
     }
 }
 
@@ -668,7 +695,8 @@ fn decrypt(password: &str, iv: &str, data: &str, mac: &str) -> Result<PlainText,
     let plaintext_encodings: Vec<_> = plaintext_encodings.split("|").collect();
     let passages = plaintext_encodings
         .iter()
-        .map(|s| {
+        .enumerate()
+        .map(|(i, s)| {
             let contents: Vec<_> = s.split("-").collect();
             if contents.len() < 2 {
                 return Err(Error::InvalidPlaintextFormat);
@@ -676,13 +704,17 @@ fn decrypt(password: &str, iv: &str, data: &str, mac: &str) -> Result<PlainText,
             let title = contents[0];
             let content = contents[1];
             Ok(Passage {
+                id: i,
                 title: base64_decode(title)?,
                 content: base64_decode(content)?,
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    Ok(PlainText { content: passages })
+    Ok(PlainText {
+        next_id: passages.len(),
+        content: passages,
+    })
 }
 
 fn base64_encode(data: Vec<u8>) -> String {
