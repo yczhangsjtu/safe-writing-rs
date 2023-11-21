@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use eframe::egui;
 use egui::{
     Color32, FontDefinitions, FontFamily, FontId, FontSelection, Key, RichText, TextEdit, Vec2,
+    WidgetText,
 };
 use font_kit::source::SystemSource;
 use serde::{Deserialize, Serialize};
@@ -207,50 +208,72 @@ impl MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.label(self.data_dir.as_str());
-            ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
-                self.build_file_list(200.0, ctx, ui);
-                match self.content.clone() {
-                    Content::NewFile(filename) => {
-                        self.build_uninitialized_file(filename, ui);
+        egui::CentralPanel::default()
+            .frame(egui::Frame::default().fill(Color32::BLACK))
+            .show(ctx, |ui| {
+                ui.label(WidgetText::RichText(
+                    RichText::new(self.data_dir.as_str()).color(Color32::WHITE),
+                ));
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
+                    self.build_file_list(200.0, ctx, ui);
+                    match self.content.clone() {
+                        Content::NewFile(filename) => {
+                            ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                                ui.allocate_space(Vec2::new(0.0, 200.0));
+                                self.build_uninitialized_file(filename, ui);
+                            });
+                        }
+                        Content::Encrypted(ref filename, ref iv, ref data, ref mac) => {
+                            ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                                ui.allocate_space(Vec2::new(0.0, 200.0));
+                                self.build_encrypted_file(filename, ui, iv, data, mac);
+                            });
+                        }
+                        Content::None => {
+                            ui.with_layout(
+                                egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                                |ui| {
+                                    ui.add(egui::Label::new(egui::WidgetText::RichText(
+                                        RichText::from("Please select a file to open").size(18.0),
+                                    )));
+                                },
+                            );
+                        }
+                        Content::PlainText(filename, plaintext, selected_index) => {
+                            self.build_editor(&filename, &plaintext, selected_index, ctx, ui);
+                        }
+                        Content::Error(err) => {
+                            ui.with_layout(
+                                egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                                |ui| {
+                                    ui.add(egui::Label::new(egui::WidgetText::RichText(
+                                        RichText::from(err).size(18.0).color(Color32::RED),
+                                    )));
+                                },
+                            );
+                        }
                     }
-                    Content::Encrypted(ref filename, ref iv, ref data, ref mac) => {
-                        self.build_encrypted_file(filename, ui, iv, data, mac);
-                    }
-                    Content::None => {
-                        ui.add(egui::Label::new(egui::WidgetText::RichText(
-                            RichText::from("Please select a file to open").size(18.0),
-                        )));
-                    }
-                    Content::PlainText(filename, plaintext, selected_index) => {
-                        self.build_editor(&filename, &plaintext, selected_index, ctx, ui);
-                    }
-                    Content::Error(err) => {
-                        ui.add(egui::Label::new(egui::WidgetText::RichText(
-                            RichText::from(err).size(18.0).color(Color32::RED),
-                        )));
-                    }
-                }
-            })
-        });
+                })
+            });
     }
 }
 
 impl MyApp {
     fn build_file_list(&mut self, width: f32, ctx: &egui::Context, ui: &mut egui::Ui) {
         egui::Frame::none()
-            .fill(Color32::LIGHT_GRAY)
+            .fill(Color32::GRAY.gamma_multiply(0.2))
             .inner_margin(5.0)
             .show(ui, |ui| {
                 ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                     if ui
                         .add(
                             egui::Button::new(egui::WidgetText::RichText(
-                                RichText::from("Create New File").size(18.0),
+                                RichText::from("Create New File")
+                                    .size(18.0)
+                                    .color(Color32::WHITE),
                             ))
                             .min_size(Vec2::new(width, 24.0))
-                            .fill(Color32::LIGHT_GREEN),
+                            .fill(Color32::GRAY.gamma_multiply(0.5)),
                         )
                         .clicked()
                     {
@@ -313,20 +336,27 @@ impl MyApp {
         width: f32,
         ui: &mut egui::Ui,
     ) -> Result<(), Error> {
-        let disabled = self.dirty || self.content.get_file_name() == Some(&file_name);
+        let selected = self.content.get_file_name() == Some(&file_name);
+        let disabled = self.dirty || selected;
         if ui
             .add(
                 egui::Button::new(egui::WidgetText::RichText(
                     RichText::from(file_name.clone())
                         .size(18.0)
-                        .color(if disabled {
-                            Color32::LIGHT_GRAY
-                        } else {
+                        .color(if self.dirty {
+                            Color32::WHITE.gamma_multiply(0.2)
+                        } else if selected {
                             Color32::BLACK
+                        } else {
+                            Color32::WHITE
                         }),
                 ))
                 .min_size(Vec2::new(width, 24.0))
-                .fill(Color32::LIGHT_BLUE),
+                .fill(if selected {
+                    Color32::LIGHT_GRAY
+                } else {
+                    Color32::TRANSPARENT
+                }),
             )
             .clicked()
             && !disabled
@@ -364,7 +394,13 @@ impl MyApp {
                 .password(true)
                 .hint_text("New Password"),
         );
-        if ui.button("Create").clicked() {
+        ui.allocate_space(Vec2::new(0.0, 10.0));
+        if ui
+            .button(egui::WidgetText::RichText(
+                RichText::from("Create").size(18.0),
+            ))
+            .clicked()
+        {
             if self.password.len() > 0 {
                 self.content = Content::PlainText(
                     filename,
@@ -391,7 +427,13 @@ impl MyApp {
                 .password(true)
                 .hint_text("Password"),
         );
-        if ui.button("Decrypt").clicked() {
+        ui.allocate_space(Vec2::new(0.0, 10.0));
+        if ui
+            .button(egui::WidgetText::RichText(
+                RichText::from("Decrypt").size(18.0),
+            ))
+            .clicked()
+        {
             match decrypt(&self.password, iv, data, mac) {
                 Ok(plaintext) => {
                     if plaintext.content.len() > 0 {
@@ -416,32 +458,39 @@ impl MyApp {
         ui: &mut egui::Ui,
     ) {
         egui::Frame::none()
-            .fill(Color32::LIGHT_GRAY)
+            .fill(Color32::LIGHT_GRAY.gamma_multiply(0.1))
             .inner_margin(5.0)
             .show(ui, |ui| {
                 self.build_passage_list(150.0, filename, plaintext, selected_index, ctx, ui);
             });
         if plaintext.content.is_empty() {
-            ui.add(egui::Label::new(egui::WidgetText::RichText(
-                RichText::from("Empty file").size(18.0),
-            )));
+            ui.with_layout(
+                egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                |ui| {
+                    ui.add(egui::Label::new(egui::WidgetText::RichText(
+                        RichText::from("Empty file").size(18.0),
+                    )));
+                },
+            );
         } else {
             egui::ScrollArea::vertical()
                 .id_source(format!(
                     "editor:{}:{}",
                     filename, plaintext.content[selected_index].id
                 ))
+                .auto_shrink([false, false])
                 .show(ui, |ui| {
                     if ui
                         .add(
                             TextEdit::multiline(&mut self.edited_text)
                                 .frame(false)
                                 .desired_width(f32::INFINITY)
-                                .desired_rows(50) // Infinite
+                                .desired_rows(50)
                                 .font(FontSelection::FontId(FontId::new(
                                     self.font_size,
                                     FontFamily::Proportional,
-                                ))),
+                                )))
+                                .text_color(Color32::WHITE),
                         )
                         .changed()
                     {
@@ -466,9 +515,12 @@ impl MyApp {
         ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
             if ui
                 .add(
-                    egui::Button::new(egui::WidgetText::RichText(RichText::from("Add").size(18.0)))
-                        .min_size(Vec2::new(width, 24.0))
-                        .fill(Color32::LIGHT_GREEN),
+                    egui::Button::new(
+                        egui::WidgetText::RichText(RichText::from("Add").size(18.0))
+                            .color(Color32::WHITE),
+                    )
+                    .min_size(Vec2::new(width, 24.0))
+                    .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
                 )
                 .clicked()
             {
@@ -478,13 +530,13 @@ impl MyApp {
                 .add(
                     egui::Button::new(egui::WidgetText::RichText(
                         RichText::from("Save").size(18.0).color(if self.dirty {
-                            Color32::BLACK
+                            Color32::WHITE
                         } else {
-                            Color32::LIGHT_GRAY
+                            Color32::LIGHT_GRAY.gamma_multiply(0.3)
                         }),
                     ))
                     .min_size(Vec2::new(width, 24.0))
-                    .fill(Color32::LIGHT_GREEN),
+                    .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
                 )
                 .clicked()
                 || ctx.input(|i| i.key_pressed(Key::S) && i.modifiers.mac_cmd))
@@ -497,10 +549,10 @@ impl MyApp {
                     egui::Button::new(egui::WidgetText::RichText(
                         RichText::from("Save & Lock")
                             .size(18.0)
-                            .color(Color32::BLACK),
+                            .color(Color32::WHITE),
                     ))
                     .min_size(Vec2::new(width, 24.0))
-                    .fill(Color32::LIGHT_RED),
+                    .fill(Color32::LIGHT_RED.gamma_multiply(0.3)),
                 )
                 .clicked()
                 || ctx.input(|i| i.key_pressed(Key::L) && i.modifiers.mac_cmd)
@@ -510,10 +562,10 @@ impl MyApp {
             if ui
                 .add(
                     egui::Button::new(egui::WidgetText::RichText(
-                        RichText::from("Move Up").size(18.0).color(Color32::BLACK),
+                        RichText::from("Move Up").size(18.0).color(Color32::WHITE),
                     ))
                     .min_size(Vec2::new(width, 24.0))
-                    .fill(Color32::LIGHT_GREEN),
+                    .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
                 )
                 .clicked()
                 || ctx.input(|i| i.key_pressed(Key::ArrowUp) && i.modifiers.mac_cmd)
@@ -538,10 +590,10 @@ impl MyApp {
             if ui
                 .add(
                     egui::Button::new(egui::WidgetText::RichText(
-                        RichText::from("Move Down").size(18.0).color(Color32::BLACK),
+                        RichText::from("Move Down").size(18.0).color(Color32::WHITE),
                     ))
                     .min_size(Vec2::new(width, 24.0))
-                    .fill(Color32::LIGHT_GREEN),
+                    .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
                 )
                 .clicked()
                 || ctx.input(|i| i.key_pressed(Key::ArrowDown) && i.modifiers.mac_cmd)
@@ -635,7 +687,8 @@ impl MyApp {
                         18.0,
                         FontFamily::Proportional,
                     )))
-                    .desired_width(width),
+                    .desired_width(width)
+                    .text_color(Color32::WHITE),
             );
             if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
                 println!("Create passage {}", title);
@@ -663,13 +716,19 @@ impl MyApp {
         if ui
             .add(
                 egui::Button::new(egui::WidgetText::RichText(
-                    RichText::from(passage.title.clone()).size(18.0),
+                    RichText::from(passage.title.clone()).size(18.0).color(
+                        if curr_index == selected_index {
+                            Color32::BLACK
+                        } else {
+                            Color32::WHITE
+                        },
+                    ),
                 ))
                 .min_size(Vec2::new(width, 24.0))
                 .fill(if curr_index == selected_index {
-                    Color32::LIGHT_BLUE
+                    Color32::WHITE.gamma_multiply(0.5)
                 } else {
-                    Color32::LIGHT_GRAY
+                    Color32::TRANSPARENT
                 }),
             )
             .clicked()
