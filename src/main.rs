@@ -58,6 +58,16 @@ impl<T: Clone, P: Clone> Content<T, P> {
             _ => None,
         }
     }
+
+    fn get_file_name(&self) -> Option<&T> {
+        match self {
+            Content::Encrypted(filename, _, _, _) => Some(filename),
+            Content::PlainText(filename, _, _) => Some(filename),
+            Content::Error(_) => None,
+            Content::NewFile(filename) => Some(filename),
+            Content::None => None,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -258,54 +268,67 @@ impl MyApp {
                         .auto_shrink([true, false])
                         .max_width(width)
                         .show(ui, |ui| {
-                            self.file_names.iter().for_each(|file_name| {
-                                if ui
-                                    .add(
-                                        egui::Button::new(egui::WidgetText::RichText(
-                                            RichText::from(file_name).size(18.0),
-                                        ))
-                                        .min_size(Vec2::new(width, 24.0))
-                                        .fill(Color32::LIGHT_BLUE),
-                                    )
-                                    .clicked()
+                            self.file_names.clone().iter().for_each(|file_name| {
+                                if let Err(Error::FailedToOpenFile(s)) =
+                                    self.build_filename_button(file_name.clone(), width, ui)
                                 {
-                                    println!("Clicked on {}", file_name);
-                                    self.password = "".to_string();
-                                    let path = PathBuf::from(self.data_dir.clone())
-                                        .join(format!("{}.safe", file_name));
-                                    match std::fs::read(path) {
-                                        Ok(content) => {
-                                            let content = String::from_utf8(content).unwrap();
-                                            if content.is_empty() {
-                                                self.content = Content::NewFile(file_name.clone());
-                                            } else {
-                                                let content: Vec<_> = content.split("\n").collect();
-                                                if content.len() < 3 {
-                                                    self.content = Content::Error(
-                                                        "Invalid format".to_string(),
-                                                    );
-                                                } else {
-                                                    self.content = Content::Encrypted(
-                                                        file_name.clone(),
-                                                        content[0].to_string(),
-                                                        content[1].to_string(),
-                                                        content[2].to_string(),
-                                                    );
-                                                }
-                                            }
-                                        }
-                                        Err(err) => {
-                                            println!(
-                                                "Failed to open file {}: {:?}",
-                                                file_name, err
-                                            );
-                                        }
-                                    }
+                                    self.content = Content::Error(s);
                                 }
                             });
                         });
                 });
             });
+    }
+
+    fn build_filename_button(
+        &mut self,
+        file_name: String,
+        width: f32,
+        ui: &mut egui::Ui,
+    ) -> Result<(), Error> {
+        let disabled = self.dirty || self.content.get_file_name() == Some(&file_name);
+        if ui
+            .add(
+                egui::Button::new(egui::WidgetText::RichText(
+                    RichText::from(file_name.clone())
+                        .size(18.0)
+                        .color(if disabled {
+                            Color32::LIGHT_GRAY
+                        } else {
+                            Color32::BLACK
+                        }),
+                ))
+                .min_size(Vec2::new(width, 24.0))
+                .fill(Color32::LIGHT_BLUE),
+            )
+            .clicked()
+            && !disabled
+        {
+            println!("Clicked on {}", &file_name);
+            self.password = "".to_string();
+            let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", file_name));
+            let content = std::fs::read(path).map_err(|err| {
+                Error::FailedToOpenFile(format!("Failed to open file {}: {:?}", file_name, err))
+            })?;
+
+            let content = String::from_utf8(content).unwrap();
+            if content.is_empty() {
+                self.content = Content::NewFile(file_name);
+            } else {
+                let content: Vec<_> = content.split("\n").collect();
+                if content.len() < 3 {
+                    self.content = Content::Error("Invalid format".to_string());
+                } else {
+                    self.content = Content::Encrypted(
+                        file_name.clone(),
+                        content[0].to_string(),
+                        content[1].to_string(),
+                        content[2].to_string(),
+                    );
+                }
+            }
+        }
+        Ok(())
     }
 
     fn build_uninitialized_file(&mut self, filename: String, ui: &mut egui::Ui) {
@@ -639,6 +662,7 @@ fn base64_decode(data: &str) -> Result<String, Error> {
 
 #[derive(Debug)]
 enum Error {
+    FailedToOpenFile(String),
     Base64DecodeFail,
     DecryptionFail,
     MacFail(MacError),
