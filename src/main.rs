@@ -403,7 +403,7 @@ impl MyApp {
                             TextEdit::multiline(&mut self.edited_text)
                                 .frame(false)
                                 .desired_width(f32::INFINITY)
-                                .desired_rows(1000) // Infinite
+                                .desired_rows(50) // Infinite
                                 .font(FontSelection::FontId(FontId::new(
                                     self.font_size,
                                     FontFamily::Proportional,
