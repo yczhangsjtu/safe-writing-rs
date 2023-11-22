@@ -117,6 +117,7 @@ struct MyApp {
     confirm_delete_passage: Option<usize>,
     confirm_password: String,
     new_password: String,
+    show_passage_operation_buttons: bool,
 }
 
 impl MyApp {
@@ -437,7 +438,8 @@ impl MyApp {
                         content: vec![],
                     },
                     0,
-                )
+                );
+                self.show_passage_operation_buttons = false;
             }
         }
     }
@@ -472,6 +474,7 @@ impl MyApp {
                     self.add_new_passage = None;
                     self.editing_passage_name = None;
                     self.confirm_delete_passage = None;
+                    self.show_passage_operation_buttons = false;
                 }
                 Err(err) => {
                     self.content = Content::Error(format!("{:?}", err));
@@ -628,7 +631,7 @@ impl MyApp {
             if ui
                 .add(
                     egui::Button::new(
-                        egui::WidgetText::RichText(RichText::from("Add").size(18.0))
+                        egui::WidgetText::RichText(RichText::from("...").size(18.0))
                             .color(Color32::WHITE),
                     )
                     .min_size(Vec2::new(width, 24.0))
@@ -636,125 +639,140 @@ impl MyApp {
                 )
                 .clicked()
             {
-                self.add_new_passage = Some(("".to_string(), selected_index + 1));
-                self.editing_passage_name = None;
+                self.show_passage_operation_buttons = !self.show_passage_operation_buttons;
             }
-            if (ui
-                .add(
-                    egui::Button::new(egui::WidgetText::RichText(
-                        RichText::from("Save").size(18.0).color(if self.dirty {
-                            Color32::WHITE
-                        } else {
-                            Color32::LIGHT_GRAY.gamma_multiply(0.3)
-                        }),
-                    ))
-                    .min_size(Vec2::new(width, 24.0))
-                    .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
-                )
-                .clicked()
-                || ctx.input(|i| i.key_pressed(Key::S) && i.modifiers.mac_cmd))
-                && self.dirty
-            {
-                self.save(filename.clone(), plaintext);
-            }
-            if ui
-                .add(
-                    egui::Button::new(egui::WidgetText::RichText(
-                        RichText::from("Save & Lock")
-                            .size(18.0)
-                            .color(Color32::WHITE),
-                    ))
-                    .min_size(Vec2::new(width, 24.0))
-                    .fill(Color32::LIGHT_RED.gamma_multiply(0.3)),
-                )
-                .clicked()
-                || ctx.input(|i| i.key_pressed(Key::L) && i.modifiers.mac_cmd)
-            {
-                self.save_and_lock(filename.clone(), plaintext);
-            }
-            if ui
-                .add(
-                    egui::Button::new(egui::WidgetText::RichText(
-                        RichText::from("Move Up").size(18.0).color(Color32::WHITE),
-                    ))
-                    .min_size(Vec2::new(width, 24.0))
-                    .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
-                )
-                .clicked()
-                || ctx.input(|i| i.key_pressed(Key::ArrowUp) && i.modifiers.mac_cmd)
-            {
-                if self
-                    .content
-                    .get_plaintext_mut()
-                    .and_then(|plaintext| {
-                        if selected_index > 0 {
-                            plaintext.content.swap(selected_index, selected_index - 1);
-                            self.dirty = true;
-                            Some(())
-                        } else {
-                            None
-                        }
-                    })
-                    .is_some()
+            if self.show_passage_operation_buttons {
+                if ui
+                    .add(
+                        egui::Button::new(
+                            egui::WidgetText::RichText(RichText::from("Add").size(18.0))
+                                .color(Color32::WHITE),
+                        )
+                        .min_size(Vec2::new(width, 24.0))
+                        .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
+                    )
+                    .clicked()
                 {
-                    self.content.decrease_selected_index();
-                };
-            }
-            if ui
-                .add(
-                    egui::Button::new(egui::WidgetText::RichText(
-                        RichText::from("Move Down").size(18.0).color(Color32::WHITE),
-                    ))
-                    .min_size(Vec2::new(width, 24.0))
-                    .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
-                )
-                .clicked()
-                || ctx.input(|i| i.key_pressed(Key::ArrowDown) && i.modifiers.mac_cmd)
-            {
-                if self
-                    .content
-                    .get_plaintext_mut()
-                    .and_then(|plaintext| {
-                        if selected_index < plaintext.content.len() - 1 {
-                            plaintext.content.swap(selected_index, selected_index + 1);
-                            self.dirty = true;
-                            Some(())
-                        } else {
-                            None
-                        }
-                    })
-                    .is_some()
+                    self.add_new_passage = Some(("".to_string(), selected_index + 1));
+                    self.editing_passage_name = None;
+                }
+                if (ui
+                    .add(
+                        egui::Button::new(egui::WidgetText::RichText(
+                            RichText::from("Save").size(18.0).color(if self.dirty {
+                                Color32::WHITE
+                            } else {
+                                Color32::LIGHT_GRAY.gamma_multiply(0.3)
+                            }),
+                        ))
+                        .min_size(Vec2::new(width, 24.0))
+                        .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
+                    )
+                    .clicked()
+                    || ctx.input(|i| i.key_pressed(Key::S) && i.modifiers.mac_cmd))
+                    && self.dirty
                 {
-                    self.content.increase_selected_index();
-                };
-            }
-            if ui
-                .add(
-                    egui::Button::new(egui::WidgetText::RichText(
-                        RichText::from("Rename").size(18.0).color(Color32::WHITE),
-                    ))
-                    .min_size(Vec2::new(width, 24.0))
-                    .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
-                )
-                .clicked()
-            {
-                self.add_new_passage = None;
-                self.editing_passage_name = Some((
-                    plaintext.content[selected_index].title.clone(),
-                    selected_index,
-                ));
-            }
-            if ui
-                .add(
-                    egui::Button::new(egui::WidgetText::RichText(
-                        RichText::from("Delete").size(18.0).color(Color32::WHITE),
-                    ))
-                    .min_size(Vec2::new(width, 24.0))
-                    .fill(Color32::LIGHT_RED.gamma_multiply(0.3)),
-                )
-                .clicked()
-            {
-                self.confirm_delete_passage = Some(selected_index);
+                    self.save(filename.clone(), plaintext);
+                }
+                if ui
+                    .add(
+                        egui::Button::new(egui::WidgetText::RichText(
+                            RichText::from("Save & Lock")
+                                .size(18.0)
+                                .color(Color32::WHITE),
+                        ))
+                        .min_size(Vec2::new(width, 24.0))
+                        .fill(Color32::LIGHT_RED.gamma_multiply(0.3)),
+                    )
+                    .clicked()
+                    || ctx.input(|i| i.key_pressed(Key::L) && i.modifiers.mac_cmd)
+                {
+                    self.save_and_lock(filename.clone(), plaintext);
+                }
+                if ui
+                    .add(
+                        egui::Button::new(egui::WidgetText::RichText(
+                            RichText::from("Move Up").size(18.0).color(Color32::WHITE),
+                        ))
+                        .min_size(Vec2::new(width, 24.0))
+                        .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
+                    )
+                    .clicked()
+                    || ctx.input(|i| i.key_pressed(Key::ArrowUp) && i.modifiers.mac_cmd)
+                {
+                    if self
+                        .content
+                        .get_plaintext_mut()
+                        .and_then(|plaintext| {
+                            if selected_index > 0 {
+                                plaintext.content.swap(selected_index, selected_index - 1);
+                                self.dirty = true;
+                                Some(())
+                            } else {
+                                None
+                            }
+                        })
+                        .is_some()
+                    {
+                        self.content.decrease_selected_index();
+                    };
+                }
+                if ui
+                    .add(
+                        egui::Button::new(egui::WidgetText::RichText(
+                            RichText::from("Move Down").size(18.0).color(Color32::WHITE),
+                        ))
+                        .min_size(Vec2::new(width, 24.0))
+                        .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
+                    )
+                    .clicked()
+                    || ctx.input(|i| i.key_pressed(Key::ArrowDown) && i.modifiers.mac_cmd)
+                {
+                    if self
+                        .content
+                        .get_plaintext_mut()
+                        .and_then(|plaintext| {
+                            if selected_index < plaintext.content.len() - 1 {
+                                plaintext.content.swap(selected_index, selected_index + 1);
+                                self.dirty = true;
+                                Some(())
+                            } else {
+                                None
+                            }
+                        })
+                        .is_some()
+                    {
+                        self.content.increase_selected_index();
+                    };
+                }
+                if ui
+                    .add(
+                        egui::Button::new(egui::WidgetText::RichText(
+                            RichText::from("Rename").size(18.0).color(Color32::WHITE),
+                        ))
+                        .min_size(Vec2::new(width, 24.0))
+                        .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
+                    )
+                    .clicked()
+                {
+                    self.add_new_passage = None;
+                    self.editing_passage_name = Some((
+                        plaintext.content[selected_index].title.clone(),
+                        selected_index,
+                    ));
+                }
+                if ui
+                    .add(
+                        egui::Button::new(egui::WidgetText::RichText(
+                            RichText::from("Delete").size(18.0).color(Color32::WHITE),
+                        ))
+                        .min_size(Vec2::new(width, 24.0))
+                        .fill(Color32::LIGHT_RED.gamma_multiply(0.3)),
+                    )
+                    .clicked()
+                {
+                    self.confirm_delete_passage = Some(selected_index);
+                }
             }
             egui::ScrollArea::vertical()
                 .id_source("passage_list")
