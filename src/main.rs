@@ -39,6 +39,7 @@ enum Content<T: Clone, P: Clone> {
     Encrypted(T, T, T, T),
     PlainText(T, P, usize),
     Error(T),
+    Success(T),
 }
 
 impl<T: Clone, P: Clone> Content<T, P> {
@@ -50,6 +51,7 @@ impl<T: Clone, P: Clone> Content<T, P> {
             }
             Content::PlainText(ref title, ref a, index) => Content::PlainText(title, a, *index),
             Content::Error(ref a) => Content::Error(a),
+            Content::Success(ref a) => Content::Success(a),
             Content::None => Content::None,
             Content::NewFile(ref title) => Content::NewFile(title),
         }
@@ -92,6 +94,7 @@ impl<T: Clone, P: Clone> Content<T, P> {
             Content::Encrypted(filename, _, _, _) => Some(filename),
             Content::PlainText(filename, _, _) => Some(filename),
             Content::Error(_) => None,
+            Content::Success(_) => None,
             Content::NewFile(filename) => Some(filename),
             Content::None => None,
         }
@@ -112,6 +115,8 @@ struct MyApp {
     add_new_passage: Option<(String, usize)>,
     editing_passage_name: Option<(String, usize)>,
     confirm_delete_passage: Option<usize>,
+    confirm_password: String,
+    new_password: String,
 }
 
 impl MyApp {
@@ -254,6 +259,16 @@ impl eframe::App for MyApp {
                                 },
                             );
                         }
+                        Content::Success(err) => {
+                            ui.with_layout(
+                                egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                                |ui| {
+                                    ui.add(egui::Label::new(egui::WidgetText::RichText(
+                                        RichText::from(err).size(18.0).color(Color32::GREEN),
+                                    )));
+                                },
+                            );
+                        }
                     }
                 })
             });
@@ -363,6 +378,8 @@ impl MyApp {
             && !disabled
         {
             self.password = "".to_string();
+            self.confirm_password = "".to_string();
+            self.new_password = "".to_string();
             let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", file_name));
             let content = std::fs::read(path).map_err(|err| {
                 Error::FailedToOpenFile(format!("Failed to open file {}: {:?}", file_name, err))
@@ -394,14 +411,25 @@ impl MyApp {
                 .password(true)
                 .hint_text("New Password"),
         );
+        ui.add(
+            TextEdit::singleline(&mut self.confirm_password)
+                .password(true)
+                .hint_text("Confirm Password"),
+        );
         ui.allocate_space(Vec2::new(0.0, 10.0));
         if ui
             .button(egui::WidgetText::RichText(
-                RichText::from("Create").size(18.0),
+                RichText::from("Create").size(18.0).color(
+                    if self.password == self.confirm_password {
+                        Color32::BLACK
+                    } else {
+                        Color32::WHITE.gamma_multiply(0.3)
+                    },
+                ),
             ))
             .clicked()
         {
-            if self.password.len() > 0 {
+            if self.password.len() > 0 && self.password == self.confirm_password {
                 self.content = Content::PlainText(
                     filename,
                     PlainText {
@@ -441,9 +469,54 @@ impl MyApp {
                     }
                     self.content = Content::PlainText(filename.clone(), plaintext, 0);
                     self.dirty = false;
+                    self.add_new_passage = None;
+                    self.editing_passage_name = None;
+                    self.confirm_delete_passage = None;
                 }
                 Err(err) => {
                     self.content = Content::Error(format!("{:?}", err));
+                }
+            }
+        }
+        ui.allocate_space(Vec2::new(0.0, 100.0));
+        ui.add(
+            TextEdit::singleline(&mut self.new_password)
+                .password(true)
+                .hint_text("New Password"),
+        );
+        ui.add(
+            TextEdit::singleline(&mut self.confirm_password)
+                .password(true)
+                .hint_text("Confirm Password"),
+        );
+        if ui
+            .button(
+                egui::WidgetText::RichText(RichText::from("Change Password").size(18.0)).color(
+                    if self.new_password == self.confirm_password {
+                        Color32::BLACK
+                    } else {
+                        Color32::WHITE.gamma_multiply(0.3)
+                    },
+                ),
+            )
+            .clicked()
+        {
+            if self.new_password == self.confirm_password {
+                match decrypt(&self.password, iv, data, mac) {
+                    Ok(plaintext) => {
+                        let ciphertext = encrypt(&self.new_password, plaintext);
+                        let path =
+                            PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", filename));
+                        std::fs::write(path, &ciphertext).unwrap();
+                        self.content =
+                            Content::Success("Password changed successfully".to_string());
+                        self.password = "".to_string();
+                        self.new_password = "".to_string();
+                        self.confirm_password = "".to_string();
+                    }
+                    Err(err) => {
+                        self.content = Content::Error(format!("{:?}", err));
+                    }
                 }
             }
         }
