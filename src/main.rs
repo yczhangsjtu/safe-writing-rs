@@ -111,6 +111,7 @@ struct MyApp {
     password: String,
     add_new_passage: Option<(String, usize)>,
     editing_passage_name: Option<(String, usize)>,
+    confirm_delete_passage: Option<usize>,
 }
 
 impl MyApp {
@@ -471,6 +472,45 @@ impl MyApp {
                     )));
                 },
             );
+        } else if let Some(to_delete_passage_index) = self.confirm_delete_passage {
+            ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                ui.allocate_space(Vec2::new(0.0, 200.0));
+                ui.label(
+                    egui::WidgetText::from(format!(
+                        "Sure to delete this passage? Titled: {}",
+                        plaintext.content[to_delete_passage_index].title
+                    ))
+                    .color(Color32::LIGHT_RED),
+                );
+                if ui
+                    .add(
+                        egui::Button::new(egui::WidgetText::RichText(
+                            RichText::from("Delete").size(18.0).color(Color32::WHITE),
+                        ))
+                        .fill(Color32::RED),
+                    )
+                    .clicked()
+                {
+                    let mut plaintext = plaintext.clone();
+                    plaintext.content.remove(to_delete_passage_index);
+                    let new_selected_index = if plaintext.content.len() == 0 {
+                        0
+                    } else if selected_index >= plaintext.content.len() {
+                        selected_index - 1
+                    } else {
+                        selected_index
+                    };
+                    self.content =
+                        Content::PlainText(filename.clone(), plaintext.clone(), new_selected_index);
+                    if plaintext.content.len() == 0 {
+                        self.edited_text = "".to_string();
+                    } else {
+                        self.edited_text = plaintext.content[new_selected_index].content.clone();
+                    }
+                    self.confirm_delete_passage = None;
+                    self.dirty = true;
+                }
+            });
         } else {
             egui::ScrollArea::vertical()
                 .id_source(format!(
@@ -630,6 +670,18 @@ impl MyApp {
                     plaintext.content[selected_index].title.clone(),
                     selected_index,
                 ));
+            }
+            if ui
+                .add(
+                    egui::Button::new(egui::WidgetText::RichText(
+                        RichText::from("Delete").size(18.0).color(Color32::WHITE),
+                    ))
+                    .min_size(Vec2::new(width, 24.0))
+                    .fill(Color32::LIGHT_RED.gamma_multiply(0.3)),
+                )
+                .clicked()
+            {
+                self.confirm_delete_passage = Some(selected_index);
             }
             egui::ScrollArea::vertical()
                 .id_source("passage_list")
