@@ -110,6 +110,7 @@ struct MyApp {
     error_creating_new_file: Option<String>,
     password: String,
     add_new_passage: Option<(String, usize)>,
+    editing_passage_name: Option<(String, usize)>,
 }
 
 impl MyApp {
@@ -294,7 +295,6 @@ impl MyApp {
                                 .desired_width(width),
                         );
                         if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-                            println!("Create file {}", filename);
                             let path = PathBuf::from(self.data_dir.clone())
                                 .join(format!("{}.safe", filename));
                             if path.exists() {
@@ -361,7 +361,6 @@ impl MyApp {
             .clicked()
             && !disabled
         {
-            println!("Clicked on {}", &file_name);
             self.password = "".to_string();
             let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", file_name));
             let content = std::fs::read(path).map_err(|err| {
@@ -524,7 +523,8 @@ impl MyApp {
                 )
                 .clicked()
             {
-                self.add_new_passage = Some(("".to_string(), selected_index + 1))
+                self.add_new_passage = Some(("".to_string(), selected_index + 1));
+                self.editing_passage_name = None;
             }
             if (ui
                 .add(
@@ -615,6 +615,22 @@ impl MyApp {
                     self.content.increase_selected_index();
                 };
             }
+            if ui
+                .add(
+                    egui::Button::new(egui::WidgetText::RichText(
+                        RichText::from("Rename").size(18.0).color(Color32::WHITE),
+                    ))
+                    .min_size(Vec2::new(width, 24.0))
+                    .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
+                )
+                .clicked()
+            {
+                self.add_new_passage = None;
+                self.editing_passage_name = Some((
+                    plaintext.content[selected_index].title.clone(),
+                    selected_index,
+                ));
+            }
             egui::ScrollArea::vertical()
                 .id_source("passage_list")
                 .max_height(f32::INFINITY)
@@ -629,16 +645,21 @@ impl MyApp {
                         .iter()
                         .enumerate()
                         .for_each(|(i, passage)| {
-                            self.build_passage_button(
-                                i,
-                                selected_index,
-                                passage,
-                                width,
-                                filename,
-                                plaintext,
-                                ctx,
-                                ui,
-                            );
+                            if self.editing_passage_name.clone().map(|(_, index)| index) == Some(i)
+                            {
+                                self.build_passage_rename(selected_index, width, ctx, ui);
+                            } else {
+                                self.build_passage_button(
+                                    i,
+                                    selected_index,
+                                    passage,
+                                    width,
+                                    filename,
+                                    plaintext,
+                                    ctx,
+                                    ui,
+                                );
+                            }
                         });
                 });
         });
@@ -688,10 +709,10 @@ impl MyApp {
                         FontFamily::Proportional,
                     )))
                     .desired_width(width)
-                    .text_color(Color32::WHITE),
+                    .text_color(Color32::BLACK)
+                    .hint_text("Passage Title"),
             );
             if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-                println!("Create passage {}", title);
                 self.content
                     .get_plaintext_mut()
                     .unwrap()
@@ -739,6 +760,30 @@ impl MyApp {
             }
         }
         self.build_new_passage_add(curr_index + 1, width, ctx, ui);
+    }
+
+    fn build_passage_rename(
+        &mut self,
+        selected_index: usize,
+        width: f32,
+        ctx: &egui::Context,
+        ui: &mut egui::Ui,
+    ) {
+        ui.add(
+            egui::TextEdit::singleline(&mut self.editing_passage_name.as_mut().unwrap().0)
+                .min_size(Vec2::new(width, 24.0))
+                .text_color(Color32::BLACK)
+                .font(FontSelection::FontId(FontId::new(
+                    18.0,
+                    FontFamily::Proportional,
+                ))),
+        );
+        if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+            self.content.get_plaintext_mut().unwrap().content[selected_index].title =
+                self.editing_passage_name.as_ref().unwrap().0.clone();
+            self.editing_passage_name = None;
+            self.dirty = true;
+        }
     }
 }
 
