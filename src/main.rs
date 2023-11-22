@@ -228,13 +228,13 @@ impl eframe::App for MyApp {
                         Content::NewFile(filename) => {
                             ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
                                 ui.allocate_space(Vec2::new(0.0, 200.0));
-                                self.build_uninitialized_file(filename, ui);
+                                self.build_uninitialized_file(filename, ctx, ui);
                             });
                         }
                         Content::Encrypted(ref filename, ref iv, ref data, ref mac) => {
                             ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
                                 ui.allocate_space(Vec2::new(0.0, 200.0));
-                                self.build_encrypted_file(filename, ui, iv, data, mac);
+                                self.build_encrypted_file(filename, ctx, ui, iv, data, mac);
                             });
                         }
                         Content::None => {
@@ -406,7 +406,12 @@ impl MyApp {
         Ok(())
     }
 
-    fn build_uninitialized_file(&mut self, filename: String, ui: &mut egui::Ui) {
+    fn build_uninitialized_file(
+        &mut self,
+        filename: String,
+        ctx: &egui::Context,
+        ui: &mut egui::Ui,
+    ) {
         ui.add(
             TextEdit::singleline(&mut self.password)
                 .password(true)
@@ -429,6 +434,7 @@ impl MyApp {
                 ),
             ))
             .clicked()
+            || ctx.input(|i| i.key_pressed(egui::Key::Enter))
         {
             if self.password.len() > 0 && self.password == self.confirm_password {
                 self.content = Content::PlainText(
@@ -447,6 +453,7 @@ impl MyApp {
     fn build_encrypted_file(
         &mut self,
         filename: &String,
+        ctx: &egui::Context,
         ui: &mut egui::Ui,
         iv: &str,
         data: &str,
@@ -463,6 +470,7 @@ impl MyApp {
                 RichText::from("Decrypt").size(18.0),
             ))
             .clicked()
+            || ctx.input(|i| i.key_pressed(egui::Key::Enter))
         {
             match decrypt(&self.password, iv, data, mac) {
                 Ok(plaintext) => {
@@ -641,6 +649,12 @@ impl MyApp {
             {
                 self.show_passage_operation_buttons = !self.show_passage_operation_buttons;
             }
+            if ctx.input(|i| i.key_pressed(Key::S) && i.modifiers.mac_cmd) {
+                self.save(filename.clone(), plaintext);
+            }
+            if ctx.input(|i| i.key_pressed(Key::L) && i.modifiers.mac_cmd) {
+                self.save_and_lock(filename.clone(), plaintext);
+            }
             if self.show_passage_operation_buttons {
                 if ui
                     .add(
@@ -656,7 +670,7 @@ impl MyApp {
                     self.add_new_passage = Some(("".to_string(), selected_index + 1));
                     self.editing_passage_name = None;
                 }
-                if (ui
+                if ui
                     .add(
                         egui::Button::new(egui::WidgetText::RichText(
                             RichText::from("Save").size(18.0).color(if self.dirty {
@@ -669,7 +683,6 @@ impl MyApp {
                         .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
                     )
                     .clicked()
-                    || ctx.input(|i| i.key_pressed(Key::S) && i.modifiers.mac_cmd))
                     && self.dirty
                 {
                     self.save(filename.clone(), plaintext);
@@ -685,7 +698,6 @@ impl MyApp {
                         .fill(Color32::LIGHT_RED.gamma_multiply(0.3)),
                     )
                     .clicked()
-                    || ctx.input(|i| i.key_pressed(Key::L) && i.modifiers.mac_cmd)
                 {
                     self.save_and_lock(filename.clone(), plaintext);
                 }
@@ -698,7 +710,6 @@ impl MyApp {
                         .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
                     )
                     .clicked()
-                    || ctx.input(|i| i.key_pressed(Key::ArrowUp) && i.modifiers.mac_cmd)
                 {
                     if self
                         .content
@@ -726,7 +737,6 @@ impl MyApp {
                         .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
                     )
                     .clicked()
-                    || ctx.input(|i| i.key_pressed(Key::ArrowDown) && i.modifiers.mac_cmd)
                 {
                     if self
                         .content
