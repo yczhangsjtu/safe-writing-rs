@@ -153,7 +153,7 @@ impl MyApp {
             }
             std::fs::create_dir_all(&data_dir).unwrap();
         }
-        let file_names = std::fs::read_dir(&data_dir)
+        let mut file_names = std::fs::read_dir(&data_dir)
             .unwrap()
             .map(|e| e.unwrap().file_name().into_string().unwrap())
             .filter_map(|filename| {
@@ -164,6 +164,7 @@ impl MyApp {
                 }
             })
             .collect::<Vec<_>>();
+        file_names.sort();
 
         let mut fonts = egui::FontDefinitions::default();
 
@@ -320,6 +321,7 @@ impl MyApp {
                             } else {
                                 std::fs::write(path, "").unwrap();
                                 self.file_names.push(filename.clone());
+                                self.file_names.sort();
                             }
                             self.creating_new_file = None;
                         }
