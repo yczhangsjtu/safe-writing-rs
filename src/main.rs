@@ -2,6 +2,7 @@ use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyIvI
 use base64::{engine::general_purpose, Engine as _};
 use hmac::{digest::MacError, Hmac, Mac};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
+use sha2::Digest;
 use std::path::PathBuf;
 
 use eframe::egui;
@@ -118,6 +119,8 @@ struct MyApp {
     confirm_password: String,
     new_password: String,
     show_passage_operation_buttons: bool,
+    waiting_for_password_for_safe_note: Option<PathBuf>,
+    imported_file_name: String,
 }
 
 impl MyApp {
@@ -302,6 +305,101 @@ impl MyApp {
                             self.creating_new_file = None;
                         }
                         self.error_creating_new_file = None;
+                    }
+                    if ui
+                        .add(
+                            egui::Button::new(egui::WidgetText::RichText(
+                                RichText::from("Load Safe Notes File")
+                                    .size(18.0)
+                                    .color(Color32::WHITE),
+                            ))
+                            .min_size(Vec2::new(width, 24.0))
+                            .fill(Color32::GRAY.gamma_multiply(0.5)),
+                        )
+                        .clicked()
+                    {
+                        if self.waiting_for_password_for_safe_note.is_none() {
+                            if let Some(path) = rfd::FileDialog::new()
+                                .add_filter("JSON Files", &["json"])
+                                .pick_file()
+                            {
+                                self.waiting_for_password_for_safe_note = Some(path);
+                                self.password = "".to_string();
+                                self.imported_file_name = "".to_string();
+                            }
+                        } else {
+                            self.waiting_for_password_for_safe_note = None;
+                        }
+                    }
+                    if let Some(path) = self.waiting_for_password_for_safe_note.clone() {
+                        ui.add(
+                            TextEdit::singleline(&mut self.password)
+                                .desired_width(width)
+                                .font(FontSelection::FontId(FontId::new(
+                                    18.0,
+                                    FontFamily::Proportional,
+                                )))
+                                .hint_text("Password")
+                                .password(true),
+                        );
+                        ui.add(
+                            TextEdit::singleline(&mut self.imported_file_name)
+                                .desired_width(width)
+                                .font(FontSelection::FontId(FontId::new(
+                                    18.0,
+                                    FontFamily::Proportional,
+                                )))
+                                .hint_text("New Name"),
+                        );
+                        if ctx.input(|i| i.key_pressed(Key::Enter)) {
+                            if !self.imported_file_name.is_empty() {
+                                match load_safe_note_file(&self.password, &path) {
+                                    Ok(safe_note) => {
+                                        let passages = safe_note
+                                            .records
+                                            .iter()
+                                            .map(|p| Passage {
+                                                id: 0,
+                                                title: p.title.clone(),
+                                                content: p.description.clone(),
+                                            })
+                                            .collect();
+                                        let plaintext = PlainText {
+                                            next_id: 0,
+                                            content: passages,
+                                        };
+                                        if self.file_names.contains(&self.imported_file_name) {
+                                            self.content = Content::Error(format!(
+                                                "File with name {} already exists",
+                                                &self.imported_file_name
+                                            ));
+                                        } else {
+                                            let content =
+                                                encrypt(&self.password, plaintext.clone());
+                                            let path = PathBuf::from(&self.data_dir)
+                                                .join(format!("{}.safe", &self.imported_file_name));
+                                            if std::fs::write(path, content).is_ok() {
+                                                self.file_names
+                                                    .push(self.imported_file_name.clone());
+                                                self.file_names.sort();
+                                                self.content = Content::PlainText(
+                                                    self.imported_file_name.clone(),
+                                                    plaintext.clone(),
+                                                    0,
+                                                );
+                                            }
+                                        }
+                                    }
+                                    Err(err) => {
+                                        self.content = Content::Error(format!(
+                                            "Error loading safenote file: {:?}",
+                                            err
+                                        ));
+                                    }
+                                }
+                                self.waiting_for_password_for_safe_note = None;
+                            }
+                        }
                     }
                     if let Some(ref mut filename) = self.creating_new_file {
                         ui.add(
@@ -1017,15 +1115,9 @@ impl PlainText {
 
 fn decrypt(password: &str, iv: &str, data: &str, mac: &str) -> Result<PlainText, Error> {
     let key = key_derive(password);
-    let iv = general_purpose::STANDARD
-        .decode(iv)
-        .map_err(|_| Error::Base64DecodeFail)?;
-    let data = general_purpose::STANDARD
-        .decode(data)
-        .map_err(|_| Error::Base64DecodeFail)?;
-    let mac = general_purpose::STANDARD
-        .decode(mac)
-        .map_err(|_| Error::Base64DecodeFail)?;
+    let iv = base64_decode_to_bytes(iv)?;
+    let data = base64_decode_to_bytes(data)?;
+    let mac = base64_decode_to_bytes(mac)?;
     let mut mac_calculated =
         Hmac::<sha2::Sha256>::new_from_slice(&key).expect("HMAC can take key of any size");
     mac_calculated.update(data.as_slice());
@@ -1083,6 +1175,70 @@ fn base64_decode(data: &str) -> Result<String, Error> {
     .map_err(|_| Error::InvalidUTF8)
 }
 
+fn base64_decode_to_bytes(data: &str) -> Result<Vec<u8>, Error> {
+    general_purpose::STANDARD
+        .decode(data)
+        .map_err(|_| Error::Base64DecodeFail)
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct SafeNoteFile {
+    records: Vec<SafeNoteRecord>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct SafeNoteRecord {
+    title: String,
+    description: String,
+}
+
+fn load_safe_note_file(password: &str, file_path: &PathBuf) -> Result<SafeNoteFile, Error> {
+    let contents = std::fs::read_to_string(file_path)
+        .map_err(|err| Error::FailedToOpenFile(format!("{:?}", err)))?;
+    let mut safenote: SafeNoteFile = serde_json::from_str(&contents)
+        .map_err(|err| Error::FailedToParseJson(format!("{:?}", err)))?;
+    for record in safenote.records.iter_mut() {
+        record.title = decrypt_safe_notes_ciphertext(password, &record.title)?;
+        record.description = decrypt_safe_notes_ciphertext(password, &record.description)?;
+    }
+    Ok(safenote)
+}
+
+fn decrypt_safe_notes_ciphertext(password: &str, ciphertext: &str) -> Result<String, Error> {
+    let data = base64_decode_to_bytes(ciphertext)?;
+    let salt = data[8..16].to_vec();
+    let data = data[16..].to_vec();
+    let password = password.as_bytes();
+    let mut concatenated_hashes = Vec::<u8>::new();
+    let mut current_hash = Vec::<u8>::new();
+    let mut pre_hash: Vec<u8>;
+
+    for _ in 0..32 {
+        if current_hash.len() > 0 {
+            pre_hash = current_hash.clone();
+            pre_hash.extend_from_slice(password);
+            pre_hash.extend_from_slice(&salt);
+        } else {
+            pre_hash = password.to_vec();
+            pre_hash.extend_from_slice(&salt);
+        }
+        let mut hasher = sha2::Sha256::new();
+        hasher.update(&pre_hash);
+        current_hash = hasher.finalize().to_vec();
+        concatenated_hashes.extend_from_slice(&current_hash);
+        if concatenated_hashes.len() > 48 {
+            break;
+        }
+    }
+    let key = concatenated_hashes[0..32].to_vec();
+    let iv = concatenated_hashes[32..48].to_vec();
+
+    cbc::Decryptor::<aes::Aes256>::new(key.as_slice().into(), iv.as_slice().into())
+        .decrypt_padded_vec_mut::<Pkcs7>(&data)
+        .map_err(|_| Error::DecryptionFail)
+        .and_then(|s| String::from_utf8(s).map_err(|_| Error::InvalidUTF8))
+}
+
 #[derive(Debug)]
 enum Error {
     FailedToOpenFile(String),
@@ -1091,4 +1247,5 @@ enum Error {
     MacFail(MacError),
     InvalidUTF8,
     InvalidPlaintextFormat,
+    FailedToParseJson(String),
 }
