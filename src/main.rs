@@ -481,6 +481,7 @@ impl MyApp {
             self.password = "".to_string();
             self.confirm_password = "".to_string();
             self.new_password = "".to_string();
+            self.edited_text = "".to_string();
             let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", file_name));
             let content = std::fs::read(path).map_err(|err| {
                 Error::FailedToOpenFile(format!("Failed to open file {}: {:?}", file_name, err))
@@ -937,6 +938,7 @@ impl MyApp {
             ciphertext[2].to_string(),
         );
         self.password = "".to_string();
+        self.edited_text = "".to_string();
     }
 
     fn build_new_passage_add(
