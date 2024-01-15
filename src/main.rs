@@ -884,6 +884,28 @@ impl MyApp {
                 {
                     self.confirm_delete_passage = Some(selected_index);
                 }
+                if ui
+                    .add(
+                        egui::Button::new(egui::WidgetText::RichText(
+                            RichText::from("Read Temp").size(18.0).color(Color32::WHITE),
+                        ))
+                        .min_size(Vec2::new(width, 24.0))
+                        .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
+                    )
+                    .clicked()
+                {
+                    let temp_file_path = PathBuf::from(self.data_dir.clone()).join("temp.txt");
+                    if let Ok(temp_content) = std::fs::read_to_string(&temp_file_path) {
+                        self.content.get_plaintext_mut().map(|plaintext| {
+                            self.edited_text += &format!("\n\n{}", temp_content.trim());
+                            plaintext.content[selected_index].content = self.edited_text.clone();
+                            self.dirty = true;
+                        });
+                        if let Err(err) = std::fs::remove_file(&temp_file_path) {
+                            println!("Failed to remove temp file: {}", err);
+                        }
+                    }
+                }
             }
             egui::ScrollArea::vertical()
                 .id_source("passage_list")
