@@ -1,3 +1,4 @@
+#![windows_subsystem = "windows"]
 use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 use base64::{engine::general_purpose, Engine as _};
 use hmac::{digest::MacError, Hmac, Mac};
