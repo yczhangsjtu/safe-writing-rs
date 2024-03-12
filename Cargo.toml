@@ -20,3 +20,7 @@ aes = "0.8.3"
 hmac = "0.12.1"
 rand = { version = "0.8.5", features = ["std_rng"] }
 rfd = "0.12"
+homedir = "0.2.1"
+
+[build-dependencies]
+winres = "0.1.12"

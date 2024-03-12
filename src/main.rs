@@ -4,19 +4,31 @@ use hmac::{digest::MacError, Hmac, Mac};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 use sha2::Digest;
 use std::path::PathBuf;
+use homedir::get_my_home;
 
 use eframe::egui;
 use egui::{
     Color32, FontDefinitions, FontFamily, FontId, FontSelection, Key, RichText, TextEdit, Vec2,
     WidgetText,
 };
-use font_kit::source::SystemSource;
+use font_kit::{family_name::FamilyName, properties::Properties, source::SystemSource};
 use serde::{Deserialize, Serialize};
+
+#[cfg(target_os = "windows")]
+const ICON: &[u8] = include_bytes!("..\\assets\\icon.png");
+
+#[cfg(target_os = "macos")]
+const ICON: &[u8] = include_bytes!("../assets/icon.png");
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(1000.0, 800.0)),
         min_window_size: Some(egui::vec2(800.0, 600.0)),
+        icon_data: Some(eframe::IconData {
+            rgba: ICON.to_vec(),
+            width: 32,
+            height: 32,
+        }),
         ..Default::default()
     };
     eframe::run_native(
@@ -128,7 +140,7 @@ impl MyApp {
         let config_path = std::env::var("SAFE_WRITING_CONFIG_DIR")
             .map(|p| std::path::PathBuf::from(p))
             .unwrap_or(
-                std::path::PathBuf::from(std::env::var("HOME").unwrap()).join(".safe_writing"),
+                get_my_home().unwrap().unwrap().as_path().join(".safe_writing"),
             );
         if !config_path.is_dir() {
             if config_path.exists() {
@@ -171,11 +183,18 @@ impl MyApp {
 
         let mut fonts = egui::FontDefinitions::default();
 
-        Self::load_font_and_insert("Hei", "heiti", 0, &mut fonts);
-        Self::load_font_and_insert("Heiti SC", "heiti sc", 0, &mut fonts);
-        Self::load_font_and_insert("PingFang SC", "pingfang sc", 0, &mut fonts);
-        Self::load_font_and_insert("Songti SC", "songti sc", 1, &mut fonts);
-        Self::load_font_and_insert("SimSong", "simsong", 1, &mut fonts);
+        #[cfg(target_os = "macos")]
+        {
+            Self::load_font_and_insert("Hei", "heiti", 0, &mut fonts);
+            Self::load_font_and_insert("Heiti SC", "heiti sc", 0, &mut fonts);
+            Self::load_font_and_insert("PingFang SC", "pingfang sc", 0, &mut fonts);
+            Self::load_font_and_insert("Songti SC", "songti sc", 1, &mut fonts);
+            Self::load_font_and_insert("SimSong", "simsong", 1, &mut fonts);
+        }
+        #[cfg(target_os = "windows")]
+        {
+            Self::load_font_and_insert("Microsoft YaHei UI", "yahei", 0, &mut fonts);
+        }
 
         // Tell egui to use these fonts:
         cc.egui_ctx.set_fonts(fonts);
@@ -188,15 +207,47 @@ impl MyApp {
         }
     }
 
+    #[cfg(target_os = "macos")]
     fn load_font_and_insert(
         name: &'static str,
         id: &'static str,
         index: usize,
         fonts: &mut FontDefinitions,
     ) {
+        SystemSource::new().all_families().unwrap().iter().for_each(|name| println!("Family: {}", name));
         let font = SystemSource::new()
             .select_by_postscript_name(name.into())
+            .expect(&format!("Cannot find font {}", name))
+            .load()
             .unwrap()
+            .copy_font_data()
+            .unwrap();
+        fonts
+            .font_data
+            .insert(id.to_owned(), egui::FontData::from_owned(font.to_vec()));
+
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default()
+            .insert(index, id.to_owned());
+        fonts
+            .families
+            .entry(egui::FontFamily::Monospace)
+            .or_default()
+            .push(id.to_owned());
+    }
+
+    
+    #[cfg(target_os = "windows")]
+    fn load_font_and_insert(
+        family_name: &'static str,
+        id: &'static str,
+        index: usize,
+        fonts: &mut FontDefinitions,
+    ) {
+        let font = SystemSource::new().select_best_match(&[FamilyName::Title(family_name.to_string())], &Properties::new())
+            .expect(&format!("Cannot find font family {}", family_name))
             .load()
             .unwrap()
             .copy_font_data()
@@ -750,10 +801,10 @@ impl MyApp {
             {
                 self.show_passage_operation_buttons = !self.show_passage_operation_buttons;
             }
-            if ctx.input(|i| i.key_pressed(Key::S) && i.modifiers.mac_cmd) {
+            if ctx.input(|i| i.key_pressed(Key::S) && i.modifiers.command) {
                 self.save(filename.clone(), plaintext);
             }
-            if ctx.input(|i| i.key_pressed(Key::L) && i.modifiers.mac_cmd) {
+            if ctx.input(|i| i.key_pressed(Key::L) && i.modifiers.command) {
                 self.save_and_lock(filename.clone(), plaintext);
             }
             if self.show_passage_operation_buttons {
