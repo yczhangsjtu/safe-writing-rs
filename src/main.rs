@@ -2,10 +2,10 @@
 use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 use base64::{engine::general_purpose, Engine as _};
 use hmac::{digest::MacError, Hmac, Mac};
+use homedir::get_my_home;
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 use sha2::Digest;
 use std::path::PathBuf;
-use homedir::get_my_home;
 
 use eframe::egui;
 use egui::{
@@ -23,13 +23,14 @@ const ICON: &[u8] = include_bytes!("../assets/icon.png");
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
-        initial_window_size: Some(egui::vec2(1000.0, 800.0)),
-        min_window_size: Some(egui::vec2(800.0, 600.0)),
-        icon_data: Some(eframe::IconData {
-            rgba: ICON.to_vec(),
-            width: 32,
-            height: 32,
-        }),
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1000.0, 800.0])
+            .with_min_inner_size([800.0, 600.0])
+            .with_icon(egui::IconData {
+                rgba: ICON.to_vec(),
+                width: 32,
+                height: 32,
+            }),
         ..Default::default()
     };
     eframe::run_native(
@@ -141,7 +142,11 @@ impl MyApp {
         let config_path = std::env::var("SAFE_WRITING_CONFIG_DIR")
             .map(|p| std::path::PathBuf::from(p))
             .unwrap_or(
-                get_my_home().unwrap().unwrap().as_path().join(".safe_writing"),
+                get_my_home()
+                    .unwrap()
+                    .unwrap()
+                    .as_path()
+                    .join(".safe_writing"),
             );
         if !config_path.is_dir() {
             if config_path.exists() {
@@ -215,7 +220,11 @@ impl MyApp {
         index: usize,
         fonts: &mut FontDefinitions,
     ) {
-        SystemSource::new().all_families().unwrap().iter().for_each(|name| println!("Family: {}", name));
+        SystemSource::new()
+            .all_families()
+            .unwrap()
+            .iter()
+            .for_each(|name| println!("Family: {}", name));
         let font = SystemSource::new()
             .select_by_postscript_name(name.into())
             .expect(&format!("Cannot find font {}", name))
@@ -239,7 +248,6 @@ impl MyApp {
             .push(id.to_owned());
     }
 
-    
     #[cfg(target_os = "windows")]
     fn load_font_and_insert(
         family_name: &'static str,
@@ -247,7 +255,11 @@ impl MyApp {
         index: usize,
         fonts: &mut FontDefinitions,
     ) {
-        let font = SystemSource::new().select_best_match(&[FamilyName::Title(family_name.to_string())], &Properties::new())
+        let font = SystemSource::new()
+            .select_best_match(
+                &[FamilyName::Title(family_name.to_string())],
+                &Properties::new(),
+            )
             .expect(&format!("Cannot find font family {}", family_name))
             .load()
             .unwrap()
