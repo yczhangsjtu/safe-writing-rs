@@ -75,8 +75,7 @@ impl MyApp {
 
     fn clear_editor_input_fields(&mut self) {
         self.password = "".to_string();
-        self.confirm_password = "".to_string();
-        self.new_password = "".to_string();
+        self.new_password = ("".to_string(), "".to_string());
         self.edited_text = "".to_string();
     }
 
@@ -87,12 +86,12 @@ impl MyApp {
         ui: &mut egui::Ui,
     ) {
         ui.add(
-            TextEdit::singleline(&mut self.password)
+            TextEdit::singleline(&mut self.new_password.0)
                 .password(true)
                 .hint_text("New Password"),
         );
         ui.add(
-            TextEdit::singleline(&mut self.confirm_password)
+            TextEdit::singleline(&mut self.new_password.1)
                 .password(true)
                 .hint_text("Confirm Password"),
         );
@@ -100,7 +99,7 @@ impl MyApp {
         if ui
             .button(egui::WidgetText::RichText(
                 RichText::from("Create").size(18.0).color(
-                    if self.password == self.confirm_password {
+                    if self.new_password.0 == self.new_password.1 {
                         Color32::BLACK
                     } else {
                         Color32::WHITE.gamma_multiply(0.3)
@@ -110,9 +109,11 @@ impl MyApp {
             .clicked()
             || ctx.input(|i| i.key_pressed(egui::Key::Enter))
         {
-            if self.password.len() > 0 && self.password == self.confirm_password {
+            if self.new_password.0.len() > 0 && self.new_password.0 == self.new_password.1 {
                 self.content = Content::PlainText(filename, PlainText::empty(), 0);
                 self.show_passage_operation_buttons = false;
+                self.password = self.new_password.0.clone();
+                self.new_password = ("".to_string(), "".to_string());
             }
         }
     }
@@ -158,19 +159,19 @@ impl MyApp {
         }
         ui.allocate_space(Vec2::new(0.0, 100.0));
         ui.add(
-            TextEdit::singleline(&mut self.new_password)
+            TextEdit::singleline(&mut self.new_password.0)
                 .password(true)
                 .hint_text("New Password"),
         );
         ui.add(
-            TextEdit::singleline(&mut self.confirm_password)
+            TextEdit::singleline(&mut self.new_password.1)
                 .password(true)
                 .hint_text("Confirm Password"),
         );
         if ui
             .button(
                 egui::WidgetText::RichText(RichText::from("Change Password").size(18.0)).color(
-                    if self.new_password == self.confirm_password {
+                    if self.new_password.0 == self.new_password.1 {
                         Color32::BLACK
                     } else {
                         Color32::WHITE.gamma_multiply(0.3)
@@ -179,18 +180,16 @@ impl MyApp {
             )
             .clicked()
         {
-            if self.new_password == self.confirm_password {
+            if self.new_password.0 == self.new_password.1 {
                 match PlainText::decrypt(&self.password, iv, data, mac) {
                     Ok(plaintext) => {
-                        let ciphertext = plaintext.encrypt(&self.new_password);
+                        let ciphertext = plaintext.encrypt(&self.new_password.0);
                         let path =
                             PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", filename));
                         std::fs::write(path, &ciphertext).unwrap();
                         self.content =
                             Content::Success("Password changed successfully".to_string());
-                        self.password = "".to_string();
-                        self.new_password = "".to_string();
-                        self.confirm_password = "".to_string();
+                        self.clear_editor_input_fields();
                     }
                     Err(err) => {
                         self.content = Content::Error(format!("{:?}", err));
