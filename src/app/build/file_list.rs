@@ -1,4 +1,4 @@
-use super::MyApp;
+use super::{editor::EditorState, MyApp};
 use crate::{app::content::Content, error::Error, safe_note::load_safe_note_file};
 use std::{ffi::OsStr, path::PathBuf};
 
@@ -128,8 +128,10 @@ impl MyApp {
                             if std::fs::write(path, content).is_ok() {
                                 self.file_names.push(new_file_name.clone());
                                 self.file_names.sort();
-                                self.content =
-                                    Content::PlainText(new_file_name.clone(), plaintext.clone(), 0);
+                                self.content = Content::PlainText(EditorState::new(
+                                    new_file_name.clone(),
+                                    plaintext.clone(),
+                                ));
                                 self.password = password.clone();
                             }
                         }

@@ -2,6 +2,7 @@ use super::{content::Content, MyApp};
 use crate::data_structures::PlainText;
 use std::path::PathBuf;
 
+use editor::EditorState;
 use eframe::egui;
 use egui::{Color32, InnerResponse, RichText, TextEdit, Vec2, WidgetText};
 
@@ -9,8 +10,8 @@ const FILE_LIST_WIDTH: f32 = 200.0;
 const PASSWORD_SCREEN_TOP_SPACE: f32 = 200.0;
 const INFO_TEXT_SIZE: f32 = 18.0;
 
-mod editor;
-mod file_list;
+pub(super) mod editor;
+pub(super) mod file_list;
 
 impl MyApp {
     pub(super) fn main_layout(
@@ -46,8 +47,8 @@ impl MyApp {
                         },
                     );
                 }
-                Content::PlainText(filename, plaintext, selected_index) => {
-                    self.build_editor(&filename, &plaintext, selected_index, ctx, ui);
+                Content::PlainText(editor_state) => {
+                    self.build_editor(&editor_state, ctx, ui);
                 }
                 Content::Error(err) => {
                     ui.with_layout(
@@ -110,7 +111,7 @@ impl MyApp {
             || ctx.input(|i| i.key_pressed(egui::Key::Enter))
         {
             if self.new_password.0.len() > 0 && self.new_password.0 == self.new_password.1 {
-                self.content = Content::PlainText(filename, PlainText::empty(), 0);
+                self.content = Content::PlainText(EditorState::empty(filename));
                 self.show_passage_operation_buttons = false;
                 self.password = self.new_password.0.clone();
                 self.new_password = ("".to_string(), "".to_string());
@@ -145,7 +146,8 @@ impl MyApp {
                     if let Some(text) = plaintext.get_first_passage_text() {
                         self.edited_text = text;
                     }
-                    self.content = Content::PlainText(filename.clone(), plaintext, 0);
+                    self.content =
+                        Content::PlainText(EditorState::new(filename.clone(), plaintext));
                     self.dirty = false;
                     self.add_new_passage = None;
                     self.editing_passage_name = None;

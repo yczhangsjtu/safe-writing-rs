@@ -9,12 +9,67 @@ use std::path::PathBuf;
 use eframe::egui;
 use egui::{Color32, FontFamily, FontId, FontSelection, Key, RichText, TextEdit, Vec2};
 
+#[derive(Default, Clone)]
+pub struct EditorState {
+    filename: String,
+    plaintext: PlainText,
+    selected_index: usize,
+}
+
+impl EditorState {
+    pub fn new(filename: String, plaintext: PlainText) -> Self {
+        EditorState {
+            filename,
+            plaintext,
+            selected_index: 0,
+        }
+    }
+
+    pub fn empty(filename: String) -> Self {
+        Self::new(filename, PlainText::empty())
+    }
+
+    pub fn filename(&self) -> &String {
+        &self.filename
+    }
+
+    pub fn plaintext(&self) -> &PlainText {
+        &self.plaintext
+    }
+
+    pub fn plaintext_mut(&mut self) -> &mut PlainText {
+        &mut self.plaintext
+    }
+
+    pub fn selected_index(&self) -> usize {
+        self.selected_index
+    }
+
+    pub fn decrease_selected_index(&mut self) {
+        if self.selected_index > 0 {
+            self.selected_index -= 1;
+        }
+    }
+
+    pub fn increase_selected_index(&mut self) {
+        if self.selected_index < self.plaintext.num_passages() - 1 {
+            self.selected_index += 1;
+        }
+    }
+
+    pub fn with_new_selected_index(&self, selected_index: usize) -> EditorState {
+        EditorState {
+            filename: self.filename().clone(),
+            plaintext: self.plaintext().clone(),
+            selected_index,
+        }
+    }
+}
+
 impl MyApp {
     pub(super) fn build_editor(
         &mut self,
-        filename: &String,
-        plaintext: &PlainText,
-        selected_index: usize,
+        editor_state: &EditorState,
         ctx: &egui::Context,
         ui: &mut egui::Ui,
     ) {
@@ -22,9 +77,9 @@ impl MyApp {
             .fill(Color32::LIGHT_GRAY.gamma_multiply(0.1))
             .inner_margin(5.0)
             .show(ui, |ui| {
-                self.build_passage_list(150.0, filename, plaintext, selected_index, ctx, ui);
+                self.build_passage_list(150.0, editor_state, editor_state.plaintext(), ctx, ui);
             });
-        if plaintext.is_empty() {
+        if editor_state.plaintext().is_empty() {
             ui.with_layout(
                 egui::Layout::centered_and_justified(egui::Direction::TopDown),
                 |ui| {
@@ -39,7 +94,10 @@ impl MyApp {
                 ui.label(
                     egui::WidgetText::from(format!(
                         "Sure to delete this passage? Titled: {}",
-                        plaintext.title_of_passage(to_delete_passage_index).unwrap()
+                        editor_state
+                            .plaintext()
+                            .title_of_passage(to_delete_passage_index)
+                            .unwrap()
                     ))
                     .color(Color32::LIGHT_RED),
                 );
@@ -52,17 +110,18 @@ impl MyApp {
                     )
                     .clicked()
                 {
-                    let mut plaintext = plaintext.clone();
+                    let mut plaintext = editor_state.plaintext().clone();
                     plaintext.remove_passage(to_delete_passage_index);
                     let new_selected_index = if plaintext.is_empty() {
                         0
-                    } else if selected_index >= plaintext.num_passages() {
-                        selected_index - 1
+                    } else if editor_state.selected_index() >= plaintext.num_passages() {
+                        editor_state.selected_index() - 1
                     } else {
-                        selected_index
+                        editor_state.selected_index()
                     };
-                    self.content =
-                        Content::PlainText(filename.clone(), plaintext.clone(), new_selected_index);
+                    self.content = Content::PlainText(
+                        editor_state.with_new_selected_index(new_selected_index),
+                    );
                     if plaintext.num_passages() == 0 {
                         self.edited_text = "".to_string();
                     } else {
@@ -77,8 +136,11 @@ impl MyApp {
             egui::ScrollArea::vertical()
                 .id_source(format!(
                     "editor:{}:{}",
-                    filename,
-                    plaintext.id_of_passage(selected_index).unwrap()
+                    editor_state.filename(),
+                    editor_state
+                        .plaintext()
+                        .id_of_passage(editor_state.selected_index())
+                        .unwrap()
                 ))
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
@@ -97,7 +159,10 @@ impl MyApp {
                         .changed()
                     {
                         self.content.get_plaintext_mut().map(|plaintext| {
-                            plaintext.set_content(selected_index, self.edited_text.clone());
+                            plaintext.set_content(
+                                editor_state.selected_index(),
+                                self.edited_text.clone(),
+                            );
                             self.dirty = true;
                         });
                     }
@@ -431,29 +496,28 @@ impl MyApp {
     fn build_passage_list(
         &mut self,
         width: f32,
-        filename: &String,
+        editor_state: &EditorState,
         plaintext: &PlainText,
-        selected_index: usize,
         ctx: &egui::Context,
         ui: &mut egui::Ui,
     ) {
         ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
             self.build_toggle_button(width, ctx, ui);
             if ctx.input(|i| i.key_pressed(Key::S) && i.modifiers.command) {
-                self.save(filename.clone(), plaintext);
+                self.save(editor_state.filename().clone(), plaintext);
             }
             if ctx.input(|i| i.key_pressed(Key::L) && i.modifiers.command) {
-                self.save_and_lock(filename.clone(), plaintext);
+                self.save_and_lock(editor_state.filename().clone(), plaintext);
             }
             if self.show_passage_operation_buttons {
-                self.build_add_button(selected_index, width, ctx, ui);
-                self.build_save_button(filename, plaintext, width, ctx, ui);
-                self.build_save_lock_button(filename, plaintext, width, ctx, ui);
-                self.build_move_button(selected_index, true, width, ctx, ui);
-                self.build_move_button(selected_index, false, width, ctx, ui);
-                self.build_rename_button(selected_index, plaintext, width, ctx, ui);
-                self.build_delete_button(selected_index, width, ctx, ui);
-                self.build_read_temp_button(selected_index, width, ctx, ui);
+                self.build_add_button(editor_state.selected_index(), width, ctx, ui);
+                self.build_save_button(editor_state.filename(), plaintext, width, ctx, ui);
+                self.build_save_lock_button(editor_state.filename(), plaintext, width, ctx, ui);
+                self.build_move_button(editor_state.selected_index(), true, width, ctx, ui);
+                self.build_move_button(editor_state.selected_index(), false, width, ctx, ui);
+                self.build_rename_button(editor_state.selected_index(), plaintext, width, ctx, ui);
+                self.build_delete_button(editor_state.selected_index(), width, ctx, ui);
+                self.build_read_temp_button(editor_state.selected_index(), width, ctx, ui);
                 self.build_append_file_button(width, ctx, ui);
             }
             egui::ScrollArea::vertical()
@@ -472,14 +536,18 @@ impl MyApp {
                         .for_each(|(i, passage)| {
                             if self.editing_passage_name.clone().map(|(_, index)| index) == Some(i)
                             {
-                                self.build_passage_rename(selected_index, width, ctx, ui);
+                                self.build_passage_rename(
+                                    editor_state.selected_index(),
+                                    width,
+                                    ctx,
+                                    ui,
+                                );
                             } else {
                                 self.build_passage_button(
                                     i,
-                                    selected_index,
+                                    editor_state,
                                     passage,
                                     width,
-                                    filename,
                                     plaintext,
                                     ctx,
                                     ui,
@@ -530,10 +598,9 @@ impl MyApp {
     fn build_passage_button(
         &mut self,
         curr_index: usize,
-        selected_index: usize,
+        editor_state: &EditorState,
         passage: &Passage,
         width: f32,
-        filename: &String,
         plaintext: &PlainText,
         ctx: &egui::Context,
         ui: &mut egui::Ui,
@@ -542,7 +609,7 @@ impl MyApp {
             .add(
                 egui::Button::new(egui::WidgetText::RichText(
                     RichText::from(passage.title().clone()).size(18.0).color(
-                        if curr_index == selected_index {
+                        if curr_index == editor_state.selected_index() {
                             Color32::BLACK
                         } else {
                             Color32::WHITE
@@ -550,7 +617,7 @@ impl MyApp {
                     ),
                 ))
                 .min_size(Vec2::new(width, 24.0))
-                .fill(if curr_index == selected_index {
+                .fill(if curr_index == editor_state.selected_index() {
                     Color32::WHITE.gamma_multiply(0.5)
                 } else {
                     Color32::TRANSPARENT
@@ -558,8 +625,8 @@ impl MyApp {
             )
             .clicked()
         {
-            if curr_index != selected_index {
-                self.content = Content::PlainText(filename.clone(), plaintext.clone(), curr_index);
+            if curr_index != editor_state.selected_index() {
+                self.content = Content::PlainText(editor_state.with_new_selected_index(curr_index));
                 self.edited_text = plaintext.content_of_passage(curr_index).unwrap();
             }
         }

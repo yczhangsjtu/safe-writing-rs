@@ -27,7 +27,7 @@ impl Passage {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct PlainText {
     next_id: usize,
     content: Vec<Passage>,
