@@ -1041,8 +1041,7 @@ impl MyApp {
             ciphertext[1].to_string(),
             ciphertext[2].to_string(),
         );
-        self.password = "".to_string();
-        self.edited_text = "".to_string();
+        self.clear_editor_input_fields();
     }
 
     fn build_new_passage_add(
