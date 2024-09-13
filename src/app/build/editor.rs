@@ -360,9 +360,11 @@ impl MyApp {
                     .hint_text("Password")
                     .desired_width(width),
             );
+        }
+        if let Some((filename, password)) = self.appending_another_file.clone() {
             if ctx.input(|i| i.key_pressed(egui::Key::Enter)) && !filename.is_empty() {
                 if let Some(current_file_name) = self.content.get_file_name() {
-                    if filename == current_file_name {
+                    if &filename == current_file_name {
                         self.error_appending_another_file =
                             Some("Cannot append to self".to_string());
                     }
@@ -380,30 +382,7 @@ impl MyApp {
                                 self.error_appending_another_file =
                                     Some(format!("File {}.safe is empty", filename));
                             } else {
-                                let content: Vec<_> = content.split("\n").collect();
-                                if content.len() < 3 {
-                                    self.error_appending_another_file =
-                                        Some(format!("File {}.safe has invalid format", filename));
-                                } else {
-                                    match PlainText::decrypt(
-                                        password, content[0], content[1], content[2],
-                                    ) {
-                                        Ok(appended_plaintext) => {
-                                            self.content.get_plaintext_mut().map(|plaintext| {
-                                                plaintext.append_plaintext(appended_plaintext);
-                                                self.dirty = true;
-                                                self.appending_another_file = None;
-                                                self.error_appending_another_file = None;
-                                            });
-                                        }
-                                        Err(err) => {
-                                            self.error_appending_another_file = Some(format!(
-                                                "Failed to decrypt file {}.safe: {:?}",
-                                                filename, err
-                                            ));
-                                        }
-                                    }
-                                }
+                                self.try_appending_encrypted_file(&filename, &content, &password);
                             }
                         }
                         Err(err) => {
@@ -418,6 +397,31 @@ impl MyApp {
                 ui.add(egui::Label::new(egui::WidgetText::RichText(
                     RichText::from(error).color(Color32::RED),
                 )));
+            }
+        }
+    }
+
+    fn try_appending_encrypted_file(&mut self, filename: &str, content: &str, password: &str) {
+        let content: Vec<_> = content.split("\n").collect();
+        if content.len() < 3 {
+            self.error_appending_another_file =
+                Some(format!("File {}.safe has invalid format", filename));
+        } else {
+            match PlainText::decrypt(password, content[0], content[1], content[2]) {
+                Ok(appended_plaintext) => {
+                    self.content.get_plaintext_mut().map(|plaintext| {
+                        plaintext.append_plaintext(appended_plaintext);
+                        self.dirty = true;
+                        self.appending_another_file = None;
+                        self.error_appending_another_file = None;
+                    });
+                }
+                Err(err) => {
+                    self.error_appending_another_file = Some(format!(
+                        "Failed to decrypt file {}.safe: {:?}",
+                        filename, err
+                    ));
+                }
             }
         }
     }
