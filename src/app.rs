@@ -7,12 +7,11 @@ use homedir::my_home;
 use std::path::PathBuf;
 
 use eframe::egui;
-use egui::{
-    Color32, FontDefinitions, FontFamily, FontId, FontSelection, Key, RichText, TextEdit, Vec2,
-    WidgetText,
-};
-use font_kit::source::SystemSource;
+use egui::{Color32, FontFamily, FontId, FontSelection, Key, RichText, TextEdit, Vec2, WidgetText};
 use serde::{Deserialize, Serialize};
+
+mod macos;
+mod windows;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct Config {
@@ -187,74 +186,6 @@ impl MyApp {
             .collect::<Vec<_>>();
         file_names.sort();
         (config, file_names)
-    }
-
-    #[cfg(target_os = "macos")]
-    fn load_font_and_insert(
-        name: &'static str,
-        id: &'static str,
-        index: usize,
-        fonts: &mut FontDefinitions,
-    ) {
-        SystemSource::new()
-            .all_families()
-            .unwrap()
-            .iter()
-            .for_each(|name| println!("Family: {}", name));
-        let font = SystemSource::new()
-            .select_by_postscript_name(name.into())
-            .expect(&format!("Cannot find font {}", name))
-            .load()
-            .unwrap()
-            .copy_font_data()
-            .unwrap();
-        fonts
-            .font_data
-            .insert(id.to_owned(), egui::FontData::from_owned(font.to_vec()));
-
-        fonts
-            .families
-            .entry(egui::FontFamily::Proportional)
-            .or_default()
-            .insert(index, id.to_owned());
-        fonts
-            .families
-            .entry(egui::FontFamily::Monospace)
-            .or_default()
-            .push(id.to_owned());
-    }
-
-    #[cfg(target_os = "windows")]
-    fn load_font_and_insert(
-        family_name: &'static str,
-        id: &'static str,
-        index: usize,
-        fonts: &mut FontDefinitions,
-    ) {
-        let font = SystemSource::new()
-            .select_best_match(
-                &[FamilyName::Title(family_name.to_string())],
-                &Properties::new(),
-            )
-            .expect(&format!("Cannot find font family {}", family_name))
-            .load()
-            .unwrap()
-            .copy_font_data()
-            .unwrap();
-        fonts
-            .font_data
-            .insert(id.to_owned(), egui::FontData::from_owned(font.to_vec()));
-
-        fonts
-            .families
-            .entry(egui::FontFamily::Proportional)
-            .or_default()
-            .insert(index, id.to_owned());
-        fonts
-            .families
-            .entry(egui::FontFamily::Monospace)
-            .or_default()
-            .push(id.to_owned());
     }
 }
 
