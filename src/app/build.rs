@@ -1,8 +1,5 @@
 use super::{content::Content, MyApp};
-use crate::{
-    data_structures::{Passage, PlainText},
-    error::Error,
-};
+use crate::data_structures::{Passage, PlainText};
 use std::path::PathBuf;
 
 use eframe::egui;
@@ -83,63 +80,6 @@ impl MyApp {
         self.confirm_password = "".to_string();
         self.new_password = "".to_string();
         self.edited_text = "".to_string();
-    }
-
-    fn build_filename_button(
-        &mut self,
-        file_name: String,
-        width: f32,
-        ui: &mut egui::Ui,
-    ) -> Result<(), Error> {
-        let selected = self.content.get_file_name() == Some(&file_name);
-        let disabled = self.dirty || selected;
-        if ui
-            .add(
-                egui::Button::new(egui::WidgetText::RichText(
-                    RichText::from(file_name.clone())
-                        .size(18.0)
-                        .color(if self.dirty {
-                            Color32::WHITE.gamma_multiply(0.2)
-                        } else if selected {
-                            Color32::BLACK
-                        } else {
-                            Color32::WHITE
-                        }),
-                ))
-                .min_size(Vec2::new(width, 24.0))
-                .fill(if selected {
-                    Color32::LIGHT_GRAY
-                } else {
-                    Color32::TRANSPARENT
-                }),
-            )
-            .clicked()
-            && !disabled
-        {
-            self.clear_editor_input_fields();
-            let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", file_name));
-            let content = std::fs::read(path).map_err(|err| {
-                Error::FailedToOpenFile(format!("Failed to open file {}: {:?}", file_name, err))
-            })?;
-
-            let content = String::from_utf8(content).unwrap();
-            if content.is_empty() {
-                self.content = Content::NewFile(file_name);
-            } else {
-                let content: Vec<_> = content.split("\n").collect();
-                if content.len() < 3 {
-                    self.content = Content::Error("Invalid format".to_string());
-                } else {
-                    self.content = Content::Encrypted(
-                        file_name.clone(),
-                        content[0].to_string(),
-                        content[1].to_string(),
-                        content[2].to_string(),
-                    );
-                }
-            }
-        }
-        Ok(())
     }
 
     pub(super) fn build_uninitialized_file(

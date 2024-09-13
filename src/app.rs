@@ -25,7 +25,6 @@ pub struct MyApp {
     file_names: Vec<String>,
     data_dir: String,
     creating_new_file: Option<String>,
-    error_creating_new_file: Option<String>,
     password: String,
     add_new_passage: Option<(String, usize)>,
     editing_passage_name: Option<(String, usize)>,
