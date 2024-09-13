@@ -1,10 +1,11 @@
 #![windows_subsystem = "windows"]
-use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
-use base64::{engine::general_purpose, Engine as _};
-use hmac::{digest::MacError, Hmac, Mac};
+
 use homedir::my_home;
-use rand::{rngs::StdRng, RngCore, SeedableRng};
-use sha2::Digest;
+use safe_writing_rs::{
+    data_structures::{Passage, PlainText},
+    error::Error,
+    safe_note::load_safe_note_file,
+};
 use std::path::PathBuf;
 
 use eframe::egui;
@@ -434,27 +435,15 @@ impl MyApp {
                             if !self.imported_file_name.is_empty() {
                                 match load_safe_note_file(&self.password, &path) {
                                     Ok(safe_note) => {
-                                        let passages = safe_note
-                                            .records
-                                            .iter()
-                                            .map(|p| Passage {
-                                                id: 0,
-                                                title: p.title.clone(),
-                                                content: p.description.clone(),
-                                            })
-                                            .collect();
-                                        let plaintext = PlainText {
-                                            next_id: 0,
-                                            content: passages,
-                                        };
+                                        let plaintext = safe_note.into_plaintext();
+
                                         if self.file_names.contains(&self.imported_file_name) {
                                             self.content = Content::Error(format!(
                                                 "File with name {} already exists",
                                                 &self.imported_file_name
                                             ));
                                         } else {
-                                            let content =
-                                                encrypt(&self.password, plaintext.clone());
+                                            let content = plaintext.encrypt(&self.password);
                                             let path = PathBuf::from(&self.data_dir)
                                                 .join(format!("{}.safe", &self.imported_file_name));
                                             if std::fs::write(path, content).is_ok() {
@@ -622,14 +611,7 @@ impl MyApp {
             || ctx.input(|i| i.key_pressed(egui::Key::Enter))
         {
             if self.password.len() > 0 && self.password == self.confirm_password {
-                self.content = Content::PlainText(
-                    filename,
-                    PlainText {
-                        next_id: 0,
-                        content: vec![],
-                    },
-                    0,
-                );
+                self.content = Content::PlainText(filename, PlainText::empty(), 0);
                 self.show_passage_operation_buttons = false;
             }
         }
@@ -657,10 +639,10 @@ impl MyApp {
             .clicked()
             || ctx.input(|i| i.key_pressed(egui::Key::Enter))
         {
-            match decrypt(&self.password, iv, data, mac) {
+            match PlainText::decrypt(&self.password, iv, data, mac) {
                 Ok(plaintext) => {
-                    if plaintext.content.len() > 0 {
-                        self.edited_text = plaintext.content[0].content.clone();
+                    if let Some(text) = plaintext.get_first_passage_text() {
+                        self.edited_text = text;
                     }
                     self.content = Content::PlainText(filename.clone(), plaintext, 0);
                     self.dirty = false;
@@ -698,9 +680,9 @@ impl MyApp {
             .clicked()
         {
             if self.new_password == self.confirm_password {
-                match decrypt(&self.password, iv, data, mac) {
+                match PlainText::decrypt(&self.password, iv, data, mac) {
                     Ok(plaintext) => {
-                        let ciphertext = encrypt(&self.new_password, plaintext);
+                        let ciphertext = plaintext.encrypt(&self.new_password);
                         let path =
                             PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", filename));
                         std::fs::write(path, &ciphertext).unwrap();
@@ -732,7 +714,7 @@ impl MyApp {
             .show(ui, |ui| {
                 self.build_passage_list(150.0, filename, plaintext, selected_index, ctx, ui);
             });
-        if plaintext.content.is_empty() {
+        if plaintext.is_empty() {
             ui.with_layout(
                 egui::Layout::centered_and_justified(egui::Direction::TopDown),
                 |ui| {
@@ -746,8 +728,8 @@ impl MyApp {
                 ui.allocate_space(Vec2::new(0.0, 200.0));
                 ui.label(
                     egui::WidgetText::from(format!(
-                        "Sure to delete this passage? Titled: {}",
-                        plaintext.content[to_delete_passage_index].title
+                        "Sure to delete this passage? Titled: {:?}",
+                        plaintext.title_of_passage(to_delete_passage_index)
                     ))
                     .color(Color32::LIGHT_RED),
                 );
@@ -761,20 +743,21 @@ impl MyApp {
                     .clicked()
                 {
                     let mut plaintext = plaintext.clone();
-                    plaintext.content.remove(to_delete_passage_index);
-                    let new_selected_index = if plaintext.content.len() == 0 {
+                    plaintext.remove_passage(to_delete_passage_index);
+                    let new_selected_index = if plaintext.is_empty() {
                         0
-                    } else if selected_index >= plaintext.content.len() {
+                    } else if selected_index >= plaintext.num_passages() {
                         selected_index - 1
                     } else {
                         selected_index
                     };
                     self.content =
                         Content::PlainText(filename.clone(), plaintext.clone(), new_selected_index);
-                    if plaintext.content.len() == 0 {
+                    if plaintext.num_passages() == 0 {
                         self.edited_text = "".to_string();
                     } else {
-                        self.edited_text = plaintext.content[new_selected_index].content.clone();
+                        self.edited_text =
+                            plaintext.content_of_passage(new_selected_index).unwrap();
                     }
                     self.confirm_delete_passage = None;
                     self.dirty = true;
@@ -784,7 +767,8 @@ impl MyApp {
             egui::ScrollArea::vertical()
                 .id_source(format!(
                     "editor:{}:{}",
-                    filename, plaintext.content[selected_index].id
+                    filename,
+                    plaintext.id_of_passage(selected_index).unwrap()
                 ))
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
@@ -803,7 +787,7 @@ impl MyApp {
                         .changed()
                     {
                         self.content.get_plaintext_mut().map(|plaintext| {
-                            plaintext.content[selected_index].content = self.edited_text.clone();
+                            plaintext.set_content(selected_index, self.edited_text.clone());
                             self.dirty = true;
                         });
                     }
@@ -901,7 +885,7 @@ impl MyApp {
                         .get_plaintext_mut()
                         .and_then(|plaintext| {
                             if selected_index > 0 {
-                                plaintext.content.swap(selected_index, selected_index - 1);
+                                plaintext.swap(selected_index, selected_index - 1);
                                 self.dirty = true;
                                 Some(())
                             } else {
@@ -927,8 +911,8 @@ impl MyApp {
                         .content
                         .get_plaintext_mut()
                         .and_then(|plaintext| {
-                            if selected_index < plaintext.content.len() - 1 {
-                                plaintext.content.swap(selected_index, selected_index + 1);
+                            if selected_index < plaintext.num_passages() - 1 {
+                                plaintext.swap(selected_index, selected_index + 1);
                                 self.dirty = true;
                                 Some(())
                             } else {
@@ -952,7 +936,7 @@ impl MyApp {
                 {
                     self.add_new_passage = None;
                     self.editing_passage_name = Some((
-                        plaintext.content[selected_index].title.clone(),
+                        plaintext.title_of_passage(selected_index).unwrap(),
                         selected_index,
                     ));
                 }
@@ -982,7 +966,7 @@ impl MyApp {
                     if let Ok(temp_content) = std::fs::read_to_string(&temp_file_path) {
                         self.content.get_plaintext_mut().map(|plaintext| {
                             self.edited_text += &format!("\n\n{}", temp_content.trim());
-                            plaintext.content[selected_index].content = self.edited_text.clone();
+                            plaintext.set_content(selected_index, self.edited_text.clone());
                             self.dirty = true;
                         });
                         if let Err(err) = std::fs::remove_file(&temp_file_path) {
@@ -1057,15 +1041,15 @@ impl MyApp {
                                                 filename
                                             ));
                                         } else {
-                                            match decrypt(
+                                            match PlainText::decrypt(
                                                 password, content[0], content[1], content[2],
                                             ) {
                                                 Ok(appended_plaintext) => {
                                                     self.content.get_plaintext_mut().map(
                                                         |plaintext| {
-                                                            plaintext
-                                                                .content
-                                                                .extend(appended_plaintext.content);
+                                                            plaintext.append_plaintext(
+                                                                appended_plaintext,
+                                                            );
                                                             self.dirty = true;
                                                             self.appending_another_file = None;
                                                             self.error_appending_another_file =
@@ -1107,11 +1091,11 @@ impl MyApp {
                 .auto_shrink([true, false])
                 .max_width(width)
                 .show(ui, |ui| {
-                    if plaintext.content.is_empty() {
+                    if plaintext.is_empty() {
                         self.build_new_passage_add(0, width, ctx, ui);
                     }
                     plaintext
-                        .content
+                        .passages()
                         .iter()
                         .enumerate()
                         .for_each(|(i, passage)| {
@@ -1137,13 +1121,13 @@ impl MyApp {
 
     fn save(&mut self, filename: String, plaintext: &PlainText) {
         let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", filename));
-        std::fs::write(path, encrypt(&self.password, plaintext.clone())).unwrap();
+        std::fs::write(path, plaintext.encrypt(&self.password)).unwrap();
         self.dirty = false;
     }
 
     fn save_and_lock(&mut self, filename: String, plaintext: &PlainText) {
         let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", filename));
-        let ciphertext = encrypt(&self.password, plaintext.clone());
+        let ciphertext = plaintext.encrypt(&self.password);
         std::fs::write(path, &ciphertext).unwrap();
         self.dirty = false;
         let ciphertext: Vec<_> = ciphertext.split("\n").collect();
@@ -1207,7 +1191,7 @@ impl MyApp {
         if ui
             .add(
                 egui::Button::new(egui::WidgetText::RichText(
-                    RichText::from(passage.title.clone()).size(18.0).color(
+                    RichText::from(passage.title().clone()).size(18.0).color(
                         if curr_index == selected_index {
                             Color32::BLACK
                         } else {
@@ -1226,7 +1210,7 @@ impl MyApp {
         {
             if curr_index != selected_index {
                 self.content = Content::PlainText(filename.clone(), plaintext.clone(), curr_index);
-                self.edited_text = plaintext.content[curr_index].content.clone();
+                self.edited_text = plaintext.content_of_passage(curr_index).unwrap();
             }
         }
         self.build_new_passage_add(curr_index + 1, width, ctx, ui);
@@ -1249,228 +1233,12 @@ impl MyApp {
                 ))),
         );
         if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-            self.content.get_plaintext_mut().unwrap().content[selected_index].title =
-                self.editing_passage_name.as_ref().unwrap().0.clone();
+            self.content.get_plaintext_mut().unwrap().set_title(
+                selected_index,
+                self.editing_passage_name.as_ref().unwrap().0.clone(),
+            );
             self.editing_passage_name = None;
             self.dirty = true;
         }
     }
-}
-
-fn key_derive(password: &str) -> [u8; 16] {
-    let mut out = [0u8; 16]; // We will use 128 bits key
-    pbkdf2::pbkdf2_hmac::<sha2::Sha256>(password.as_bytes(), b"safe_write", 100, &mut out);
-    out
-}
-
-fn encrypt(password: &str, data: PlainText) -> String {
-    let data = data.encode();
-    let key = key_derive(password);
-
-    let mut iv = [0u8; 16];
-    StdRng::from_entropy().fill_bytes(&mut iv);
-
-    let encrypted = cbc::Encryptor::<aes::Aes128>::new(&key.into(), &iv.into())
-        .encrypt_padded_vec_mut::<Pkcs7>(&data);
-    let mut mac =
-        Hmac::<sha2::Sha256>::new_from_slice(&key).expect("HMAC can take key of any size");
-    mac.update(encrypted.as_slice());
-
-    general_purpose::STANDARD.encode(iv)
-        + "\n"
-        + &general_purpose::STANDARD.encode(encrypted)
-        + "\n"
-        + &general_purpose::STANDARD.encode(mac.finalize().into_bytes())
-}
-
-#[derive(Debug, Clone)]
-struct Passage {
-    id: usize,
-    title: String,
-    content: String,
-}
-
-impl Passage {
-    fn encode(&self) -> String {
-        let title = base64_encode(self.title.as_bytes().to_vec());
-        let content = base64_encode(self.content.as_bytes().to_vec());
-        title + "-" + &content
-    }
-}
-
-#[derive(Debug, Clone)]
-struct PlainText {
-    next_id: usize,
-    content: Vec<Passage>,
-}
-
-impl PlainText {
-    fn encode(&self) -> Vec<u8> {
-        (self
-            .content
-            .iter()
-            .map(|p| p.encode())
-            .collect::<Vec<_>>()
-            .join("|")
-            + ":FontSize=24")
-            .as_bytes()
-            .to_vec()
-    }
-
-    fn insert_new_passage(&mut self, index: usize, title: String) {
-        self.content.insert(
-            index,
-            Passage {
-                id: self.next_id,
-                title,
-                content: "".to_string(),
-            },
-        );
-        self.next_id += 1;
-    }
-}
-
-fn decrypt(password: &str, iv: &str, data: &str, mac: &str) -> Result<PlainText, Error> {
-    let key = key_derive(password);
-    let iv = base64_decode_to_bytes(iv)?;
-    let data = base64_decode_to_bytes(data)?;
-    let mac = base64_decode_to_bytes(mac)?;
-    let mut mac_calculated =
-        Hmac::<sha2::Sha256>::new_from_slice(&key).expect("HMAC can take key of any size");
-    mac_calculated.update(data.as_slice());
-    mac_calculated
-        .verify_slice(&mac)
-        .map_err(|err| Error::MacFail(err))?;
-
-    let plaintext = cbc::Decryptor::<aes::Aes128>::new(&key.into(), iv.as_slice().into())
-        .decrypt_padded_vec_mut::<Pkcs7>(&data)
-        .map_err(|_| Error::DecryptionFail)
-        .and_then(|s| String::from_utf8(s).map_err(|_| Error::InvalidUTF8))?;
-
-    let plaintexts: Vec<_> = plaintext.split(":").collect();
-    if plaintexts.len() < 2 {
-        return Err(Error::InvalidPlaintextFormat);
-    }
-    let plaintext_encodings = plaintexts[0];
-    // let font_size = plaintexts[1];
-
-    if plaintext_encodings.is_empty() {
-        return Ok(PlainText {
-            next_id: 0,
-            content: vec![],
-        });
-    };
-
-    let plaintext_encodings: Vec<_> = plaintext_encodings.split("|").collect();
-
-    let passages = plaintext_encodings
-        .iter()
-        .enumerate()
-        .map(|(i, s)| {
-            let contents: Vec<_> = s.split("-").collect();
-            if contents.len() < 2 {
-                return Err(Error::InvalidPlaintextFormat);
-            }
-            let title = contents[0];
-            let content = contents[1];
-            Ok(Passage {
-                id: i,
-                title: base64_decode(title)?,
-                content: base64_decode(content)?,
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
-    Ok(PlainText {
-        next_id: passages.len(),
-        content: passages,
-    })
-}
-
-fn base64_encode(data: Vec<u8>) -> String {
-    general_purpose::STANDARD.encode(data)
-}
-
-fn base64_decode(data: &str) -> Result<String, Error> {
-    String::from_utf8(
-        general_purpose::STANDARD
-            .decode(data)
-            .map_err(|_| Error::Base64DecodeFail)?,
-    )
-    .map_err(|_| Error::InvalidUTF8)
-}
-
-fn base64_decode_to_bytes(data: &str) -> Result<Vec<u8>, Error> {
-    general_purpose::STANDARD
-        .decode(data)
-        .map_err(|_| Error::Base64DecodeFail)
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-struct SafeNoteFile {
-    records: Vec<SafeNoteRecord>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-struct SafeNoteRecord {
-    title: String,
-    description: String,
-}
-
-fn load_safe_note_file(password: &str, file_path: &PathBuf) -> Result<SafeNoteFile, Error> {
-    let contents = std::fs::read_to_string(file_path)
-        .map_err(|err| Error::FailedToOpenFile(format!("{:?}", err)))?;
-    let mut safenote: SafeNoteFile = serde_json::from_str(&contents)
-        .map_err(|err| Error::FailedToParseJson(format!("{:?}", err)))?;
-    for record in safenote.records.iter_mut() {
-        record.title = decrypt_safe_notes_ciphertext(password, &record.title)?;
-        record.description = decrypt_safe_notes_ciphertext(password, &record.description)?;
-    }
-    Ok(safenote)
-}
-
-fn decrypt_safe_notes_ciphertext(password: &str, ciphertext: &str) -> Result<String, Error> {
-    let data = base64_decode_to_bytes(ciphertext)?;
-    let salt = data[8..16].to_vec();
-    let data = data[16..].to_vec();
-    let password = password.as_bytes();
-    let mut concatenated_hashes = Vec::<u8>::new();
-    let mut current_hash = Vec::<u8>::new();
-    let mut pre_hash: Vec<u8>;
-
-    for _ in 0..32 {
-        if current_hash.len() > 0 {
-            pre_hash = current_hash.clone();
-            pre_hash.extend_from_slice(password);
-            pre_hash.extend_from_slice(&salt);
-        } else {
-            pre_hash = password.to_vec();
-            pre_hash.extend_from_slice(&salt);
-        }
-        let mut hasher = sha2::Sha256::new();
-        hasher.update(&pre_hash);
-        current_hash = hasher.finalize().to_vec();
-        concatenated_hashes.extend_from_slice(&current_hash);
-        if concatenated_hashes.len() > 48 {
-            break;
-        }
-    }
-    let key = concatenated_hashes[0..32].to_vec();
-    let iv = concatenated_hashes[32..48].to_vec();
-
-    cbc::Decryptor::<aes::Aes256>::new(key.as_slice().into(), iv.as_slice().into())
-        .decrypt_padded_vec_mut::<Pkcs7>(&data)
-        .map_err(|_| Error::DecryptionFail)
-        .and_then(|s| String::from_utf8(s).map_err(|_| Error::InvalidUTF8))
-}
-
-#[derive(Debug)]
-enum Error {
-    FailedToOpenFile(String),
-    Base64DecodeFail,
-    DecryptionFail,
-    MacFail(MacError),
-    InvalidUTF8,
-    InvalidPlaintextFormat,
-    FailedToParseJson(String),
 }
