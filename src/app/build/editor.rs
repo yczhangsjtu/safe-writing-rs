@@ -363,40 +363,42 @@ impl MyApp {
         }
         if let Some((filename, password)) = self.appending_another_file.clone() {
             if ctx.input(|i| i.key_pressed(egui::Key::Enter)) && !filename.is_empty() {
-                if let Some(current_file_name) = self.content.get_file_name() {
-                    if &filename == current_file_name {
-                        self.error_appending_another_file =
-                            Some("Cannot append to self".to_string());
-                    }
-                }
-
-                let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", filename));
-                if !path.exists() {
-                    self.error_appending_another_file =
-                        Some(format!("File {}.safe not exists", filename));
-                } else {
-                    match std::fs::read(path) {
-                        Ok(data) => {
-                            let content = String::from_utf8(data).unwrap();
-                            if content.is_empty() {
-                                self.error_appending_another_file =
-                                    Some(format!("File {}.safe is empty", filename));
-                            } else {
-                                self.try_appending_encrypted_file(&filename, &content, &password);
-                            }
-                        }
-                        Err(err) => {
-                            self.error_appending_another_file =
-                                Some(format!("Failed to read file {}.safe: {}", filename, err));
-                        }
-                    }
-                }
+                self.try_appending_safe_file(&filename, &password);
                 self.creating_new_file = None;
             }
             if let Some(error) = &self.error_appending_another_file {
                 ui.add(egui::Label::new(egui::WidgetText::RichText(
                     RichText::from(error).color(Color32::RED),
                 )));
+            }
+        }
+    }
+
+    fn try_appending_safe_file(&mut self, filename: &String, password: &String) {
+        if let Some(current_file_name) = self.content.get_file_name() {
+            if filename == current_file_name {
+                self.error_appending_another_file = Some("Cannot append to self".to_string());
+            }
+        }
+
+        let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", filename));
+        if !path.exists() {
+            self.error_appending_another_file = Some(format!("File {}.safe not exists", filename));
+        } else {
+            match std::fs::read(path) {
+                Ok(data) => {
+                    let content = String::from_utf8(data).unwrap();
+                    if content.is_empty() {
+                        self.error_appending_another_file =
+                            Some(format!("File {}.safe is empty", filename));
+                    } else {
+                        self.try_appending_encrypted_file(filename, &content, password);
+                    }
+                }
+                Err(err) => {
+                    self.error_appending_another_file =
+                        Some(format!("Failed to read file {}.safe: {}", filename, err));
+                }
             }
         }
     }
