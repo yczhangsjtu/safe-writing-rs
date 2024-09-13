@@ -2,7 +2,7 @@
 use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 use base64::{engine::general_purpose, Engine as _};
 use hmac::{digest::MacError, Hmac, Mac};
-use homedir::get_my_home;
+use homedir::my_home;
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 use sha2::Digest;
 use std::path::PathBuf;
@@ -12,7 +12,7 @@ use egui::{
     Color32, FontDefinitions, FontFamily, FontId, FontSelection, Key, RichText, TextEdit, Vec2,
     WidgetText,
 };
-use font_kit::{family_name::FamilyName, properties::Properties, source::SystemSource};
+use font_kit::source::SystemSource;
 use serde::{Deserialize, Serialize};
 
 #[cfg(target_os = "windows")]
@@ -36,7 +36,7 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "Safe Writing",
         options,
-        Box::new(|cc: &eframe::CreationContext<'_>| Box::<MyApp>::new(MyApp::new(cc))),
+        Box::new(|cc: &eframe::CreationContext<'_>| Ok(Box::<MyApp>::new(MyApp::new(cc)))),
     )
 }
 
@@ -72,6 +72,7 @@ impl<T: Clone, P: Clone> Content<T, P> {
         }
     }
 
+    #[allow(unused)]
     fn get_plaintext(&mut self) -> Option<&P> {
         match self {
             Content::PlainText(_, ref a, _) => Some(a),
@@ -139,15 +140,38 @@ struct MyApp {
 
 impl MyApp {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        let (config, file_names) = Self::get_config_and_filenames();
+
+        let mut fonts = egui::FontDefinitions::default();
+
+        #[cfg(target_os = "macos")]
+        {
+            Self::load_font_and_insert("Hei", "heiti", 0, &mut fonts);
+            Self::load_font_and_insert("Heiti SC", "heiti sc", 0, &mut fonts);
+            Self::load_font_and_insert("PingFang SC", "pingfang sc", 0, &mut fonts);
+            Self::load_font_and_insert("Songti SC", "songti sc", 1, &mut fonts);
+            Self::load_font_and_insert("SimSong", "simsong", 1, &mut fonts);
+        }
+        #[cfg(target_os = "windows")]
+        {
+            Self::load_font_and_insert("Microsoft YaHei UI", "yahei", 0, &mut fonts);
+        }
+
+        // Tell egui to use these fonts:
+        cc.egui_ctx.set_fonts(fonts);
+
+        Self {
+            font_size: config.font_size,
+            file_names,
+            data_dir: config.data_dir,
+            ..Default::default()
+        }
+    }
+
+    fn get_config_and_filenames() -> (Config, Vec<String>) {
         let config_path = std::env::var("SAFE_WRITING_CONFIG_DIR")
             .map(|p| std::path::PathBuf::from(p))
-            .unwrap_or(
-                get_my_home()
-                    .unwrap()
-                    .unwrap()
-                    .as_path()
-                    .join(".safe_writing"),
-            );
+            .unwrap_or(my_home().unwrap().unwrap().as_path().join(".safe_writing"));
         if !config_path.is_dir() {
             if config_path.exists() {
                 panic!("Config path {} is not a directory", config_path.display());
@@ -186,31 +210,7 @@ impl MyApp {
             })
             .collect::<Vec<_>>();
         file_names.sort();
-
-        let mut fonts = egui::FontDefinitions::default();
-
-        #[cfg(target_os = "macos")]
-        {
-            Self::load_font_and_insert("Hei", "heiti", 0, &mut fonts);
-            Self::load_font_and_insert("Heiti SC", "heiti sc", 0, &mut fonts);
-            Self::load_font_and_insert("PingFang SC", "pingfang sc", 0, &mut fonts);
-            Self::load_font_and_insert("Songti SC", "songti sc", 1, &mut fonts);
-            Self::load_font_and_insert("SimSong", "simsong", 1, &mut fonts);
-        }
-        #[cfg(target_os = "windows")]
-        {
-            Self::load_font_and_insert("Microsoft YaHei UI", "yahei", 0, &mut fonts);
-        }
-
-        // Tell egui to use these fonts:
-        cc.egui_ctx.set_fonts(fonts);
-
-        Self {
-            font_size: config.font_size,
-            file_names,
-            data_dir: config.data_dir,
-            ..Default::default()
-        }
+        (config, file_names)
     }
 
     #[cfg(target_os = "macos")]
@@ -395,6 +395,19 @@ impl MyApp {
                             self.waiting_for_password_for_safe_note = None;
                         }
                     }
+                    if ui
+                        .add(
+                            egui::Button::new(egui::WidgetText::RichText(
+                                RichText::from("Refresh").size(18.0).color(Color32::WHITE),
+                            ))
+                            .min_size(Vec2::new(width, 24.0))
+                            .fill(Color32::GRAY.gamma_multiply(0.5)),
+                        )
+                        .clicked()
+                    {
+                        let (_, file_names) = Self::get_config_and_filenames();
+                        self.file_names = file_names;
+                    }
                     if let Some(path) = self.waiting_for_password_for_safe_note.clone() {
                         ui.add(
                             TextEdit::singleline(&mut self.password)
@@ -484,6 +497,7 @@ impl MyApp {
                                 std::fs::write(path, "").unwrap();
                                 self.file_names.push(filename.clone());
                                 self.file_names.sort();
+                                self.content = Content::NewFile(filename.clone());
                             }
                             self.creating_new_file = None;
                         }
@@ -509,6 +523,13 @@ impl MyApp {
                         });
                 });
             });
+    }
+
+    fn clear_editor_input_fields(&mut self) {
+        self.password = "".to_string();
+        self.confirm_password = "".to_string();
+        self.new_password = "".to_string();
+        self.edited_text = "".to_string();
     }
 
     fn build_filename_button(
@@ -542,10 +563,7 @@ impl MyApp {
             .clicked()
             && !disabled
         {
-            self.password = "".to_string();
-            self.confirm_password = "".to_string();
-            self.new_password = "".to_string();
-            self.edited_text = "".to_string();
+            self.clear_editor_input_fields();
             let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", file_name));
             let content = std::fs::read(path).map_err(|err| {
                 Error::FailedToOpenFile(format!("Failed to open file {}: {:?}", file_name, err))
@@ -1225,7 +1243,15 @@ fn decrypt(password: &str, iv: &str, data: &str, mac: &str) -> Result<PlainText,
     let plaintext_encodings = plaintexts[0];
     // let font_size = plaintexts[1];
 
+    if plaintext_encodings.is_empty() {
+        return Ok(PlainText {
+            next_id: 0,
+            content: vec![],
+        });
+    };
+
     let plaintext_encodings: Vec<_> = plaintext_encodings.split("|").collect();
+
     let passages = plaintext_encodings
         .iter()
         .enumerate()

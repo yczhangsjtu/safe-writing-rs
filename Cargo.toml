@@ -6,21 +6,21 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-egui = "0.27"
-eframe = "0.27"
-font-kit = "0.13.2"
+egui = "0.28"
+eframe = "0.28"
+font-kit = "0.14"
 serde_json = "1.0.108"
 serde = { version = "1.0.166", features = ["derive"] }
 toml = "0.8.8"
 pbkdf2 = "0.12.2"
 sha2 = "0.10.8"
-base64 = "0.21.5"
+base64 = "0.22"
 cbc = { version = "0.1.2", features = ["alloc"] }
 aes = "0.8.3"
 hmac = "0.12.1"
 rand = { version = "0.8.5", features = ["std_rng"] }
-rfd = "0.12"
-homedir = "0.2.1"
+rfd = "0.14"
+homedir = "0.3"
 
 [build-dependencies]
 winres = "0.1.12"
