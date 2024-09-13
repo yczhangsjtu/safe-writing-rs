@@ -7,9 +7,72 @@ use crate::{
 use std::path::PathBuf;
 
 use eframe::egui;
-use egui::{Color32, FontFamily, FontId, FontSelection, Key, RichText, TextEdit, Vec2};
+use egui::{
+    Color32, FontFamily, FontId, FontSelection, InnerResponse, Key, RichText, TextEdit, Vec2,
+    WidgetText,
+};
 
 impl MyApp {
+    pub(super) fn main_layout(
+        &mut self,
+        ctx: &egui::Context,
+        ui: &mut egui::Ui,
+    ) -> InnerResponse<()> {
+        ui.label(WidgetText::RichText(
+            RichText::new(self.data_dir.as_str()).color(Color32::WHITE),
+        ));
+        ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
+            self.build_file_list(200.0, ctx, ui);
+            match self.content.clone() {
+                Content::NewFile(filename) => {
+                    ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                        ui.allocate_space(Vec2::new(0.0, 200.0));
+                        self.build_uninitialized_file(filename, ctx, ui);
+                    });
+                }
+                Content::Encrypted(ref filename, ref iv, ref data, ref mac) => {
+                    ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                        ui.allocate_space(Vec2::new(0.0, 200.0));
+                        self.build_encrypted_file(filename, ctx, ui, iv, data, mac);
+                    });
+                }
+                Content::None => {
+                    ui.with_layout(
+                        egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                        |ui| {
+                            ui.add(egui::Label::new(egui::WidgetText::RichText(
+                                RichText::from("Please select a file to open").size(18.0),
+                            )));
+                        },
+                    );
+                }
+                Content::PlainText(filename, plaintext, selected_index) => {
+                    self.build_editor(&filename, &plaintext, selected_index, ctx, ui);
+                }
+                Content::Error(err) => {
+                    ui.with_layout(
+                        egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                        |ui| {
+                            ui.add(egui::Label::new(egui::WidgetText::RichText(
+                                RichText::from(err).size(18.0).color(Color32::RED),
+                            )));
+                        },
+                    );
+                }
+                Content::Success(err) => {
+                    ui.with_layout(
+                        egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                        |ui| {
+                            ui.add(egui::Label::new(egui::WidgetText::RichText(
+                                RichText::from(err).size(18.0).color(Color32::GREEN),
+                            )));
+                        },
+                    );
+                }
+            }
+        })
+    }
+
     pub(super) fn build_file_list(&mut self, width: f32, ctx: &egui::Context, ui: &mut egui::Ui) {
         egui::Frame::none()
             .fill(Color32::GRAY.gamma_multiply(0.2))
