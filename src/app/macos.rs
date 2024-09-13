@@ -11,11 +11,11 @@ impl MyApp {
         index: usize,
         fonts: &mut FontDefinitions,
     ) {
-        SystemSource::new()
-            .all_families()
-            .unwrap()
-            .iter()
-            .for_each(|name| println!("Family: {}", name));
+        // SystemSource::new()
+        //     .all_families()
+        //     .unwrap()
+        //     .iter()
+        //     .for_each(|name| println!("Family: {}", name));
         let font = SystemSource::new()
             .select_by_postscript_name(name.into())
             .expect(&format!("Cannot find font {}", name))

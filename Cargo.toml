@@ -24,6 +24,3 @@ homedir = "0.3"
 
 [build-dependencies]
 winres = "0.1.12"
-
-[patch.crates-io]
-font-kit = { path = "../font-kit" }
