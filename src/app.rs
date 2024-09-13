@@ -34,8 +34,7 @@ pub struct MyApp {
     show_passage_operation_buttons: bool,
     appending_another_file: Option<(String, String)>,
     error_appending_another_file: Option<String>,
-    waiting_for_password_for_safe_note: Option<PathBuf>,
-    imported_file_name: String,
+    waiting_for_password_for_safe_note: Option<(PathBuf, String, String)>,
 }
 
 impl MyApp {

@@ -1,6 +1,6 @@
 use super::MyApp;
 use crate::{app::content::Content, error::Error, safe_note::load_safe_note_file};
-use std::path::PathBuf;
+use std::{ffi::OsStr, path::PathBuf};
 
 use eframe::egui;
 use egui::{Color32, FontFamily, FontId, FontSelection, Key, RichText, TextEdit, Vec2};
@@ -77,18 +77,33 @@ impl MyApp {
                     .add_filter("JSON Files", &["json"])
                     .pick_file()
                 {
-                    self.waiting_for_password_for_safe_note = Some(path);
-                    self.password = "".to_string();
-                    self.imported_file_name = "".to_string();
+                    let default_name = path
+                        .file_stem()
+                        .unwrap_or(OsStr::new(""))
+                        .to_string_lossy()
+                        .to_string();
+                    self.waiting_for_password_for_safe_note =
+                        Some((path, default_name, "".to_string()));
                 }
             } else {
                 self.waiting_for_password_for_safe_note = None;
             }
         }
 
-        if let Some(path) = self.waiting_for_password_for_safe_note.clone() {
+        if let Some((path, ref mut new_file_name, ref mut password)) =
+            &mut self.waiting_for_password_for_safe_note
+        {
             ui.add(
-                TextEdit::singleline(&mut self.password)
+                TextEdit::singleline(new_file_name)
+                    .desired_width(width)
+                    .font(FontSelection::FontId(FontId::new(
+                        18.0,
+                        FontFamily::Proportional,
+                    )))
+                    .hint_text("New Name"),
+            );
+            ui.add(
+                TextEdit::singleline(password)
                     .desired_width(width)
                     .font(FontSelection::FontId(FontId::new(
                         18.0,
@@ -97,48 +112,34 @@ impl MyApp {
                     .hint_text("Password")
                     .password(true),
             );
-            ui.add(
-                TextEdit::singleline(&mut self.imported_file_name)
-                    .desired_width(width)
-                    .font(FontSelection::FontId(FontId::new(
-                        18.0,
-                        FontFamily::Proportional,
-                    )))
-                    .hint_text("New Name"),
-            );
-            if ctx.input(|i| i.key_pressed(Key::Enter)) {
-                if !self.imported_file_name.is_empty() {
-                    match load_safe_note_file(&self.password, &path) {
-                        Ok(safe_note) => {
-                            let plaintext = safe_note.into_plaintext();
-
-                            if self.file_names.contains(&self.imported_file_name) {
-                                self.content = Content::Error(format!(
-                                    "File with name {} already exists",
-                                    &self.imported_file_name
-                                ));
-                            } else {
-                                let content = plaintext.encrypt(&self.password);
-                                let path = PathBuf::from(&self.data_dir)
-                                    .join(format!("{}.safe", &self.imported_file_name));
-                                if std::fs::write(path, content).is_ok() {
-                                    self.file_names.push(self.imported_file_name.clone());
-                                    self.file_names.sort();
-                                    self.content = Content::PlainText(
-                                        self.imported_file_name.clone(),
-                                        plaintext.clone(),
-                                        0,
-                                    );
-                                }
+            if ctx.input(|i| i.key_pressed(Key::Enter)) && !new_file_name.is_empty() {
+                match load_safe_note_file(password, &path) {
+                    Ok(safe_note) => {
+                        let plaintext = safe_note.into_plaintext();
+                        if self.file_names.contains(new_file_name) {
+                            self.content = Content::Error(format!(
+                                "File with name {} already exists",
+                                new_file_name
+                            ));
+                        } else {
+                            let content = plaintext.encrypt(password);
+                            let path = PathBuf::from(&self.data_dir)
+                                .join(format!("{}.safe", new_file_name));
+                            if std::fs::write(path, content).is_ok() {
+                                self.file_names.push(new_file_name.clone());
+                                self.file_names.sort();
+                                self.content =
+                                    Content::PlainText(new_file_name.clone(), plaintext.clone(), 0);
+                                self.password = password.clone();
                             }
                         }
-                        Err(err) => {
-                            self.content =
-                                Content::Error(format!("Error loading safenote file: {:?}", err));
-                        }
                     }
-                    self.waiting_for_password_for_safe_note = None;
+                    Err(err) => {
+                        self.content =
+                            Content::Error(format!("Error loading safenote file: {:?}", err));
+                    }
                 }
+                self.waiting_for_password_for_safe_note = None;
             }
         }
     }
