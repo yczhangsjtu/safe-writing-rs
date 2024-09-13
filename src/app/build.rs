@@ -1,11 +1,9 @@
 use super::{content::Content, MyApp};
-use crate::data_structures::{Passage, PlainText};
+use crate::data_structures::PlainText;
 use std::path::PathBuf;
 
 use eframe::egui;
-use egui::{
-    Color32, FontFamily, FontId, FontSelection, InnerResponse, RichText, TextEdit, Vec2, WidgetText,
-};
+use egui::{Color32, InnerResponse, RichText, TextEdit, Vec2, WidgetText};
 
 const FILE_LIST_WIDTH: f32 = 200.0;
 const PASSWORD_SCREEN_TOP_SPACE: f32 = 200.0;
@@ -199,129 +197,6 @@ impl MyApp {
                     }
                 }
             }
-        }
-    }
-
-    fn save(&mut self, filename: String, plaintext: &PlainText) {
-        let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", filename));
-        std::fs::write(path, plaintext.encrypt(&self.password)).unwrap();
-        self.dirty = false;
-    }
-
-    fn save_and_lock(&mut self, filename: String, plaintext: &PlainText) {
-        let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", filename));
-        let ciphertext = plaintext.encrypt(&self.password);
-        std::fs::write(path, &ciphertext).unwrap();
-        self.dirty = false;
-        let ciphertext: Vec<_> = ciphertext.split("\n").collect();
-        self.content = Content::Encrypted(
-            filename.clone(),
-            ciphertext[0].to_string(),
-            ciphertext[1].to_string(),
-            ciphertext[2].to_string(),
-        );
-        self.clear_editor_input_fields();
-    }
-
-    fn build_new_passage_add(
-        &mut self,
-        current_index: usize,
-        width: f32,
-        ctx: &egui::Context,
-        ui: &mut egui::Ui,
-    ) {
-        if let Some((ref mut title, to_insert_index)) = self.add_new_passage {
-            if current_index > 0 && current_index != to_insert_index {
-                // When current_index is 0, this function must be called when the plaintext is
-                // empty. In this case, we will build this text field.
-                // When current_index is not zero, this function is called after building the
-                // passage at index current_index-1. In this case, we must check if this is
-                // indeed the target index to insert.
-                return;
-            }
-            ui.add(
-                egui::TextEdit::singleline(title)
-                    .font(FontSelection::FontId(FontId::new(
-                        18.0,
-                        FontFamily::Proportional,
-                    )))
-                    .desired_width(width)
-                    .text_color(Color32::BLACK)
-                    .hint_text("Passage Title"),
-            );
-            if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-                self.content
-                    .get_plaintext_mut()
-                    .unwrap()
-                    .insert_new_passage(current_index, title.clone());
-                self.add_new_passage = None;
-                self.dirty = true;
-            }
-        }
-    }
-
-    fn build_passage_button(
-        &mut self,
-        curr_index: usize,
-        selected_index: usize,
-        passage: &Passage,
-        width: f32,
-        filename: &String,
-        plaintext: &PlainText,
-        ctx: &egui::Context,
-        ui: &mut egui::Ui,
-    ) {
-        if ui
-            .add(
-                egui::Button::new(egui::WidgetText::RichText(
-                    RichText::from(passage.title().clone()).size(18.0).color(
-                        if curr_index == selected_index {
-                            Color32::BLACK
-                        } else {
-                            Color32::WHITE
-                        },
-                    ),
-                ))
-                .min_size(Vec2::new(width, 24.0))
-                .fill(if curr_index == selected_index {
-                    Color32::WHITE.gamma_multiply(0.5)
-                } else {
-                    Color32::TRANSPARENT
-                }),
-            )
-            .clicked()
-        {
-            if curr_index != selected_index {
-                self.content = Content::PlainText(filename.clone(), plaintext.clone(), curr_index);
-                self.edited_text = plaintext.content_of_passage(curr_index).unwrap();
-            }
-        }
-        self.build_new_passage_add(curr_index + 1, width, ctx, ui);
-    }
-
-    fn build_passage_rename(
-        &mut self,
-        selected_index: usize,
-        width: f32,
-        ctx: &egui::Context,
-        ui: &mut egui::Ui,
-    ) {
-        ui.add(
-            egui::TextEdit::singleline(&mut self.editing_passage_name.as_mut().unwrap().0)
-                .min_size(Vec2::new(width, 24.0))
-                .text_color(Color32::BLACK)
-                .font(FontSelection::FontId(FontId::new(
-                    18.0,
-                    FontFamily::Proportional,
-                ))),
-        );
-        if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-            self.content.get_plaintext_mut().unwrap().set_title(
-                selected_index,
-                self.editing_passage_name.as_ref().unwrap().0.clone(),
-            );
-            self.editing_passage_name = None;
-            self.dirty = true;
         }
     }
 }
