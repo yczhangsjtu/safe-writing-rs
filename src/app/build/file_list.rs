@@ -6,7 +6,7 @@ use eframe::egui;
 use egui::{Color32, FontFamily, FontId, FontSelection, Key, RichText, TextEdit, Vec2};
 
 impl MyApp {
-    fn build_create_new_file_button(&mut self, width: f32, ui: &mut egui::Ui) {
+    fn build_create_new_file_button(&mut self, width: f32, ctx: &egui::Context, ui: &mut egui::Ui) {
         if ui
             .add(
                 egui::Button::new(egui::WidgetText::RichText(
@@ -26,6 +26,34 @@ impl MyApp {
             }
             self.error_creating_new_file = None;
         }
+        if let Some(ref mut filename) = self.creating_new_file {
+            ui.add(
+                egui::TextEdit::singleline(filename)
+                    .font(FontSelection::FontId(FontId::new(
+                        18.0,
+                        FontFamily::Proportional,
+                    )))
+                    .desired_width(width),
+            );
+            if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+                let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", filename));
+                if path.exists() {
+                    self.error_creating_new_file =
+                        Some(format!("File {} already exists", filename));
+                } else {
+                    std::fs::write(path, "").unwrap();
+                    self.file_names.push(filename.clone());
+                    self.file_names.sort();
+                    self.content = Content::NewFile(filename.clone());
+                }
+                self.creating_new_file = None;
+            }
+        }
+        if let Some(error) = &self.error_creating_new_file {
+            ui.add(egui::Label::new(egui::WidgetText::RichText(
+                RichText::from(error).color(Color32::RED),
+            )));
+        }
     }
 
     pub(super) fn build_file_list(&mut self, width: f32, ctx: &egui::Context, ui: &mut egui::Ui) {
@@ -34,7 +62,7 @@ impl MyApp {
             .inner_margin(5.0)
             .show(ui, |ui| {
                 ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
-                    self.build_create_new_file_button(width, ui);
+                    self.build_create_new_file_button(width, ctx, ui);
                     if ui
                         .add(
                             egui::Button::new(egui::WidgetText::RichText(
@@ -131,35 +159,7 @@ impl MyApp {
                             }
                         }
                     }
-                    if let Some(ref mut filename) = self.creating_new_file {
-                        ui.add(
-                            egui::TextEdit::singleline(filename)
-                                .font(FontSelection::FontId(FontId::new(
-                                    18.0,
-                                    FontFamily::Proportional,
-                                )))
-                                .desired_width(width),
-                        );
-                        if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-                            let path = PathBuf::from(self.data_dir.clone())
-                                .join(format!("{}.safe", filename));
-                            if path.exists() {
-                                self.error_creating_new_file =
-                                    Some(format!("File {} already exists", filename));
-                            } else {
-                                std::fs::write(path, "").unwrap();
-                                self.file_names.push(filename.clone());
-                                self.file_names.sort();
-                                self.content = Content::NewFile(filename.clone());
-                            }
-                            self.creating_new_file = None;
-                        }
-                    }
-                    if let Some(error) = &self.error_creating_new_file {
-                        ui.add(egui::Label::new(egui::WidgetText::RichText(
-                            RichText::from(error).color(Color32::RED),
-                        )));
-                    }
+
                     egui::ScrollArea::vertical()
                         .id_source("file_name_list")
                         .max_height(f32::INFINITY)
