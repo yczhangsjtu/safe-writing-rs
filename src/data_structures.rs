@@ -62,8 +62,12 @@ impl PlainText {
         self.content.get(index).map(|p| p.title.clone())
     }
 
-    pub fn content_of_passage(&self, index: usize) -> Option<String> {
-        self.content.get(index).map(|p| p.content.clone())
+    pub fn content_of_passage(&self, index: usize) -> Option<&String> {
+        self.content.get(index).map(|p| &p.content)
+    }
+
+    pub fn content_of_passage_mut(&mut self, index: usize) -> Option<&mut String> {
+        self.content.get_mut(index).map(|p| &mut p.content)
     }
 
     pub fn id_of_passage(&self, index: usize) -> Option<usize> {
@@ -132,7 +136,11 @@ impl PlainText {
         encrypt(password, self)
     }
 
-    pub fn decrypt(password: &str, iv: &str, data: &str, mac: &str) -> Result<Self, Error> {
-        decrypt(password, iv, data, mac)
+    pub fn decrypt(password: &str, ciphertext: &str) -> Result<Self, Error> {
+        let ciphertext = ciphertext.split("\n").collect::<Vec<_>>();
+        if ciphertext.len() < 3 {
+            return Err(Error::DecryptionFail);
+        }
+        decrypt(password, ciphertext[0], ciphertext[1], ciphertext[2])
     }
 }

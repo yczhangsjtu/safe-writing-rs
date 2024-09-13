@@ -1,4 +1,4 @@
-use super::{editor::EditorState, MyApp};
+use super::{editor::EditorState, MyApp, NewFileState};
 use crate::{app::content::Content, error::Error, safe_note::load_safe_note_file};
 use std::{ffi::OsStr, path::PathBuf};
 
@@ -12,7 +12,7 @@ impl MyApp {
                 egui::Button::new(egui::WidgetText::RichText(
                     RichText::from("Create New File")
                         .size(18.0)
-                        .color(if self.dirty {
+                        .color(if self.is_dirty() {
                             Color32::WHITE.gamma_multiply(0.2)
                         } else {
                             Color32::WHITE
@@ -22,7 +22,7 @@ impl MyApp {
                 .fill(Color32::GRAY.gamma_multiply(0.5)),
             )
             .clicked()
-            && !self.dirty
+            && !self.is_dirty()
         {
             if self.creating_new_file.is_none() {
                 self.creating_new_file = Some("".to_string());
@@ -47,7 +47,11 @@ impl MyApp {
                     std::fs::write(path, "").unwrap();
                     self.file_names.push(filename.clone());
                     self.file_names.sort();
-                    self.content = Content::NewFile(filename.clone());
+                    self.content = Content::NewFile(NewFileState::new(
+                        filename.clone(),
+                        self.font_size,
+                        self.data_dir.clone(),
+                    ));
                 }
                 self.creating_new_file = None;
             }
@@ -60,7 +64,7 @@ impl MyApp {
                 egui::Button::new(egui::WidgetText::RichText(
                     RichText::from("Load Safe Notes File")
                         .size(18.0)
-                        .color(if self.dirty {
+                        .color(if self.is_dirty() {
                             Color32::WHITE.gamma_multiply(0.2)
                         } else {
                             Color32::WHITE
@@ -70,7 +74,7 @@ impl MyApp {
                 .fill(Color32::GRAY.gamma_multiply(0.5)),
             )
             .clicked()
-            && !self.dirty
+            && !self.is_dirty()
         {
             if self.waiting_for_password_for_safe_note.is_none() {
                 if let Some(path) = rfd::FileDialog::new()
@@ -131,6 +135,9 @@ impl MyApp {
                                 self.content = Content::PlainText(EditorState::new(
                                     new_file_name.clone(),
                                     plaintext.clone(),
+                                    password.clone(),
+                                    self.font_size,
+                                    self.data_dir.clone(),
                                 ));
                                 self.password = password.clone();
                             }
@@ -150,17 +157,19 @@ impl MyApp {
         if ui
             .add(
                 egui::Button::new(egui::WidgetText::RichText(
-                    RichText::from("Refresh").size(18.0).color(if self.dirty {
-                        Color32::WHITE.gamma_multiply(0.2)
-                    } else {
-                        Color32::WHITE
-                    }),
+                    RichText::from("Refresh")
+                        .size(18.0)
+                        .color(if self.is_dirty() {
+                            Color32::WHITE.gamma_multiply(0.2)
+                        } else {
+                            Color32::WHITE
+                        }),
                 ))
                 .min_size(Vec2::new(width, 24.0))
                 .fill(Color32::GRAY.gamma_multiply(0.5)),
             )
             .clicked()
-            && !self.dirty
+            && !self.is_dirty()
         {
             let (_, file_names) = Self::get_config_and_filenames();
             self.file_names = file_names;
@@ -174,13 +183,13 @@ impl MyApp {
         ui: &mut egui::Ui,
     ) -> Result<(), Error> {
         let selected = self.content.get_file_name() == Some(&file_name);
-        let disabled = self.dirty || selected;
+        let disabled = self.is_dirty() || selected;
         if ui
             .add(
                 egui::Button::new(egui::WidgetText::RichText(
                     RichText::from(file_name.clone())
                         .size(18.0)
-                        .color(if self.dirty {
+                        .color(if self.is_dirty() {
                             Color32::WHITE.gamma_multiply(0.2)
                         } else if selected {
                             Color32::BLACK
@@ -206,19 +215,18 @@ impl MyApp {
 
             let content = String::from_utf8(content).unwrap();
             if content.is_empty() {
-                self.content = Content::NewFile(file_name);
+                self.content = Content::NewFile(NewFileState::new(
+                    file_name,
+                    self.font_size,
+                    self.data_dir.clone(),
+                ));
             } else {
-                let content: Vec<_> = content.split("\n").collect();
-                if content.len() < 3 {
-                    self.content = Content::Error("Invalid format".to_string());
-                } else {
-                    self.content = Content::Encrypted(
-                        file_name.clone(),
-                        content[0].to_string(),
-                        content[1].to_string(),
-                        content[2].to_string(),
-                    );
-                }
+                self.content = Content::Encrypted(super::EncryptedFileState::new(
+                    file_name,
+                    content,
+                    self.font_size,
+                    self.data_dir.clone(),
+                ));
             }
         }
         Ok(())

@@ -1,13 +1,13 @@
 use crate::data_structures::PlainText;
 
-use super::build::editor::EditorState;
+use super::build::{editor::EditorState, EncryptedFileState, NewFileState};
 
 #[derive(Default, Clone)]
 pub(super) enum Content {
     #[default]
     None,
-    NewFile(String),
-    Encrypted(String, String, String, String),
+    NewFile(NewFileState),
+    Encrypted(EncryptedFileState),
     PlainText(EditorState),
     Error(String),
     Success(String),
@@ -22,34 +22,13 @@ impl Content {
         }
     }
 
-    pub fn get_plaintext_mut(&mut self) -> Option<&mut PlainText> {
-        match self {
-            Content::PlainText(ref mut a) => Some(a.plaintext_mut()),
-            _ => None,
-        }
-    }
-
-    pub fn decrease_selected_index(&mut self) {
-        match self {
-            Content::PlainText(plaintext) => plaintext.decrease_selected_index(),
-            _ => {}
-        }
-    }
-
-    pub fn increase_selected_index(&mut self) {
-        match self {
-            Content::PlainText(plaintext) => plaintext.increase_selected_index(),
-            _ => {}
-        }
-    }
-
     pub fn get_file_name(&self) -> Option<&String> {
         match self {
-            Content::Encrypted(filename, _, _, _) => Some(filename),
+            Content::Encrypted(encrypted_file_state) => Some(encrypted_file_state.filename()),
             Content::PlainText(editor_state) => Some(editor_state.filename()),
             Content::Error(_) => None,
             Content::Success(_) => None,
-            Content::NewFile(filename) => Some(filename),
+            Content::NewFile(new_file_state) => Some(new_file_state.filename()),
             Content::None => None,
         }
     }

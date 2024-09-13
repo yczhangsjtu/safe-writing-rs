@@ -18,20 +18,13 @@ mod windows;
 #[derive(Default)]
 pub struct MyApp {
     content: Content,
-    edited_text: String,
-    dirty: bool,
+    next_content: Option<Content>,
     font_size: f32,
     file_names: Vec<String>,
     data_dir: String,
     creating_new_file: Option<String>,
     password: String,
-    add_new_passage: Option<(String, usize)>,
-    editing_passage_name: Option<(String, usize)>,
-    confirm_delete_passage: Option<usize>,
     new_password: (String, String),
-    show_passage_operation_buttons: bool,
-    appending_another_file: Option<(String, String)>,
-    error_appending_another_file: Option<String>,
     waiting_for_password_for_safe_note: Option<(PathBuf, String, String)>,
 }
 
@@ -109,10 +102,20 @@ impl MyApp {
         file_names.sort();
         (config, file_names)
     }
+
+    fn is_dirty(&self) -> bool {
+        match &self.content {
+            Content::PlainText(ref editor_state) => editor_state.is_dirty(),
+            _ => false,
+        }
+    }
 }
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if let Some(content) = self.next_content.take() {
+            self.content = content;
+        }
         egui::CentralPanel::default()
             .frame(egui::Frame::default().fill(Color32::BLACK))
             .show(ctx, |ui| self.main_layout(ctx, ui));
