@@ -392,7 +392,7 @@ impl MyApp {
                         self.error_appending_another_file =
                             Some(format!("File {}.safe is empty", filename));
                     } else {
-                        self.try_appending_encrypted_file(filename, &content, password);
+                        self.try_appending_safe_file_content(filename, &content, password);
                     }
                 }
                 Err(err) => {
@@ -403,7 +403,7 @@ impl MyApp {
         }
     }
 
-    fn try_appending_encrypted_file(&mut self, filename: &str, content: &str, password: &str) {
+    fn try_appending_safe_file_content(&mut self, filename: &str, content: &str, password: &str) {
         let content: Vec<_> = content.split("\n").collect();
         if content.len() < 3 {
             self.error_appending_another_file =
