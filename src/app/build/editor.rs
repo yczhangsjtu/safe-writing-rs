@@ -102,6 +102,143 @@ impl MyApp {
         }
     }
 
+    fn build_toggle_button(&mut self, width: f32, _ctx: &egui::Context, ui: &mut egui::Ui) {
+        if ui
+            .add(
+                egui::Button::new(
+                    egui::WidgetText::RichText(RichText::from("...").size(18.0))
+                        .color(Color32::WHITE),
+                )
+                .min_size(Vec2::new(width, 24.0))
+                .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
+            )
+            .clicked()
+        {
+            self.show_passage_operation_buttons = !self.show_passage_operation_buttons;
+        }
+    }
+
+    fn build_add_button(
+        &mut self,
+        selected_index: usize,
+        width: f32,
+        _ctx: &egui::Context,
+        ui: &mut egui::Ui,
+    ) {
+        if ui
+            .add(
+                egui::Button::new(
+                    egui::WidgetText::RichText(RichText::from("Add").size(18.0))
+                        .color(Color32::WHITE),
+                )
+                .min_size(Vec2::new(width, 24.0))
+                .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
+            )
+            .clicked()
+        {
+            self.add_new_passage = Some(("".to_string(), selected_index + 1));
+            self.editing_passage_name = None;
+        }
+    }
+
+    fn build_save_button(
+        &mut self,
+        filename: &str,
+        plaintext: &PlainText,
+        width: f32,
+        _ctx: &egui::Context,
+        ui: &mut egui::Ui,
+    ) {
+        if ui
+            .add(
+                egui::Button::new(egui::WidgetText::RichText(
+                    RichText::from("Save").size(18.0).color(if self.dirty {
+                        Color32::WHITE
+                    } else {
+                        Color32::LIGHT_GRAY.gamma_multiply(0.3)
+                    }),
+                ))
+                .min_size(Vec2::new(width, 24.0))
+                .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
+            )
+            .clicked()
+            && self.dirty
+        {
+            self.save(filename.to_string(), plaintext);
+        }
+    }
+
+    fn build_save_lock_button(
+        &mut self,
+        filename: &str,
+        plaintext: &PlainText,
+        width: f32,
+        _ctx: &egui::Context,
+        ui: &mut egui::Ui,
+    ) {
+        if ui
+            .add(
+                egui::Button::new(egui::WidgetText::RichText(
+                    RichText::from("Save & Lock")
+                        .size(18.0)
+                        .color(Color32::WHITE),
+                ))
+                .min_size(Vec2::new(width, 24.0))
+                .fill(Color32::LIGHT_RED.gamma_multiply(0.3)),
+            )
+            .clicked()
+        {
+            self.save_and_lock(filename.to_string(), plaintext);
+        }
+    }
+
+    fn build_move_button(
+        &mut self,
+        selected_index: usize,
+        up: bool,
+        width: f32,
+        _ctx: &egui::Context,
+        ui: &mut egui::Ui,
+    ) {
+        if ui
+            .add(
+                egui::Button::new(egui::WidgetText::RichText(
+                    RichText::from(if up { "Move Up" } else { "Move Down" })
+                        .size(18.0)
+                        .color(Color32::WHITE),
+                ))
+                .min_size(Vec2::new(width, 24.0))
+                .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
+            )
+            .clicked()
+        {
+            if self
+                .content
+                .get_plaintext_mut()
+                .and_then(|plaintext| {
+                    if up && selected_index > 0 {
+                        plaintext.swap(selected_index, selected_index - 1);
+                        self.dirty = true;
+                        Some(())
+                    } else if !up && selected_index < plaintext.num_passages() - 1 {
+                        plaintext.swap(selected_index, selected_index + 1);
+                        self.dirty = true;
+                        Some(())
+                    } else {
+                        None
+                    }
+                })
+                .is_some()
+            {
+                if up {
+                    self.content.decrease_selected_index();
+                } else {
+                    self.content.increase_selected_index();
+                }
+            };
+        }
+    }
+
     fn build_passage_list(
         &mut self,
         width: f32,
@@ -112,19 +249,7 @@ impl MyApp {
         ui: &mut egui::Ui,
     ) {
         ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
-            if ui
-                .add(
-                    egui::Button::new(
-                        egui::WidgetText::RichText(RichText::from("...").size(18.0))
-                            .color(Color32::WHITE),
-                    )
-                    .min_size(Vec2::new(width, 24.0))
-                    .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
-                )
-                .clicked()
-            {
-                self.show_passage_operation_buttons = !self.show_passage_operation_buttons;
-            }
+            self.build_toggle_button(width, ctx, ui);
             if ctx.input(|i| i.key_pressed(Key::S) && i.modifiers.command) {
                 self.save(filename.clone(), plaintext);
             }
@@ -132,105 +257,12 @@ impl MyApp {
                 self.save_and_lock(filename.clone(), plaintext);
             }
             if self.show_passage_operation_buttons {
-                if ui
-                    .add(
-                        egui::Button::new(
-                            egui::WidgetText::RichText(RichText::from("Add").size(18.0))
-                                .color(Color32::WHITE),
-                        )
-                        .min_size(Vec2::new(width, 24.0))
-                        .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
-                    )
-                    .clicked()
-                {
-                    self.add_new_passage = Some(("".to_string(), selected_index + 1));
-                    self.editing_passage_name = None;
-                }
-                if ui
-                    .add(
-                        egui::Button::new(egui::WidgetText::RichText(
-                            RichText::from("Save").size(18.0).color(if self.dirty {
-                                Color32::WHITE
-                            } else {
-                                Color32::LIGHT_GRAY.gamma_multiply(0.3)
-                            }),
-                        ))
-                        .min_size(Vec2::new(width, 24.0))
-                        .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
-                    )
-                    .clicked()
-                    && self.dirty
-                {
-                    self.save(filename.clone(), plaintext);
-                }
-                if ui
-                    .add(
-                        egui::Button::new(egui::WidgetText::RichText(
-                            RichText::from("Save & Lock")
-                                .size(18.0)
-                                .color(Color32::WHITE),
-                        ))
-                        .min_size(Vec2::new(width, 24.0))
-                        .fill(Color32::LIGHT_RED.gamma_multiply(0.3)),
-                    )
-                    .clicked()
-                {
-                    self.save_and_lock(filename.clone(), plaintext);
-                }
-                if ui
-                    .add(
-                        egui::Button::new(egui::WidgetText::RichText(
-                            RichText::from("Move Up").size(18.0).color(Color32::WHITE),
-                        ))
-                        .min_size(Vec2::new(width, 24.0))
-                        .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
-                    )
-                    .clicked()
-                {
-                    if self
-                        .content
-                        .get_plaintext_mut()
-                        .and_then(|plaintext| {
-                            if selected_index > 0 {
-                                plaintext.swap(selected_index, selected_index - 1);
-                                self.dirty = true;
-                                Some(())
-                            } else {
-                                None
-                            }
-                        })
-                        .is_some()
-                    {
-                        self.content.decrease_selected_index();
-                    };
-                }
-                if ui
-                    .add(
-                        egui::Button::new(egui::WidgetText::RichText(
-                            RichText::from("Move Down").size(18.0).color(Color32::WHITE),
-                        ))
-                        .min_size(Vec2::new(width, 24.0))
-                        .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
-                    )
-                    .clicked()
-                {
-                    if self
-                        .content
-                        .get_plaintext_mut()
-                        .and_then(|plaintext| {
-                            if selected_index < plaintext.num_passages() - 1 {
-                                plaintext.swap(selected_index, selected_index + 1);
-                                self.dirty = true;
-                                Some(())
-                            } else {
-                                None
-                            }
-                        })
-                        .is_some()
-                    {
-                        self.content.increase_selected_index();
-                    };
-                }
+                self.build_add_button(selected_index, width, ctx, ui);
+                self.build_save_button(filename, plaintext, width, ctx, ui);
+                self.build_save_lock_button(filename, plaintext, width, ctx, ui);
+                self.build_move_button(selected_index, true, width, ctx, ui);
+                self.build_move_button(selected_index, false, width, ctx, ui);
+
                 if ui
                     .add(
                         egui::Button::new(egui::WidgetText::RichText(
