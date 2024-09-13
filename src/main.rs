@@ -134,6 +134,8 @@ struct MyApp {
     confirm_password: String,
     new_password: String,
     show_passage_operation_buttons: bool,
+    appending_another_file: Option<(String, String)>,
+    error_appending_another_file: Option<String>,
     waiting_for_password_for_safe_note: Option<PathBuf>,
     imported_file_name: String,
 }
@@ -986,6 +988,116 @@ impl MyApp {
                         if let Err(err) = std::fs::remove_file(&temp_file_path) {
                             println!("Failed to remove temp file: {}", err);
                         }
+                    }
+                }
+                if ui
+                    .add(
+                        egui::Button::new(egui::WidgetText::RichText(
+                            RichText::from("Append File")
+                                .size(18.0)
+                                .color(Color32::WHITE),
+                        ))
+                        .min_size(Vec2::new(width, 24.0))
+                        .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
+                    )
+                    .clicked()
+                {
+                    if self.appending_another_file.is_some() {
+                        self.appending_another_file = None;
+                    } else {
+                        self.appending_another_file = Some((String::new(), String::new()));
+                    }
+                    self.error_appending_another_file = None;
+                }
+                if let Some((ref mut filename, ref mut password)) = self.appending_another_file {
+                    ui.add(
+                        egui::TextEdit::singleline(filename)
+                            .font(FontSelection::FontId(FontId::new(
+                                18.0,
+                                FontFamily::Proportional,
+                            )))
+                            .hint_text("Name")
+                            .desired_width(width),
+                    );
+                    ui.add(
+                        egui::TextEdit::singleline(password)
+                            .font(FontSelection::FontId(FontId::new(
+                                18.0,
+                                FontFamily::Proportional,
+                            )))
+                            .password(true)
+                            .hint_text("Password")
+                            .desired_width(width),
+                    );
+                    if ctx.input(|i| i.key_pressed(egui::Key::Enter)) && !filename.is_empty() {
+                        if let Some(current_file_name) = self.content.get_file_name() {
+                            if filename == current_file_name {
+                                self.error_appending_another_file =
+                                    Some("Cannot append to self".to_string());
+                            }
+                        }
+
+                        let path =
+                            PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", filename));
+                        if !path.exists() {
+                            self.error_appending_another_file =
+                                Some(format!("File {}.safe not exists", filename));
+                        } else {
+                            match std::fs::read(path) {
+                                Ok(data) => {
+                                    let content = String::from_utf8(data).unwrap();
+                                    if content.is_empty() {
+                                        self.error_appending_another_file =
+                                            Some(format!("File {}.safe is empty", filename));
+                                    } else {
+                                        let content: Vec<_> = content.split("\n").collect();
+                                        if content.len() < 3 {
+                                            self.error_appending_another_file = Some(format!(
+                                                "File {}.safe has invalid format",
+                                                filename
+                                            ));
+                                        } else {
+                                            match decrypt(
+                                                password, content[0], content[1], content[2],
+                                            ) {
+                                                Ok(appended_plaintext) => {
+                                                    self.content.get_plaintext_mut().map(
+                                                        |plaintext| {
+                                                            plaintext
+                                                                .content
+                                                                .extend(appended_plaintext.content);
+                                                            self.dirty = true;
+                                                            self.appending_another_file = None;
+                                                            self.error_appending_another_file =
+                                                                None;
+                                                        },
+                                                    );
+                                                }
+                                                Err(err) => {
+                                                    self.error_appending_another_file =
+                                                        Some(format!(
+                                                            "Failed to decrypt file {}.safe: {:?}",
+                                                            filename, err
+                                                        ));
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                Err(err) => {
+                                    self.error_appending_another_file = Some(format!(
+                                        "Failed to read file {}.safe: {}",
+                                        filename, err
+                                    ));
+                                }
+                            }
+                        }
+                        self.creating_new_file = None;
+                    }
+                    if let Some(error) = &self.error_appending_another_file {
+                        ui.add(egui::Label::new(egui::WidgetText::RichText(
+                            RichText::from(error).color(Color32::RED),
+                        )));
                     }
                 }
             }
