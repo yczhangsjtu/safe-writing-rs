@@ -1,38 +1,26 @@
+use crate::data_structures::PlainText;
+
 #[derive(Default, Clone)]
-pub(super) enum Content<T: Clone, P: Clone> {
+pub(super) enum Content {
     #[default]
     None,
-    NewFile(T),
-    Encrypted(T, T, T, T),
-    PlainText(T, P, usize),
-    Error(T),
-    Success(T),
+    NewFile(String),
+    Encrypted(String, String, String, String),
+    PlainText(String, PlainText, usize),
+    Error(String),
+    Success(String),
 }
 
-impl<T: Clone, P: Clone> Content<T, P> {
+impl Content {
     #[allow(unused)]
-    pub fn as_ref(&self) -> Content<&T, &P> {
-        match self {
-            Content::Encrypted(ref title, ref a, ref b, ref c) => {
-                Content::Encrypted(title, a, b, c)
-            }
-            Content::PlainText(ref title, ref a, index) => Content::PlainText(title, a, *index),
-            Content::Error(ref a) => Content::Error(a),
-            Content::Success(ref a) => Content::Success(a),
-            Content::None => Content::None,
-            Content::NewFile(ref title) => Content::NewFile(title),
-        }
-    }
-
-    #[allow(unused)]
-    pub fn get_plaintext(&mut self) -> Option<&P> {
+    pub fn get_plaintext(&mut self) -> Option<&PlainText> {
         match self {
             Content::PlainText(_, ref a, _) => Some(a),
             _ => None,
         }
     }
 
-    pub fn get_plaintext_mut(&mut self) -> Option<&mut P> {
+    pub fn get_plaintext_mut(&mut self) -> Option<&mut PlainText> {
         match self {
             Content::PlainText(_, ref mut a, _) => Some(a),
             _ => None,
@@ -57,7 +45,7 @@ impl<T: Clone, P: Clone> Content<T, P> {
         }
     }
 
-    pub fn get_file_name(&self) -> Option<&T> {
+    pub fn get_file_name(&self) -> Option<&String> {
         match self {
             Content::Encrypted(filename, _, _, _) => Some(filename),
             Content::PlainText(filename, _, _) => Some(filename),

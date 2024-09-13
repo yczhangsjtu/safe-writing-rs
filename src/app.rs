@@ -1,4 +1,3 @@
-use crate::data_structures::PlainText;
 use homedir::my_home;
 use std::path::PathBuf;
 
@@ -18,7 +17,7 @@ mod windows;
 
 #[derive(Default)]
 pub struct MyApp {
-    content: Content<String, PlainText>,
+    content: Content,
     edited_text: String,
     dirty: bool,
     font_size: f32,
