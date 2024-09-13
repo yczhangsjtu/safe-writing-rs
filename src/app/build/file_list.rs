@@ -143,6 +143,27 @@ impl MyApp {
         }
     }
 
+    fn build_refresh_button(&mut self, width: f32, _ctx: &egui::Context, ui: &mut egui::Ui) {
+        if ui
+            .add(
+                egui::Button::new(egui::WidgetText::RichText(
+                    RichText::from("Refresh").size(18.0).color(if self.dirty {
+                        Color32::WHITE.gamma_multiply(0.2)
+                    } else {
+                        Color32::WHITE
+                    }),
+                ))
+                .min_size(Vec2::new(width, 24.0))
+                .fill(Color32::GRAY.gamma_multiply(0.5)),
+            )
+            .clicked()
+            && !self.dirty
+        {
+            let (_, file_names) = Self::get_config_and_filenames();
+            self.file_names = file_names;
+        }
+    }
+
     fn build_filename_button(
         &mut self,
         file_name: String,
@@ -208,19 +229,7 @@ impl MyApp {
                 ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                     self.build_create_new_file_button(width, ctx, ui);
                     self.build_load_safe_note_button(width, ctx, ui);
-                    if ui
-                        .add(
-                            egui::Button::new(egui::WidgetText::RichText(
-                                RichText::from("Refresh").size(18.0).color(Color32::WHITE),
-                            ))
-                            .min_size(Vec2::new(width, 24.0))
-                            .fill(Color32::GRAY.gamma_multiply(0.5)),
-                        )
-                        .clicked()
-                    {
-                        let (_, file_names) = Self::get_config_and_filenames();
-                        self.file_names = file_names;
-                    }
+                    self.build_refresh_button(width, ctx, ui);
 
                     egui::ScrollArea::vertical()
                         .id_source("file_name_list")
