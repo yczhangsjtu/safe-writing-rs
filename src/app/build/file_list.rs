@@ -139,7 +139,6 @@ impl MyApp {
                                     self.font_size,
                                     self.data_dir.clone(),
                                 ));
-                                self.password = password.clone();
                             }
                         }
                     }
@@ -207,7 +206,6 @@ impl MyApp {
             .clicked()
             && !disabled
         {
-            self.clear_editor_input_fields();
             let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", file_name));
             let content = std::fs::read(path).map_err(|err| {
                 Error::FailedToOpenFile(format!("Failed to open file {}: {:?}", file_name, err))

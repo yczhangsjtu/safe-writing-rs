@@ -126,11 +126,6 @@ impl MyApp {
         })
     }
 
-    fn clear_editor_input_fields(&mut self) {
-        self.password = "".to_string();
-        self.new_password = ("".to_string(), "".to_string());
-    }
-
     pub(super) fn build_uninitialized_file(
         new_file_state: &mut NewFileState,
         ctx: &egui::Context,

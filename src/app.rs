@@ -23,8 +23,6 @@ pub struct MyApp {
     file_names: Vec<String>,
     data_dir: String,
     creating_new_file: Option<String>,
-    password: String,
-    new_password: (String, String),
     waiting_for_password_for_safe_note: Option<(PathBuf, String, String)>,
 }
 
