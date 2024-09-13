@@ -8,16 +8,12 @@ use std::path::PathBuf;
 
 use eframe::egui;
 use egui::{Color32, FontFamily, FontId, FontSelection, Key, RichText, TextEdit, Vec2, WidgetText};
-use serde::{Deserialize, Serialize};
+
+mod config;
+use config::Config;
 
 mod macos;
 mod windows;
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-struct Config {
-    font_size: f32,
-    data_dir: String,
-}
 
 #[derive(Default, Clone)]
 enum Content<T: Clone, P: Clone> {
