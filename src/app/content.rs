@@ -1,6 +1,9 @@
 use crate::data_structures::PlainText;
 
-use super::build::{editor::EditorState, EncryptedFileState, NewFileState};
+use super::build::{
+    editor::EditorState,
+    locked::{EncryptedFileState, NewFileState},
+};
 
 #[derive(Default, Clone)]
 pub(super) enum Content {

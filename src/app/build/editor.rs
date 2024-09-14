@@ -1,4 +1,4 @@
-use super::{EncryptedFileState, MyApp};
+use super::{locked::EncryptedFileState, MyApp};
 
 use crate::{app::content::Content, data_structures::PlainText};
 use std::path::PathBuf;

@@ -1,4 +1,8 @@
-use super::{editor::EditorState, MyApp, NewFileState};
+use super::{
+    editor::EditorState,
+    locked::{EncryptedFileState, NewFileState},
+    MyApp,
+};
 use crate::{app::content::Content, error::Error, safe_note::load_safe_note_file};
 use std::{ffi::OsStr, path::PathBuf};
 
@@ -221,7 +225,7 @@ impl MyApp {
                     self.data_dir().clone(),
                 ));
             } else {
-                self.content = Content::Encrypted(super::EncryptedFileState::new(
+                self.content = Content::Encrypted(EncryptedFileState::new(
                     file_name,
                     content,
                     self.font_size(),
