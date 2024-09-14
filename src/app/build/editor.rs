@@ -99,7 +99,62 @@ impl EditorState {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+enum ButtonStyle {
+    Normal,
+    Warning,
+    Danger,
+}
+
+impl ButtonStyle {
+    fn background_color(&self) -> Color32 {
+        match self {
+            ButtonStyle::Normal => Color32::LIGHT_GREEN.gamma_multiply(0.3),
+            ButtonStyle::Warning => Color32::LIGHT_RED.gamma_multiply(0.3),
+            ButtonStyle::Danger => Color32::RED,
+        }
+    }
+
+    fn text_color(&self) -> Color32 {
+        match self {
+            ButtonStyle::Normal => Color32::WHITE,
+            ButtonStyle::Warning => Color32::WHITE,
+            ButtonStyle::Danger => Color32::WHITE,
+        }
+    }
+    fn disabled_background_color(&self) -> Color32 {
+        match self {
+            ButtonStyle::Normal => Color32::LIGHT_GREEN.gamma_multiply(0.2),
+            ButtonStyle::Warning => Color32::LIGHT_RED.gamma_multiply(0.2),
+            ButtonStyle::Danger => Color32::RED.gamma_multiply(0.2),
+        }
+    }
+
+    fn disabled_text_color(&self) -> Color32 {
+        match self {
+            ButtonStyle::Normal => Color32::LIGHT_GRAY.gamma_multiply(0.3),
+            ButtonStyle::Warning => Color32::LIGHT_GRAY.gamma_multiply(0.3),
+            ButtonStyle::Danger => Color32::LIGHT_GRAY.gamma_multiply(0.3),
+        }
+    }
+}
+
 impl MyApp {
+    fn make_control_button(caption: &str, style: ButtonStyle, disabled: bool) -> egui::Button {
+        egui::Button::new(egui::WidgetText::RichText(
+            RichText::from(caption).size(18.0).color(if disabled {
+                style.disabled_text_color()
+            } else {
+                style.text_color()
+            }),
+        ))
+        .fill(if disabled {
+            style.disabled_background_color()
+        } else {
+            style.background_color()
+        })
+    }
+
     pub(super) fn build_editor(
         next_content: &mut Option<Content>,
         editor_state: &mut EditorState,
@@ -135,12 +190,11 @@ impl MyApp {
                     .color(Color32::LIGHT_RED),
                 );
                 if ui
-                    .add(
-                        egui::Button::new(egui::WidgetText::RichText(
-                            RichText::from("Delete").size(18.0).color(Color32::WHITE),
-                        ))
-                        .fill(Color32::RED),
-                    )
+                    .add(Self::make_control_button(
+                        "Delete",
+                        ButtonStyle::Danger,
+                        false,
+                    ))
                     .clicked()
                 {
                     let plaintext = editor_state.plaintext_mut();
@@ -216,12 +270,8 @@ impl MyApp {
     ) {
         if ui
             .add(
-                egui::Button::new(
-                    egui::WidgetText::RichText(RichText::from("...").size(18.0))
-                        .color(Color32::WHITE),
-                )
-                .min_size(Vec2::new(width, 24.0))
-                .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
+                Self::make_control_button("...", ButtonStyle::Normal, false)
+                    .min_size(Vec2::new(width, 24.0)),
             )
             .clicked()
         {
@@ -239,12 +289,8 @@ impl MyApp {
     ) {
         if ui
             .add(
-                egui::Button::new(
-                    egui::WidgetText::RichText(RichText::from("Add").size(18.0))
-                        .color(Color32::WHITE),
-                )
-                .min_size(Vec2::new(width, 24.0))
-                .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
+                Self::make_control_button("Add", ButtonStyle::Normal, false)
+                    .min_size(Vec2::new(width, 24.0)),
             )
             .clicked()
         {
@@ -261,17 +307,8 @@ impl MyApp {
     ) {
         if ui
             .add(
-                egui::Button::new(egui::WidgetText::RichText(
-                    RichText::from("Save")
-                        .size(18.0)
-                        .color(if editor_state.dirty {
-                            Color32::WHITE
-                        } else {
-                            Color32::LIGHT_GRAY.gamma_multiply(0.3)
-                        }),
-                ))
-                .min_size(Vec2::new(width, 24.0))
-                .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
+                Self::make_control_button("Save", ButtonStyle::Normal, !editor_state.dirty)
+                    .min_size(Vec2::new(width, 24.0)),
             )
             .clicked()
             && editor_state.dirty
@@ -289,13 +326,8 @@ impl MyApp {
     ) {
         if ui
             .add(
-                egui::Button::new(egui::WidgetText::RichText(
-                    RichText::from("Save & Lock")
-                        .size(18.0)
-                        .color(Color32::WHITE),
-                ))
-                .min_size(Vec2::new(width, 24.0))
-                .fill(Color32::LIGHT_RED.gamma_multiply(0.3)),
+                Self::make_control_button("Save & Lock", ButtonStyle::Warning, false)
+                    .min_size(Vec2::new(width, 24.0)),
             )
             .clicked()
         {
@@ -313,13 +345,12 @@ impl MyApp {
     ) {
         if ui
             .add(
-                egui::Button::new(egui::WidgetText::RichText(
-                    RichText::from(if up { "Move Up" } else { "Move Down" })
-                        .size(18.0)
-                        .color(Color32::WHITE),
-                ))
-                .min_size(Vec2::new(width, 24.0))
-                .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
+                Self::make_control_button(
+                    if up { "Move Up" } else { "Move Down" },
+                    ButtonStyle::Normal,
+                    false,
+                )
+                .min_size(Vec2::new(width, 24.0)),
             )
             .clicked()
         {
@@ -345,11 +376,8 @@ impl MyApp {
     ) {
         if ui
             .add(
-                egui::Button::new(egui::WidgetText::RichText(
-                    RichText::from("Rename").size(18.0).color(Color32::WHITE),
-                ))
-                .min_size(Vec2::new(width, 24.0))
-                .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
+                Self::make_control_button("Rename", ButtonStyle::Normal, false)
+                    .min_size(Vec2::new(width, 24.0)),
             )
             .clicked()
         {
@@ -373,11 +401,8 @@ impl MyApp {
     ) {
         if ui
             .add(
-                egui::Button::new(egui::WidgetText::RichText(
-                    RichText::from("Delete").size(18.0).color(Color32::WHITE),
-                ))
-                .min_size(Vec2::new(width, 24.0))
-                .fill(Color32::LIGHT_RED.gamma_multiply(0.3)),
+                Self::make_control_button("Delete", ButtonStyle::Warning, false)
+                    .min_size(Vec2::new(width, 24.0)),
             )
             .clicked()
         {
@@ -394,11 +419,8 @@ impl MyApp {
     ) {
         if ui
             .add(
-                egui::Button::new(egui::WidgetText::RichText(
-                    RichText::from("Read Temp").size(18.0).color(Color32::WHITE),
-                ))
-                .min_size(Vec2::new(width, 24.0))
-                .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
+                Self::make_control_button("Read Temp", ButtonStyle::Normal, false)
+                    .min_size(Vec2::new(width, 24.0)),
             )
             .clicked()
         {
@@ -429,13 +451,8 @@ impl MyApp {
     ) {
         if ui
             .add(
-                egui::Button::new(egui::WidgetText::RichText(
-                    RichText::from("Append File")
-                        .size(18.0)
-                        .color(Color32::WHITE),
-                ))
-                .min_size(Vec2::new(width, 24.0))
-                .fill(Color32::LIGHT_GREEN.gamma_multiply(0.3)),
+                Self::make_control_button("Append File", ButtonStyle::Normal, false)
+                    .min_size(Vec2::new(width, 24.0)),
             )
             .clicked()
         {
