@@ -45,6 +45,14 @@ impl EditorState {
         &self.filename
     }
 
+    pub fn full_path(&self) -> PathBuf {
+        PathBuf::from(self.data_dir().clone()).join(format!("{}.safe", self.filename))
+    }
+
+    pub fn temp_path(&self) -> PathBuf {
+        PathBuf::from(self.data_dir().clone()).join(format!("temp.txt"))
+    }
+
     pub fn plaintext(&self) -> &PlainText {
         &self.plaintext
     }
@@ -387,7 +395,7 @@ impl MyApp {
             )
             .clicked()
         {
-            let temp_file_path = PathBuf::from(editor_state.data_dir().clone()).join("temp.txt");
+            let temp_file_path = editor_state.temp_path();
             if let Ok(temp_content) = std::fs::read_to_string(&temp_file_path) {
                 let plaintext = editor_state.plaintext_mut();
                 plaintext.set_content(
@@ -474,8 +482,7 @@ impl MyApp {
             editor_state.error_appending_another_file = Some("Cannot append to self".to_string());
         }
 
-        let path =
-            PathBuf::from(editor_state.data_dir().clone()).join(format!("{}.safe", filename));
+        let path = editor_state.full_path();
         if !path.exists() {
             editor_state.error_appending_another_file =
                 Some(format!("File {}.safe not exists", filename));
@@ -714,15 +721,13 @@ impl MyApp {
     }
 
     fn save(editor_state: &mut EditorState) {
-        let path = PathBuf::from(editor_state.data_dir().clone())
-            .join(format!("{}.safe", editor_state.filename));
+        let path = editor_state.full_path();
         std::fs::write(path, editor_state.plaintext.encrypt(&editor_state.password)).unwrap();
         editor_state.dirty = false;
     }
 
     fn save_and_lock(next_content: &mut Option<Content>, editor_state: &mut EditorState) {
-        let path = PathBuf::from(editor_state.data_dir().clone())
-            .join(format!("{}.safe", editor_state.filename));
+        let path = editor_state.full_path();
         let ciphertext = editor_state.plaintext.encrypt(&editor_state.password);
         std::fs::write(path, &ciphertext).unwrap();
         editor_state.dirty = false;
