@@ -71,7 +71,7 @@ impl MyApp {
         ui: &mut egui::Ui,
     ) -> InnerResponse<()> {
         ui.label(WidgetText::RichText(
-            RichText::new(self.data_dir.as_str()).color(Color32::WHITE),
+            RichText::new(self.data_dir().as_str()).color(Color32::WHITE),
         ));
         ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
             self.build_file_list(FILE_LIST_WIDTH, ctx, ui);

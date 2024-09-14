@@ -19,11 +19,10 @@ mod windows;
 pub struct MyApp {
     content: Content,
     next_content: Option<Content>,
-    font_size: f32,
     file_names: Vec<String>,
-    data_dir: String,
     creating_new_file: Option<String>,
     waiting_for_password_for_safe_note: Option<(PathBuf, String, String)>,
+    config: Config,
 }
 
 impl MyApp {
@@ -49,9 +48,8 @@ impl MyApp {
         cc.egui_ctx.set_fonts(fonts);
 
         Self {
-            font_size: config.font_size,
             file_names,
-            data_dir: config.data_dir,
+            config,
             ..Default::default()
         }
     }
@@ -106,6 +104,14 @@ impl MyApp {
             Content::PlainText(ref editor_state) => editor_state.is_dirty(),
             _ => false,
         }
+    }
+
+    fn data_dir(&self) -> &String {
+        &self.config.data_dir
+    }
+
+    fn font_size(&self) -> f32 {
+        self.config.font_size
     }
 }
 

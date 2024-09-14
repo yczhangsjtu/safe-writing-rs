@@ -7,6 +7,7 @@ use egui::{Color32, FontFamily, FontId, FontSelection, Key, RichText, TextEdit, 
 
 impl MyApp {
     fn build_create_new_file_button(&mut self, width: f32, ctx: &egui::Context, ui: &mut egui::Ui) {
+        let data_dir = self.data_dir().clone();
         if ui
             .add(
                 egui::Button::new(egui::WidgetText::RichText(
@@ -40,7 +41,7 @@ impl MyApp {
                     .desired_width(width),
             );
             if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-                let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", filename));
+                let path = PathBuf::from(&data_dir).join(format!("{}.safe", filename));
                 if path.exists() {
                     self.content = Content::Error(format!("File {} already exists", filename));
                 } else {
@@ -49,8 +50,8 @@ impl MyApp {
                     self.file_names.sort();
                     self.content = Content::NewFile(NewFileState::new(
                         filename.clone(),
-                        self.font_size,
-                        self.data_dir.clone(),
+                        self.font_size(),
+                        data_dir,
                     ));
                 }
                 self.creating_new_file = None;
@@ -59,6 +60,7 @@ impl MyApp {
     }
 
     fn build_load_safe_note_button(&mut self, width: f32, ctx: &egui::Context, ui: &mut egui::Ui) {
+        let data_dir = self.data_dir().clone();
         if ui
             .add(
                 egui::Button::new(egui::WidgetText::RichText(
@@ -127,8 +129,8 @@ impl MyApp {
                             ));
                         } else {
                             let content = plaintext.encrypt(password);
-                            let path = PathBuf::from(&self.data_dir)
-                                .join(format!("{}.safe", new_file_name));
+                            let path =
+                                PathBuf::from(&data_dir).join(format!("{}.safe", new_file_name));
                             if std::fs::write(path, content).is_ok() {
                                 self.file_names.push(new_file_name.clone());
                                 self.file_names.sort();
@@ -136,8 +138,8 @@ impl MyApp {
                                     new_file_name.clone(),
                                     plaintext.clone(),
                                     password.clone(),
-                                    self.font_size,
-                                    self.data_dir.clone(),
+                                    self.font_size(),
+                                    data_dir,
                                 ));
                             }
                         }
@@ -206,7 +208,7 @@ impl MyApp {
             .clicked()
             && !disabled
         {
-            let path = PathBuf::from(self.data_dir.clone()).join(format!("{}.safe", file_name));
+            let path = PathBuf::from(self.data_dir().clone()).join(format!("{}.safe", file_name));
             let content = std::fs::read(path).map_err(|err| {
                 Error::FailedToOpenFile(format!("Failed to open file {}: {:?}", file_name, err))
             })?;
@@ -215,15 +217,15 @@ impl MyApp {
             if content.is_empty() {
                 self.content = Content::NewFile(NewFileState::new(
                     file_name,
-                    self.font_size,
-                    self.data_dir.clone(),
+                    self.font_size(),
+                    self.data_dir().clone(),
                 ));
             } else {
                 self.content = Content::Encrypted(super::EncryptedFileState::new(
                     file_name,
                     content,
-                    self.font_size,
-                    self.data_dir.clone(),
+                    self.font_size(),
+                    self.data_dir().clone(),
                 ));
             }
         }
