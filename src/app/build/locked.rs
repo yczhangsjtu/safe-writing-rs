@@ -1,5 +1,7 @@
-use crate::app::{content::Content, MyApp};
-use crate::data_structures::PlainText;
+use crate::{
+    app::{config::Config, content::Content, MyApp},
+    data_structures::PlainText,
+};
 use std::path::PathBuf;
 
 use super::editor::EditorState;
@@ -11,22 +13,34 @@ pub struct NewFileState {
     filename: String,
     new_password: String,
     confirm_password: String,
-    font_size: f32,
-    data_dir: String,
+    config: Config,
 }
 
 impl NewFileState {
-    pub fn new(filename: String, font_size: f32, data_dir: String) -> Self {
+    pub fn new(filename: String, config: Config) -> Self {
         Self {
             filename,
             new_password: "".to_string(),
             confirm_password: "".to_string(),
-            font_size,
-            data_dir,
+            config,
         }
     }
     pub fn filename(&self) -> &String {
         &self.filename
+    }
+
+    #[allow(unused)]
+    pub fn data_dir(&self) -> &String {
+        &self.config.data_dir
+    }
+
+    #[allow(unused)]
+    pub fn font_size(&self) -> f32 {
+        self.config.font_size
+    }
+
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 }
 
@@ -37,23 +51,34 @@ pub struct EncryptedFileState {
     password: String,
     new_password: String,
     confirm_password: String,
-    font_size: f32,
-    data_dir: String,
+    config: Config,
 }
 
 impl EncryptedFileState {
-    pub fn new(filename: String, ciphertext: String, font_size: f32, data_dir: String) -> Self {
+    pub fn new(filename: String, ciphertext: String, config: Config) -> Self {
         Self {
             filename,
             ciphertext,
-            font_size,
-            data_dir,
+            config,
             ..Default::default()
         }
     }
 
     pub fn filename(&self) -> &String {
         &self.filename
+    }
+
+    pub fn data_dir(&self) -> &String {
+        &self.config.data_dir
+    }
+
+    #[allow(unused)]
+    pub fn font_size(&self) -> f32 {
+        self.config.font_size
+    }
+
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 }
 
@@ -92,9 +117,8 @@ impl MyApp {
             {
                 return Some(Content::PlainText(EditorState::empty(
                     new_file_state.filename.clone(),
-                    new_file_state.font_size,
                     new_file_state.new_password.clone(),
-                    new_file_state.data_dir.clone(),
+                    new_file_state.config().clone(),
                 )));
             }
         }
@@ -128,8 +152,7 @@ impl MyApp {
                         encrypted_file_state.filename.clone(),
                         plaintext,
                         encrypted_file_state.password.clone(),
-                        encrypted_file_state.font_size,
-                        encrypted_file_state.data_dir.clone(),
+                        encrypted_file_state.config().clone(),
                     );
                     return Some(Content::PlainText(editor_state));
                 }
@@ -168,7 +191,7 @@ impl MyApp {
                 ) {
                     Ok(plaintext) => {
                         let ciphertext = plaintext.encrypt(&encrypted_file_state.new_password);
-                        let path = PathBuf::from(encrypted_file_state.data_dir.clone())
+                        let path = PathBuf::from(encrypted_file_state.data_dir().clone())
                             .join(format!("{}.safe", encrypted_file_state.filename));
                         std::fs::write(path, &ciphertext).unwrap();
                         return Some(Content::Success(

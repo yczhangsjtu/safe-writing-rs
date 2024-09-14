@@ -110,6 +110,7 @@ impl MyApp {
         &self.config.data_dir
     }
 
+    #[allow(unused)]
     fn font_size(&self) -> f32 {
         self.config.font_size
     }

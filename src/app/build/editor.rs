@@ -1,6 +1,9 @@
 use super::{locked::EncryptedFileState, MyApp};
 
-use crate::{app::content::Content, data_structures::PlainText};
+use crate::{
+    app::{config::Config, content::Content},
+    data_structures::PlainText,
+};
 use std::path::PathBuf;
 
 use eframe::egui;
@@ -18,32 +21,24 @@ pub struct EditorState {
     show_passage_operation_buttons: bool,
     appending_another_file: Option<(String, String)>,
     error_appending_another_file: Option<String>,
-    font_size: f32,
     password: String,
-    data_dir: String,
+    config: Config,
 }
 
 impl EditorState {
-    pub fn new(
-        filename: String,
-        plaintext: PlainText,
-        password: String,
-        font_size: f32,
-        data_dir: String,
-    ) -> Self {
+    pub fn new(filename: String, plaintext: PlainText, password: String, config: Config) -> Self {
         EditorState {
             filename,
             plaintext,
             password,
             selected_index: 0,
-            font_size,
-            data_dir,
+            config,
             ..Default::default()
         }
     }
 
-    pub fn empty(filename: String, font_size: f32, password: String, data_dir: String) -> Self {
-        Self::new(filename, PlainText::empty(), password, font_size, data_dir)
+    pub fn empty(filename: String, password: String, config: Config) -> Self {
+        Self::new(filename, PlainText::empty(), password, config)
     }
 
     pub fn filename(&self) -> &String {
@@ -80,6 +75,18 @@ impl EditorState {
 
     pub fn is_dirty(&self) -> bool {
         self.dirty
+    }
+
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
+    pub fn data_dir(&self) -> &String {
+        &self.config.data_dir
+    }
+
+    pub fn font_size(&self) -> f32 {
+        self.config.font_size
     }
 }
 
@@ -154,7 +161,7 @@ impl MyApp {
                 ))
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
-                    let font_size = editor_state.font_size;
+                    let font_size = editor_state.font_size();
                     if let Some(edited_text) = editor_state.edited_text_mut() {
                         if ui
                             .add(
@@ -380,7 +387,7 @@ impl MyApp {
             )
             .clicked()
         {
-            let temp_file_path = PathBuf::from(editor_state.data_dir.clone()).join("temp.txt");
+            let temp_file_path = PathBuf::from(editor_state.data_dir().clone()).join("temp.txt");
             if let Ok(temp_content) = std::fs::read_to_string(&temp_file_path) {
                 let plaintext = editor_state.plaintext_mut();
                 plaintext.set_content(
@@ -467,7 +474,8 @@ impl MyApp {
             editor_state.error_appending_another_file = Some("Cannot append to self".to_string());
         }
 
-        let path = PathBuf::from(editor_state.data_dir.clone()).join(format!("{}.safe", filename));
+        let path =
+            PathBuf::from(editor_state.data_dir().clone()).join(format!("{}.safe", filename));
         if !path.exists() {
             editor_state.error_appending_another_file =
                 Some(format!("File {}.safe not exists", filename));
@@ -706,14 +714,14 @@ impl MyApp {
     }
 
     fn save(editor_state: &mut EditorState) {
-        let path = PathBuf::from(editor_state.data_dir.clone())
+        let path = PathBuf::from(editor_state.data_dir().clone())
             .join(format!("{}.safe", editor_state.filename));
         std::fs::write(path, editor_state.plaintext.encrypt(&editor_state.password)).unwrap();
         editor_state.dirty = false;
     }
 
     fn save_and_lock(next_content: &mut Option<Content>, editor_state: &mut EditorState) {
-        let path = PathBuf::from(editor_state.data_dir.clone())
+        let path = PathBuf::from(editor_state.data_dir().clone())
             .join(format!("{}.safe", editor_state.filename));
         let ciphertext = editor_state.plaintext.encrypt(&editor_state.password);
         std::fs::write(path, &ciphertext).unwrap();
@@ -721,8 +729,7 @@ impl MyApp {
         *next_content = Some(Content::Encrypted(EncryptedFileState::new(
             editor_state.filename.clone(),
             ciphertext,
-            editor_state.font_size,
-            editor_state.data_dir.clone(),
+            editor_state.config().clone(),
         )));
     }
 }

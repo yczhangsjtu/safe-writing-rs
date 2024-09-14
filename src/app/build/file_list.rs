@@ -52,11 +52,8 @@ impl MyApp {
                     std::fs::write(path, "").unwrap();
                     self.file_names.push(filename.clone());
                     self.file_names.sort();
-                    self.content = Content::NewFile(NewFileState::new(
-                        filename.clone(),
-                        self.font_size(),
-                        data_dir,
-                    ));
+                    self.content =
+                        Content::NewFile(NewFileState::new(filename.clone(), self.config.clone()));
                 }
                 self.creating_new_file = None;
             }
@@ -142,8 +139,7 @@ impl MyApp {
                                     new_file_name.clone(),
                                     plaintext.clone(),
                                     password.clone(),
-                                    self.font_size(),
-                                    data_dir,
+                                    self.config.clone(),
                                 ));
                             }
                         }
@@ -219,17 +215,12 @@ impl MyApp {
 
             let content = String::from_utf8(content).unwrap();
             if content.is_empty() {
-                self.content = Content::NewFile(NewFileState::new(
-                    file_name,
-                    self.font_size(),
-                    self.data_dir().clone(),
-                ));
+                self.content = Content::NewFile(NewFileState::new(file_name, self.config.clone()));
             } else {
                 self.content = Content::Encrypted(EncryptedFileState::new(
                     file_name,
                     content,
-                    self.font_size(),
-                    self.data_dir().clone(),
+                    self.config.clone(),
                 ));
             }
         }
