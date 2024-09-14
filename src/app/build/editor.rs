@@ -61,6 +61,7 @@ impl EditorState {
         &mut self.plaintext
     }
 
+    #[allow(unused)]
     pub fn edited_text_mut(&mut self) -> Option<&mut String> {
         self.plaintext.content_of_passage_mut(self.selected_index)
     }
@@ -170,23 +171,29 @@ impl MyApp {
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     let font_size = editor_state.font_size();
-                    if let Some(edited_text) = editor_state.edited_text_mut() {
-                        if ui
-                            .add(
-                                TextEdit::multiline(edited_text)
-                                    .frame(false)
-                                    .desired_width(f32::INFINITY)
-                                    .desired_rows(50)
-                                    .font(FontSelection::FontId(FontId::new(
-                                        font_size,
-                                        FontFamily::Proportional,
-                                    )))
-                                    .text_color(Color32::WHITE),
-                            )
-                            .changed()
-                        {
-                            editor_state.dirty = true;
-                        }
+                    if let Some(edited_text) = editor_state
+                        .plaintext
+                        .content_of_passage_mut(editor_state.selected_index)
+                    {
+                        ui.with_layout(egui::Layout::top_down_justified(egui::Align::Max), |ui| {
+                            let screen_size = ui.ctx().input(|input| input.screen_rect());
+                            let editor_area = TextEdit::multiline(edited_text)
+                                .frame(false)
+                                .desired_width(f32::INFINITY)
+                                .desired_rows(1.max(
+                                    ((screen_size.height() - 20f32) / (font_size * 1.4)) as usize,
+                                ))
+                                // .desired_rows(50)
+                                .font(FontSelection::FontId(FontId::new(
+                                    font_size,
+                                    FontFamily::Proportional,
+                                )))
+                                .text_color(Color32::WHITE);
+                            let response = ui.add(editor_area);
+                            if response.changed() {
+                                editor_state.dirty = true;
+                            }
+                        });
                     } else {
                         ui.with_layout(
                             egui::Layout::centered_and_justified(egui::Direction::TopDown),
