@@ -4,14 +4,27 @@ use crate::{
     app::{config::Config, content::Content},
     data_structures::PlainText,
 };
-use std::{collections::HashSet, path::PathBuf, usize};
+use std::{borrow::Cow, collections::HashSet, path::PathBuf};
 
 use eframe::egui;
 use egui::{
-    ahash::HashMap, text::CCursorRange, Color32, FontFamily, FontId, FontSelection, Key, Label,
-    RichText, TextBuffer, TextEdit, Vec2, WidgetText,
+    ahash::HashMap, text::CCursorRange, Color32, FontFamily, FontId, FontSelection, Image,
+    ImageSource, Key, Label, RichText, TextBuffer, TextEdit, Vec2, WidgetText,
 };
 use sha2::Digest;
+
+const STATIC_URIS: [&str; 10] = [
+    "bytes://1.png",
+    "bytes://2.png",
+    "bytes://3.png",
+    "bytes://4.png",
+    "bytes://5.png",
+    "bytes://6.png",
+    "bytes://7.png",
+    "bytes://8.png",
+    "bytes://9.png",
+    "bytes://10.png",
+];
 
 #[derive(Default, Clone)]
 pub struct EditorState {
@@ -322,7 +335,7 @@ impl MyApp {
                             .plaintext
                             .content_of_passage(editor_state.selected_index)
                         {
-                            Self::build_reading_area(ui, text, font_size);
+                            Self::build_reading_area(editor_state, ui, text, font_size);
                         } else {
                             Self::build_no_passage_selected_screen(ui);
                         }
@@ -383,13 +396,82 @@ impl MyApp {
         });
     }
 
-    fn build_reading_area(ui: &mut egui::Ui, text: &String, font_size: f32) {
+    fn build_reading_area(
+        editor_state: &EditorState,
+        ui: &mut egui::Ui,
+        text: &String,
+        font_size: f32,
+    ) {
         ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
-            let area = Label::new(WidgetText::RichText(
-                RichText::new(text).size(font_size).color(Color32::WHITE),
-            ))
-            .selectable(true);
-            ui.add(area);
+            // Split the passage by the image placeholders
+            let mut remained_text = &text[..];
+            let mut counter: usize = 0;
+            while !remained_text.is_empty() {
+                // Find the next "image!(" that is the start of the line and
+                // that line ends with ")"
+                let mut image_placeholder_index = remained_text.len();
+                let mut start_search_pos = 0;
+                while let Some(index) = &remained_text[start_search_pos..].find("image!(") {
+                    if start_search_pos + *index > 0
+                        && &remained_text[start_search_pos + *index - 1..start_search_pos + *index]
+                            != "\n"
+                    {
+                        start_search_pos = start_search_pos + *index + 7;
+                        continue;
+                    }
+                    let next_eol = &remained_text[start_search_pos + *index..]
+                        .find('\n')
+                        .map(|x| x + start_search_pos + index)
+                        .unwrap_or(remained_text.len());
+                    if *next_eol <= start_search_pos + *index + 7 {
+                        break;
+                    }
+                    if &remained_text[next_eol - 1..*next_eol] != ")" {
+                        start_search_pos = *next_eol;
+                        continue;
+                    }
+                    let digest = &remained_text[start_search_pos + *index + 7..next_eol - 1];
+                    if digest.len() != 64 || !digest.chars().all(|x| x.is_ascii_hexdigit()) {
+                        start_search_pos = *next_eol;
+                        continue;
+                    }
+                    image_placeholder_index = start_search_pos + *index;
+                    break;
+                }
+
+                let text_before_image = remained_text[..image_placeholder_index].trim_end();
+                if !text_before_image.is_empty() {
+                    let area = Label::new(WidgetText::RichText(
+                        RichText::new(text_before_image)
+                            .size(font_size)
+                            .color(Color32::WHITE),
+                    ))
+                    .selectable(true);
+                    ui.add(area);
+                }
+
+                remained_text = &remained_text[image_placeholder_index..];
+                if !remained_text.is_empty() {
+                    assert!(remained_text.starts_with("image!"));
+                    let digest = &remained_text[7..71];
+                    remained_text = &remained_text[72..];
+
+                    if let Some(image) = editor_state.image_map.get(digest) {
+                        ui.add(Image::new(ImageSource::Bytes {
+                            uri: Cow::Borrowed(STATIC_URIS[counter]),
+                            bytes: editor_state.plaintext.images()[*image].clone().into(),
+                        }));
+                        counter += 1;
+                    } else {
+                        let area = Label::new(WidgetText::RichText(
+                            RichText::new(format!("Error loading image: {}", digest))
+                                .color(Color32::RED),
+                        ))
+                        .selectable(true);
+                        ui.add(area);
+                    }
+                }
+            }
         });
     }
 
@@ -939,12 +1021,14 @@ impl MyApp {
     }
 
     fn save(editor_state: &mut EditorState) {
+        EditorState::clean_non_referenced_images(editor_state);
         let path = editor_state.full_path();
         std::fs::write(path, editor_state.plaintext.encrypt(&editor_state.password)).unwrap();
         editor_state.dirty = false;
     }
 
     fn save_and_lock(next_content: &mut Option<Content>, editor_state: &mut EditorState) {
+        EditorState::clean_non_referenced_images(editor_state);
         let path = editor_state.full_path();
         let ciphertext = editor_state.plaintext.encrypt(&editor_state.password);
         std::fs::write(path, &ciphertext).unwrap();

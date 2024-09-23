@@ -25,6 +25,9 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "Safe Writing",
         options,
-        Box::new(|cc: &eframe::CreationContext<'_>| Ok(Box::<MyApp>::new(MyApp::new(cc)))),
+        Box::new(|cc: &eframe::CreationContext<'_>| {
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+            Ok(Box::<MyApp>::new(MyApp::new(cc)))
+        }),
     )
 }
