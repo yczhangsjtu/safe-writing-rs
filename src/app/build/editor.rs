@@ -4,17 +4,20 @@ use crate::{
     app::{config::Config, content::Content},
     data_structures::PlainText,
 };
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf, usize};
 
 use eframe::egui;
 use egui::{
-    Color32, FontFamily, FontId, FontSelection, Key, Label, RichText, TextEdit, Vec2, WidgetText,
+    ahash::HashMap, text::CCursorRange, Color32, FontFamily, FontId, FontSelection, Key, Label,
+    RichText, TextBuffer, TextEdit, Vec2, WidgetText,
 };
+use sha2::Digest;
 
 #[derive(Default, Clone)]
 pub struct EditorState {
     filename: String,
     plaintext: PlainText,
+    image_map: HashMap<String, usize>,
     selected_index: usize,
     dirty: bool,
     add_new_passage: Option<(String, usize)>,
@@ -26,18 +29,104 @@ pub struct EditorState {
     preview_mode: bool,
     password: String,
     config: Config,
+    text_to_insert: Option<String>,
 }
 
 impl EditorState {
     pub fn new(filename: String, plaintext: PlainText, password: String, config: Config) -> Self {
+        let image_map = if plaintext.num_images() > 0 {
+            Self::build_image_map(plaintext.images())
+        } else {
+            HashMap::default()
+        };
         EditorState {
             filename,
             plaintext,
+            image_map,
             password,
             selected_index: 0,
             config,
             ..Default::default()
         }
+    }
+
+    fn build_image_map(images: &[Vec<u8>]) -> HashMap<String, usize> {
+        let mut image_map = HashMap::default();
+        // Compute the SHA256 of this image as the key
+        for (i, image) in images.iter().enumerate() {
+            image_map.insert(
+                format!("{:x}", {
+                    let mut hasher = sha2::Sha256::new();
+                    hasher.update(image);
+                    hasher.finalize()
+                }),
+                i,
+            );
+        }
+        image_map
+    }
+
+    fn insert_image(editor_state: &mut EditorState, image: &Vec<u8>) -> String {
+        let image_digest = format!("{:x}", {
+            let mut hasher = sha2::Sha256::new();
+            hasher.update(image);
+            hasher.finalize()
+        });
+        if editor_state.image_map.contains_key(&image_digest) {
+            return image_digest;
+        }
+        editor_state.plaintext.images_mut().push(image.clone());
+        editor_state.image_map.insert(
+            image_digest.clone(),
+            editor_state.plaintext.num_images() - 1,
+        );
+        editor_state.dirty = true;
+        image_digest
+    }
+
+    fn image_placeholder(digest: &str) -> String {
+        format!("image!({})", digest)
+    }
+
+    fn clean_non_referenced_images(editor_state: &mut EditorState) {
+        // Collect all the strings of the form image!(...) in the passages
+        let mut image_references = HashSet::new();
+        for passage in editor_state.plaintext.passages() {
+            for line in passage.content().split('\n') {
+                if line.starts_with("image!(") && line.ends_with(")") && line.len() == 72 {
+                    // SHA256 digest hex has length 64, so the line length is
+                    // 64 + len("image!()") = 72
+                    image_references.insert(&line[7..71]);
+                }
+            }
+        }
+
+        let existing_indices = editor_state
+            .image_map
+            .iter()
+            .filter_map(|(digest, index)| {
+                if image_references.contains(digest.as_str()) {
+                    Some(index)
+                } else {
+                    None
+                }
+            })
+            .collect::<HashSet<_>>();
+        if existing_indices.len() == editor_state.image_map.len() {
+            return;
+        }
+        let mut index = 0;
+        editor_state.plaintext.images_mut().retain(|_| {
+            let ret = existing_indices.contains(&index);
+            index += 1;
+            ret
+        });
+        editor_state.image_map = Self::build_image_map(&editor_state.plaintext.images());
+    }
+
+    pub fn insert_image_at_cursor(&mut self, image: Vec<u8>) {
+        let digest = Self::insert_image(self, &image);
+        self.text_to_insert = Some(format!("\n{}\n", Self::image_placeholder(&digest)));
     }
 
     pub fn empty(filename: String, password: String, config: Config) -> Self {
@@ -247,6 +336,7 @@ impl MyApp {
                                 edited_text,
                                 &mut editor_state.dirty,
                                 font_size,
+                                &mut editor_state.text_to_insert,
                             );
                         } else {
                             Self::build_no_passage_selected_screen(ui);
@@ -256,7 +346,13 @@ impl MyApp {
         }
     }
 
-    fn build_editing_area(ui: &mut egui::Ui, text: &mut String, dirty: &mut bool, font_size: f32) {
+    fn build_editing_area(
+        ui: &mut egui::Ui,
+        text: &mut String,
+        dirty: &mut bool,
+        font_size: f32,
+        text_to_insert: &mut Option<String>,
+    ) {
         ui.with_layout(egui::Layout::top_down_justified(egui::Align::Max), |ui| {
             let screen_size = ui.ctx().input(|input| input.screen_rect());
             let editor_area = TextEdit::multiline(text)
@@ -272,6 +368,17 @@ impl MyApp {
             let response = ui.add(editor_area);
             if response.changed() {
                 *dirty = true;
+            }
+            if let Some(mut state) = TextEdit::load_state(ui.ctx(), response.id) {
+                let cursor = state.cursor.char_range();
+                if let Some(text_to_insert) = text_to_insert.take() {
+                    if let Some(cursor) = cursor {
+                        let mut cursor = text.delete_selected_ccursor_range(cursor.sorted());
+                        text.insert_text_at(&mut cursor, &text_to_insert, usize::MAX);
+                        *dirty = true;
+                        state.cursor.set_char_range(Some(CCursorRange::one(cursor)));
+                    }
+                }
             }
         });
     }
@@ -337,6 +444,31 @@ impl MyApp {
             .clicked()
         {
             editor_state.preview_mode = !editor_state.preview_mode;
+        }
+    }
+
+    fn build_insert_image_button(
+        editor_state: &mut EditorState,
+        width: f32,
+        _ctx: &egui::Context,
+        ui: &mut egui::Ui,
+    ) {
+        if ui
+            .add(
+                Self::make_control_button("Image", ButtonStyle::Normal, false)
+                    .min_size(Vec2::new(width, 24.0)),
+            )
+            .clicked()
+        {
+            if let Some(path) = rfd::FileDialog::new()
+                .add_filter("PNG Files", &["png"])
+                .pick_file()
+            {
+                let image = std::fs::read(path);
+                if let Ok(image) = image {
+                    editor_state.insert_image_at_cursor(image);
+                }
+            }
         }
     }
 
@@ -640,6 +772,7 @@ impl MyApp {
             }
             if editor_state.show_passage_operation_buttons {
                 Self::build_preview_button(editor_state, width, ctx, ui);
+                Self::build_insert_image_button(editor_state, width, ctx, ui);
                 Self::build_add_button(editor_state, width, ctx, ui);
                 Self::build_save_button(editor_state, width, ctx, ui);
                 Self::build_save_lock_button(next_content, editor_state, width, ctx, ui);

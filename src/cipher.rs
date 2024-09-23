@@ -99,8 +99,8 @@ pub fn decrypt(password: &str, iv: &str, data: &str, mac: &str) -> Result<PlainT
             if images.len() < image_size as usize {
                 return Err(Error::InvalidImageFormat);
             }
-            images = &images[image_size as usize..];
             splitted_images.push(images[0..image_size as usize].to_vec());
+            images = &images[image_size as usize..];
         }
         splitted_images
     };

@@ -22,6 +22,10 @@ impl Passage {
         &self.title
     }
 
+    pub fn content(&self) -> &String {
+        &self.content
+    }
+
     pub fn encode(&self) -> String {
         let title = base64_encode(self.title.as_bytes());
         let content = base64_encode(self.content.as_bytes());
@@ -83,6 +87,14 @@ impl PlainText {
 
     pub fn content_of_passage_mut(&mut self, index: usize) -> Option<&mut String> {
         self.content.get_mut(index).map(|p| &mut p.content)
+    }
+
+    pub fn images(&self) -> &Vec<Vec<u8>> {
+        &self.images
+    }
+
+    pub fn images_mut(&mut self) -> &mut Vec<Vec<u8>> {
+        &mut self.images
     }
 
     pub fn id_of_passage(&self, index: usize) -> Option<usize> {
