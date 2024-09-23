@@ -4,6 +4,8 @@ use crate::{
     error::Error,
 };
 
+pub(crate) const IMAGE_SEP: u8 = 0x88;
+
 #[derive(Debug, Clone)]
 pub struct Passage {
     id: usize,
@@ -31,23 +33,36 @@ impl Passage {
 pub struct PlainText {
     next_id: usize,
     content: Vec<Passage>,
+    images: Vec<Vec<u8>>,
 }
 
 impl PlainText {
-    pub fn new(next_id: usize, content: Vec<Passage>) -> Self {
-        Self { next_id, content }
+    pub fn new(next_id: usize, content: Vec<Passage>, images: Vec<Vec<u8>>) -> Self {
+        Self {
+            next_id,
+            content,
+            images,
+        }
     }
 
     pub fn empty() -> Self {
-        Self::new(0, vec![])
+        Self::new(0, vec![], vec![])
     }
 
     pub fn from_passages(content: Vec<Passage>) -> Self {
-        Self::new(0, content)
+        Self::new(0, content, vec![])
+    }
+
+    pub fn from_passages_images(content: Vec<Passage>, images: Vec<Vec<u8>>) -> Self {
+        Self::new(0, content, images)
     }
 
     pub fn num_passages(&self) -> usize {
         self.content.len()
+    }
+
+    pub fn num_images(&self) -> usize {
+        self.images.len()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -105,7 +120,7 @@ impl PlainText {
     }
 
     pub fn encode(&self) -> Vec<u8> {
-        (self
+        let passages_data = (self
             .content
             .iter()
             .map(|p| p.encode())
@@ -113,7 +128,26 @@ impl PlainText {
             .join("|")
             + ":FontSize=24")
             .as_bytes()
-            .to_vec()
+            .to_vec();
+        if self.images.is_empty() {
+            passages_data
+        } else {
+            vec![
+                passages_data,
+                vec![IMAGE_SEP],
+                (self.images.len() as u32).to_le_bytes().to_vec(),
+                self.images
+                    .iter()
+                    .map(|image| {
+                        let mut image_data = (image.len() as u32).to_le_bytes().to_vec();
+                        image_data.extend_from_slice(image);
+                        image_data
+                    })
+                    .collect::<Vec<_>>()
+                    .concat(),
+            ]
+            .concat()
+        }
     }
 
     pub fn insert_new_passage(&mut self, index: usize, title: String) {

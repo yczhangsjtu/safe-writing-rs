@@ -9,4 +9,5 @@ pub enum Error {
     InvalidUTF8,
     InvalidPlaintextFormat,
     FailedToParseJson(String),
+    InvalidImageFormat,
 }

@@ -3,7 +3,7 @@ use hmac::{Hmac, Mac};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 
 use crate::{
-    data_structures::{Passage, PlainText},
+    data_structures::{Passage, PlainText, IMAGE_SEP},
     encode::{base64_decode, base64_decode_to_bytes, base64_encode},
     error::Error,
 };
@@ -46,10 +46,64 @@ pub fn decrypt(password: &str, iv: &str, data: &str, mac: &str) -> Result<PlainT
         .verify_slice(&mac)
         .map_err(|err| Error::MacFail(err))?;
 
-    let plaintext = cbc::Decryptor::<aes::Aes128>::new(&key.into(), iv.as_slice().into())
+    let (plaintext, images) = cbc::Decryptor::<aes::Aes128>::new(&key.into(), iv.as_slice().into())
         .decrypt_padded_vec_mut::<Pkcs7>(&data)
         .map_err(|_| Error::DecryptionFail)
-        .and_then(|s| String::from_utf8(s).map_err(|_| Error::InvalidUTF8))?;
+        .and_then(|s| {
+            let (plaintext, images) = if let Some((i, _)) = s
+                .iter()
+                .enumerate()
+                .filter(|(_, b)| *b == &IMAGE_SEP)
+                .next()
+            {
+                let (plaintext, images) = s.split_at(i);
+                let images = &images[1..];
+                (plaintext.to_vec(), images.to_vec())
+            } else {
+                (s, vec![])
+            };
+            let plaintext = String::from_utf8(plaintext).map_err(|_| Error::InvalidUTF8)?;
+            Ok((plaintext, images))
+        })?;
+
+    let images = if images.is_empty() {
+        vec![]
+    } else {
+        // The images are encoded as follows:
+        // 1. Number of images, encoded as u32
+        // 2. For each image, the image data is encoded as:
+        //    2.1 Size of the image, encoded as u32
+        //    2.2 The image data (in png format)
+        if images.len() < size_of::<u32>() {
+            return Err(Error::InvalidImageFormat);
+        }
+        let num_images = u32::from_le_bytes(
+            images[0..4]
+                .try_into()
+                .map_err(|_| Error::InvalidImageFormat)?,
+        );
+
+        let mut splitted_images = Vec::with_capacity(num_images as usize);
+
+        let mut images = &images[4..];
+        for _ in 0..num_images {
+            if images.len() < size_of::<u32>() {
+                return Err(Error::InvalidImageFormat);
+            }
+            let image_size = u32::from_le_bytes(
+                images[0..4]
+                    .try_into()
+                    .map_err(|_| Error::InvalidImageFormat)?,
+            );
+            images = &images[4..];
+            if images.len() < image_size as usize {
+                return Err(Error::InvalidImageFormat);
+            }
+            images = &images[image_size as usize..];
+            splitted_images.push(images[0..image_size as usize].to_vec());
+        }
+        splitted_images
+    };
 
     let plaintexts: Vec<_> = plaintext.split(":").collect();
     if plaintexts.len() < 2 {
@@ -82,5 +136,5 @@ pub fn decrypt(password: &str, iv: &str, data: &str, mac: &str) -> Result<PlainT
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    Ok(PlainText::new(passages.len(), passages))
+    Ok(PlainText::new(passages.len(), passages, images))
 }
