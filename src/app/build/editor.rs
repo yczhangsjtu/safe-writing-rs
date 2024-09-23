@@ -7,7 +7,9 @@ use crate::{
 use std::path::PathBuf;
 
 use eframe::egui;
-use egui::{Color32, FontFamily, FontId, FontSelection, Key, RichText, TextEdit, Vec2};
+use egui::{
+    Color32, FontFamily, FontId, FontSelection, Key, Label, RichText, TextEdit, Vec2, WidgetText,
+};
 
 #[derive(Default, Clone)]
 pub struct EditorState {
@@ -21,6 +23,7 @@ pub struct EditorState {
     show_passage_operation_buttons: bool,
     appending_another_file: Option<(String, String)>,
     error_appending_another_file: Option<String>,
+    preview_mode: bool,
     password: String,
     config: Config,
 }
@@ -225,41 +228,73 @@ impl MyApp {
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     let font_size = editor_state.font_size();
-                    if let Some(edited_text) = editor_state
-                        .plaintext
-                        .content_of_passage_mut(editor_state.selected_index)
-                    {
-                        ui.with_layout(egui::Layout::top_down_justified(egui::Align::Max), |ui| {
-                            let screen_size = ui.ctx().input(|input| input.screen_rect());
-                            let editor_area = TextEdit::multiline(edited_text)
-                                .frame(false)
-                                .desired_width(f32::INFINITY)
-                                .desired_rows(1.max(
-                                    ((screen_size.height() - 20f32) / (font_size * 1.4)) as usize,
-                                ))
-                                // .desired_rows(50)
-                                .font(FontSelection::FontId(FontId::new(
-                                    font_size,
-                                    FontFamily::Proportional,
-                                )))
-                                .text_color(Color32::WHITE);
-                            let response = ui.add(editor_area);
-                            if response.changed() {
-                                editor_state.dirty = true;
-                            }
-                        });
+                    if editor_state.preview_mode {
+                        if let Some(text) = editor_state
+                            .plaintext
+                            .content_of_passage(editor_state.selected_index)
+                        {
+                            Self::build_reading_area(ui, text, font_size);
+                        } else {
+                            Self::build_no_passage_selected_screen(ui);
+                        }
                     } else {
-                        ui.with_layout(
-                            egui::Layout::centered_and_justified(egui::Direction::TopDown),
-                            |ui| {
-                                ui.add(egui::Label::new(egui::WidgetText::RichText(
-                                    RichText::from("No passage selected").size(18.0),
-                                )));
-                            },
-                        );
+                        if let Some(edited_text) = editor_state
+                            .plaintext
+                            .content_of_passage_mut(editor_state.selected_index)
+                        {
+                            Self::build_editing_area(
+                                ui,
+                                edited_text,
+                                &mut editor_state.dirty,
+                                font_size,
+                            );
+                        } else {
+                            Self::build_no_passage_selected_screen(ui);
+                        }
                     }
                 });
         }
+    }
+
+    fn build_editing_area(ui: &mut egui::Ui, text: &mut String, dirty: &mut bool, font_size: f32) {
+        ui.with_layout(egui::Layout::top_down_justified(egui::Align::Max), |ui| {
+            let screen_size = ui.ctx().input(|input| input.screen_rect());
+            let editor_area = TextEdit::multiline(text)
+                .frame(false)
+                .desired_width(f32::INFINITY)
+                .desired_rows(1.max(((screen_size.height() - 20f32) / (font_size * 1.4)) as usize))
+                // .desired_rows(50)
+                .font(FontSelection::FontId(FontId::new(
+                    font_size,
+                    FontFamily::Proportional,
+                )))
+                .text_color(Color32::WHITE);
+            let response = ui.add(editor_area);
+            if response.changed() {
+                *dirty = true;
+            }
+        });
+    }
+
+    fn build_reading_area(ui: &mut egui::Ui, text: &String, font_size: f32) {
+        ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
+            let area = Label::new(WidgetText::RichText(
+                RichText::new(text).size(font_size).color(Color32::WHITE),
+            ))
+            .selectable(true);
+            ui.add(area);
+        });
+    }
+
+    fn build_no_passage_selected_screen(ui: &mut egui::Ui) {
+        ui.with_layout(
+            egui::Layout::centered_and_justified(egui::Direction::TopDown),
+            |ui| {
+                ui.add(egui::Label::new(egui::WidgetText::RichText(
+                    RichText::from("No passage selected").size(18.0),
+                )));
+            },
+        );
     }
 
     fn build_toggle_button(
@@ -280,9 +315,33 @@ impl MyApp {
         }
     }
 
+    fn build_preview_button(
+        editor_state: &mut EditorState,
+        width: f32,
+        _ctx: &egui::Context,
+        ui: &mut egui::Ui,
+    ) {
+        if ui
+            .add(
+                Self::make_control_button(
+                    if editor_state.preview_mode {
+                        "Edit"
+                    } else {
+                        "Preview"
+                    },
+                    ButtonStyle::Normal,
+                    false,
+                )
+                .min_size(Vec2::new(width, 24.0)),
+            )
+            .clicked()
+        {
+            editor_state.preview_mode = !editor_state.preview_mode;
+        }
+    }
+
     fn build_add_button(
         editor_state: &mut EditorState,
-        selected_index: usize,
         width: f32,
         _ctx: &egui::Context,
         ui: &mut egui::Ui,
@@ -294,7 +353,8 @@ impl MyApp {
             )
             .clicked()
         {
-            editor_state.add_new_passage = Some(("".to_string(), selected_index + 1));
+            editor_state.add_new_passage =
+                Some(("".to_string(), editor_state.selected_index() + 1));
             editor_state.editing_passage_name = None;
         }
     }
@@ -579,7 +639,8 @@ impl MyApp {
                 Self::save_and_lock(next_content, editor_state);
             }
             if editor_state.show_passage_operation_buttons {
-                Self::build_add_button(editor_state, editor_state.selected_index(), width, ctx, ui);
+                Self::build_preview_button(editor_state, width, ctx, ui);
+                Self::build_add_button(editor_state, width, ctx, ui);
                 Self::build_save_button(editor_state, width, ctx, ui);
                 Self::build_save_lock_button(next_content, editor_state, width, ctx, ui);
                 Self::build_move_button(
