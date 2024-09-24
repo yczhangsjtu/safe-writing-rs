@@ -496,7 +496,7 @@ impl MyApp {
 
                     if let Some(image) = editor_state.image_map.get(digest) {
                         let image = Image::from_texture(SizedTexture::from_handle(&image.1))
-                            .fit_to_fraction(Vec2::new(1.0, 1.0));
+                            .max_width(ui.available_width());
                         ui.add(image);
                     } else {
                         let area = Label::new(WidgetText::RichText(
