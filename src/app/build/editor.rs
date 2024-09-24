@@ -495,7 +495,9 @@ impl MyApp {
                     remained_text = &remained_text[72..];
 
                     if let Some(image) = editor_state.image_map.get(digest) {
-                        ui.add(Image::from_texture(SizedTexture::from_handle(&image.1)));
+                        let image = Image::from_texture(SizedTexture::from_handle(&image.1))
+                            .fit_to_fraction(Vec2::new(1.0, 1.0));
+                        ui.add(image);
                     } else {
                         let area = Label::new(WidgetText::RichText(
                             RichText::new(format!("Error loading image: {}", digest))
@@ -556,10 +558,11 @@ impl MyApp {
     fn build_insert_image_button(editor_state: &mut EditorState, width: f32, ui: &mut egui::Ui) {
         if ui
             .add(
-                Self::make_control_button("Image", ButtonStyle::Normal, false)
+                Self::make_control_button("Image", ButtonStyle::Normal, editor_state.preview_mode)
                     .min_size(Vec2::new(width, 24.0)),
             )
             .clicked()
+            && !editor_state.preview_mode
         {
             if let Some(path) = rfd::FileDialog::new()
                 .add_filter("PNG Files", &["png"])
@@ -693,10 +696,15 @@ impl MyApp {
     ) {
         if ui
             .add(
-                Self::make_control_button("Read Temp", ButtonStyle::Normal, false)
-                    .min_size(Vec2::new(width, 24.0)),
+                Self::make_control_button(
+                    "Read Temp",
+                    ButtonStyle::Normal,
+                    editor_state.preview_mode,
+                )
+                .min_size(Vec2::new(width, 24.0)),
             )
             .clicked()
+            && !editor_state.preview_mode
         {
             let temp_file_path = editor_state.temp_path();
             if let Ok(temp_content) = std::fs::read_to_string(&temp_file_path) {
