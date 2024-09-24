@@ -117,8 +117,8 @@ impl PlainText {
         self.content.remove(index)
     }
 
-    pub fn append_plaintext(&mut self, plaintext: PlainText) {
-        self.content.extend(plaintext.content)
+    pub fn append_plaintext(&mut self, plaintext: &PlainText) {
+        self.content.extend(plaintext.content.clone());
     }
 
     pub fn bounded_index(&self, index: usize) -> usize {

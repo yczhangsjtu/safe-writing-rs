@@ -192,7 +192,11 @@ impl EditorState {
     }
 
     pub fn full_path(&self) -> PathBuf {
-        PathBuf::from(self.data_dir().clone()).join(format!("{}.safe", self.filename))
+        self.full_path_of(&self.filename)
+    }
+
+    pub fn full_path_of(&self, filename: &str) -> PathBuf {
+        PathBuf::from(self.data_dir().clone()).join(format!("{}.safe", filename))
     }
 
     pub fn temp_path(&self) -> PathBuf {
@@ -792,7 +796,7 @@ impl MyApp {
         }
         if let Some((filename, password)) = editor_state.appending_another_file.clone() {
             if ui.ctx().input(|i| i.key_pressed(egui::Key::Enter)) && !filename.is_empty() {
-                Self::try_appending_safe_file(editor_state, &filename, &password);
+                Self::try_appending_safe_file(editor_state, &filename, &password, ui);
                 editor_state.appending_another_file = None;
             }
             if let Some(error) = &editor_state.error_appending_another_file {
@@ -807,12 +811,13 @@ impl MyApp {
         editor_state: &mut EditorState,
         filename: &String,
         password: &String,
+        ui: &mut egui::Ui,
     ) {
         if filename == &editor_state.filename {
             editor_state.error_appending_another_file = Some("Cannot append to self".to_string());
         }
 
-        let path = editor_state.full_path();
+        let path = editor_state.full_path_of(&filename);
         if !path.exists() {
             editor_state.error_appending_another_file =
                 Some(format!("File {}.safe not exists", filename));
@@ -829,6 +834,7 @@ impl MyApp {
                             filename,
                             &content,
                             password,
+                            ui,
                         );
                     }
                 }
@@ -845,6 +851,7 @@ impl MyApp {
         filename: &str,
         content: &str,
         password: &str,
+        ui: &mut egui::Ui,
     ) {
         if content.len() < 3 {
             editor_state.error_appending_another_file =
@@ -854,7 +861,10 @@ impl MyApp {
                 Ok(appended_plaintext) => {
                     editor_state
                         .plaintext_mut()
-                        .append_plaintext(appended_plaintext);
+                        .append_plaintext(&appended_plaintext);
+                    appended_plaintext.images().iter().for_each(|image| {
+                        EditorState::insert_image(editor_state, image, ui.ctx());
+                    });
                     editor_state.dirty = true;
                     editor_state.appending_another_file = None;
                     editor_state.error_appending_another_file = None;
