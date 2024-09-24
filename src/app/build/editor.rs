@@ -34,6 +34,7 @@ pub struct EditorState {
     password: String,
     config: Config,
     text_to_insert: Option<String>,
+    image_to_insert: Option<Vec<u8>>,
 }
 
 impl EditorState {
@@ -389,9 +390,19 @@ impl MyApp {
                                 &mut editor_state.dirty,
                                 font_size,
                                 &mut editor_state.text_to_insert,
+                                &mut editor_state.image_to_insert,
                             );
                         } else {
                             Self::build_no_passage_selected_screen(ui);
+                        }
+                        if let Some(data) = editor_state.image_to_insert.take() {
+                            if editor_state
+                                .plaintext
+                                .content_of_passage(editor_state.selected_index)
+                                .is_some()
+                            {
+                                editor_state.insert_image_at_cursor(data, ui.ctx());
+                            }
                         }
                     }
                 });
@@ -404,6 +415,7 @@ impl MyApp {
         dirty: &mut bool,
         font_size: f32,
         text_to_insert: &mut Option<String>,
+        image_to_insert: &mut Option<Vec<u8>>,
     ) {
         ui.with_layout(egui::Layout::top_down_justified(egui::Align::Max), |ui| {
             let screen_size = ui.ctx().input(|input| input.screen_rect());
@@ -417,10 +429,27 @@ impl MyApp {
                     FontFamily::Proportional,
                 )))
                 .text_color(Color32::WHITE);
+
+            ui.ctx().input(|input| {
+                input.raw.dropped_files.iter().for_each(|file| {
+                    if let Some(path) = file.path.clone() {
+                        if let Some(ext) = path.extension() {
+                            if ext.to_string_lossy() == "png" {
+                                let data = std::fs::read(path);
+                                if let Ok(data) = data {
+                                    *image_to_insert = Some(data);
+                                }
+                            }
+                        }
+                    }
+                })
+            });
+
             let response = ui.add(editor_area);
             if response.changed() {
                 *dirty = true;
             }
+
             if let Some(mut state) = TextEdit::load_state(ui.ctx(), response.id) {
                 let cursor = state.cursor.char_range();
                 if let Some(text_to_insert) = text_to_insert.take() {
