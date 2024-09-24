@@ -3,6 +3,7 @@ use super::{locked::EncryptedFileState, MyApp};
 use crate::{
     app::{config::Config, content::Content},
     data_structures::PlainText,
+    png::read_png_metadata,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -37,6 +38,7 @@ pub struct EditorState {
     image_to_insert: Option<Vec<u8>>,
     inserting_safe_image: Option<(String, String, String)>,
     error_inserting_safe_image: Option<String>,
+    show_png_meta_data: Option<usize>,
 }
 
 impl EditorState {
@@ -381,7 +383,14 @@ impl MyApp {
                             .plaintext
                             .content_of_passage(editor_state.selected_index)
                         {
-                            Self::build_reading_area(editor_state, ui, text, font_size);
+                            Self::build_reading_area(
+                                &editor_state.plaintext,
+                                &editor_state.image_map,
+                                ui,
+                                text,
+                                font_size,
+                                &mut editor_state.show_png_meta_data,
+                            );
                         } else {
                             Self::build_no_passage_selected_screen(ui);
                         }
@@ -471,10 +480,12 @@ impl MyApp {
     }
 
     fn build_reading_area(
-        editor_state: &EditorState,
+        plaintext: &PlainText,
+        image_map: &HashMap<String, (usize, TextureHandle)>,
         ui: &mut egui::Ui,
         text: &String,
         font_size: f32,
+        show_png_meta_data: &mut Option<usize>,
     ) {
         ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
             // Split the passage by the image placeholders
@@ -529,10 +540,24 @@ impl MyApp {
                     let digest = &remained_text[7..71];
                     remained_text = &remained_text[72..];
 
-                    if let Some(image) = editor_state.image_map.get(digest) {
+                    if let Some(image) = image_map.get(digest) {
+                        let index = image.0;
                         let image = Image::from_texture(SizedTexture::from_handle(&image.1))
-                            .max_width(ui.available_width());
-                        ui.add(image);
+                            .max_width(ui.available_width())
+                            .sense(egui::Sense::click());
+                        let response = ui.add(image);
+                        if response.clicked_by(egui::PointerButton::Primary) {
+                            if show_png_meta_data.is_some() {
+                                *show_png_meta_data = None;
+                            } else {
+                                *show_png_meta_data = Some(index);
+                            }
+                        }
+                        if show_png_meta_data == &Some(index) {
+                            if let Some(metadata) = read_png_metadata(&plaintext.images()[index]) {
+                                ui.add(Label::new(WidgetText::RichText(RichText::new(metadata))));
+                            }
+                        }
                     } else {
                         let area = Label::new(WidgetText::RichText(
                             RichText::new(format!("Error loading image: {}", digest))

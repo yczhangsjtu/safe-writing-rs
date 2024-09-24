@@ -3202,6 +3202,7 @@ dependencies = [
  "homedir",
  "image",
  "pbkdf2",
+ "png",
  "rand",
  "rfd",
  "serde",
