@@ -2,7 +2,7 @@
 
 use super::MyApp;
 use egui::FontDefinitions;
-use font_kit::source::SystemSource;
+use font_kit::{family_name::FamilyName, properties::Properties, source::SystemSource};
 
 impl MyApp {
     pub(super) fn load_font_and_insert(
