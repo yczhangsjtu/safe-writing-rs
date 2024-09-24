@@ -28,6 +28,7 @@ pub struct EditorState {
     add_new_passage: Option<(String, usize)>,
     editing_passage_name: Option<(String, usize)>,
     confirm_delete_passage: Option<usize>,
+    confirm_clean_nonexist_images: bool,
     show_passage_operation_buttons: bool,
     appending_another_file: Option<(String, String)>,
     error_appending_another_file: Option<String>,
@@ -363,6 +364,26 @@ impl MyApp {
                     editor_state.dirty = true;
                     editor_state.selected_index = new_selected_index;
                     editor_state.confirm_delete_passage = None;
+                }
+            });
+        } else if editor_state.confirm_clean_nonexist_images {
+            ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                ui.allocate_space(Vec2::new(0.0, 200.0));ui.label(
+                    egui::WidgetText::from(
+                        "Sure to clean? All images that are not used in the passage will be deleted."
+                    )
+                    .color(Color32::LIGHT_RED),
+                );
+                if ui
+                    .add(Self::make_control_button(
+                        "I'm Sure",
+                        ButtonStyle::Danger,
+                        false,
+                    ))
+                    .clicked()
+                {
+                    EditorState::clean_non_referenced_images(editor_state, ui.ctx());
+                    editor_state.confirm_clean_nonexist_images = false;
                 }
             });
         } else {
@@ -714,6 +735,22 @@ impl MyApp {
         }
     }
 
+    fn build_clean_nonexist_image_button(
+        editor_state: &mut EditorState,
+        width: f32,
+        ui: &mut egui::Ui,
+    ) {
+        if ui
+            .add(
+                Self::make_control_button("Clean Images", ButtonStyle::Normal, false)
+                    .min_size(Vec2::new(width, 24.0)),
+            )
+            .clicked()
+        {
+            editor_state.confirm_clean_nonexist_images = true;
+        }
+    }
+
     fn build_add_button(editor_state: &mut EditorState, width: f32, ui: &mut egui::Ui) {
         if ui
             .add(
@@ -737,7 +774,7 @@ impl MyApp {
             .clicked()
             && editor_state.dirty
         {
-            Self::save(editor_state, ui.ctx());
+            Self::save(editor_state);
         }
     }
 
@@ -754,7 +791,7 @@ impl MyApp {
             )
             .clicked()
         {
-            Self::save_and_lock(next_content, editor_state, ui.ctx());
+            Self::save_and_lock(next_content, editor_state);
         }
     }
 
@@ -1075,18 +1112,19 @@ impl MyApp {
                 .ctx()
                 .input(|i| i.key_pressed(Key::S) && i.modifiers.command)
             {
-                Self::save(editor_state, ui.ctx());
+                Self::save(editor_state);
             }
             if ui
                 .ctx()
                 .input(|i| i.key_pressed(Key::L) && i.modifiers.command)
             {
-                Self::save_and_lock(next_content, editor_state, ui.ctx());
+                Self::save_and_lock(next_content, editor_state);
             }
             if editor_state.show_passage_operation_buttons {
                 Self::build_preview_button(editor_state, width, ui);
                 Self::build_insert_image_button(editor_state, width, ui);
                 Self::build_insert_safe_image_button(editor_state, width, ui);
+                Self::build_clean_nonexist_image_button(editor_state, width, ui);
                 Self::build_add_button(editor_state, width, ui);
                 Self::build_save_button(editor_state, width, ui);
                 Self::build_save_lock_button(next_content, editor_state, width, ui);
@@ -1236,19 +1274,14 @@ impl MyApp {
         }
     }
 
-    fn save(editor_state: &mut EditorState, ctx: &egui::Context) {
-        EditorState::clean_non_referenced_images(editor_state, ctx);
+    fn save(editor_state: &mut EditorState) {
+        // EditorState::clean_non_referenced_images(editor_state, ctx);
         let path = editor_state.full_path();
         std::fs::write(path, editor_state.plaintext.encrypt(&editor_state.password)).unwrap();
         editor_state.dirty = false;
     }
 
-    fn save_and_lock(
-        next_content: &mut Option<Content>,
-        editor_state: &mut EditorState,
-        ctx: &egui::Context,
-    ) {
-        EditorState::clean_non_referenced_images(editor_state, ctx);
+    fn save_and_lock(next_content: &mut Option<Content>, editor_state: &mut EditorState) {
         let path = editor_state.full_path();
         let ciphertext = editor_state.plaintext.encrypt(&editor_state.password);
         std::fs::write(path, &ciphertext).unwrap();
