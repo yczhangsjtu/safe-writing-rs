@@ -153,6 +153,7 @@ impl MyApp {
                         plaintext,
                         encrypted_file_state.password.clone(),
                         encrypted_file_state.config().clone(),
+                        ctx,
                     );
                     return Some(Content::PlainText(editor_state));
                 }

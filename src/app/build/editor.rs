@@ -4,33 +4,24 @@ use crate::{
     app::{config::Config, content::Content},
     data_structures::PlainText,
 };
-use std::{borrow::Cow, collections::HashSet, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
 use eframe::egui;
 use egui::{
-    ahash::HashMap, text::CCursorRange, Color32, FontFamily, FontId, FontSelection, Image,
-    ImageSource, Key, Label, RichText, TextBuffer, TextEdit, Vec2, WidgetText,
+    load::SizedTexture, text::CCursorRange, Color32, FontFamily, FontId, FontSelection, Image, Key,
+    Label, RichText, TextBuffer, TextEdit, TextureHandle, TextureOptions, Vec2, WidgetText,
 };
+use image::load_from_memory;
 use sha2::Digest;
-
-const STATIC_URIS: [&str; 10] = [
-    "bytes://1.png",
-    "bytes://2.png",
-    "bytes://3.png",
-    "bytes://4.png",
-    "bytes://5.png",
-    "bytes://6.png",
-    "bytes://7.png",
-    "bytes://8.png",
-    "bytes://9.png",
-    "bytes://10.png",
-];
 
 #[derive(Default, Clone)]
 pub struct EditorState {
     filename: String,
     plaintext: PlainText,
-    image_map: HashMap<String, usize>,
+    image_map: HashMap<String, (usize, TextureHandle)>,
     selected_index: usize,
     dirty: bool,
     add_new_passage: Option<(String, usize)>,
@@ -46,9 +37,15 @@ pub struct EditorState {
 }
 
 impl EditorState {
-    pub fn new(filename: String, plaintext: PlainText, password: String, config: Config) -> Self {
+    pub fn new(
+        filename: String,
+        plaintext: PlainText,
+        password: String,
+        config: Config,
+        ctx: &egui::Context,
+    ) -> Self {
         let image_map = if plaintext.num_images() > 0 {
-            Self::build_image_map(plaintext.images())
+            Self::build_image_map(plaintext.images(), ctx)
         } else {
             HashMap::default()
         };
@@ -63,23 +60,54 @@ impl EditorState {
         }
     }
 
-    fn build_image_map(images: &[Vec<u8>]) -> HashMap<String, usize> {
+    fn load_image_from_memory(image_data: &[u8]) -> Result<egui::ColorImage, image::ImageError> {
+        let image = load_from_memory(image_data)?;
+        let size = [image.width() as _, image.height() as _];
+        let image_buffer = image.to_rgba8();
+        let pixels: image::FlatSamples<&[u8]> = image_buffer.as_flat_samples();
+        Ok(egui::ColorImage::from_rgba_unmultiplied(
+            size,
+            pixels.as_slice(),
+        ))
+    }
+
+    fn load_texture_from_memory(
+        image_data: &[u8],
+        ctx: &egui::Context,
+    ) -> Result<TextureHandle, image::ImageError> {
+        let image = Self::load_image_from_memory(image_data)?;
+        let texture_handle = ctx.load_texture("image", image, TextureOptions::default());
+        Ok(texture_handle)
+    }
+
+    fn build_image_map(
+        images: &[Vec<u8>],
+        ctx: &egui::Context,
+    ) -> HashMap<String, (usize, TextureHandle)> {
         let mut image_map = HashMap::default();
         // Compute the SHA256 of this image as the key
         for (i, image) in images.iter().enumerate() {
-            image_map.insert(
-                format!("{:x}", {
-                    let mut hasher = sha2::Sha256::new();
-                    hasher.update(image);
-                    hasher.finalize()
-                }),
-                i,
-            );
+            let digest = format!("{:x}", {
+                let mut hasher = sha2::Sha256::new();
+                hasher.update(image);
+                hasher.finalize()
+            });
+            let handle = Self::load_texture_from_memory(image.as_slice(), ctx);
+            if let Ok(handle) = handle {
+                image_map.insert(digest, (i, handle));
+            } else {
+                println!("Failed to load image: {}", i);
+                continue;
+            }
         }
         image_map
     }
 
-    fn insert_image(editor_state: &mut EditorState, image: &Vec<u8>) -> String {
+    fn insert_image(
+        editor_state: &mut EditorState,
+        image: &Vec<u8>,
+        ctx: &egui::Context,
+    ) -> String {
         let image_digest = format!("{:x}", {
             let mut hasher = sha2::Sha256::new();
             hasher.update(image);
@@ -89,10 +117,15 @@ impl EditorState {
             return image_digest;
         }
         editor_state.plaintext.images_mut().push(image.clone());
-        editor_state.image_map.insert(
-            image_digest.clone(),
-            editor_state.plaintext.num_images() - 1,
-        );
+        let handle = Self::load_texture_from_memory(image.as_slice(), ctx);
+        if let Ok(handle) = handle {
+            editor_state.image_map.insert(
+                image_digest.clone(),
+                (editor_state.plaintext.num_images() - 1, handle),
+            );
+        } else {
+            println!("Failed to load image: {}", image_digest);
+        }
         editor_state.dirty = true;
         image_digest
     }
@@ -101,7 +134,7 @@ impl EditorState {
         format!("image!({})", digest)
     }
 
-    fn clean_non_referenced_images(editor_state: &mut EditorState) {
+    fn clean_non_referenced_images(editor_state: &mut EditorState, ctx: &egui::Context) {
         // Collect all the strings of the form image!(...) in the passages
         let mut image_references = HashSet::new();
         for passage in editor_state.plaintext.passages() {
@@ -119,7 +152,7 @@ impl EditorState {
             .iter()
             .filter_map(|(digest, index)| {
                 if image_references.contains(digest.as_str()) {
-                    Some(index)
+                    Some(index.0)
                 } else {
                     None
                 }
@@ -134,16 +167,23 @@ impl EditorState {
             index += 1;
             ret
         });
-        editor_state.image_map = Self::build_image_map(&editor_state.plaintext.images());
+        editor_state.image_map = Self::build_image_map(&editor_state.plaintext.images(), ctx);
     }
 
-    pub fn insert_image_at_cursor(&mut self, image: Vec<u8>) {
-        let digest = Self::insert_image(self, &image);
+    pub fn insert_image_at_cursor(&mut self, image: Vec<u8>, ctx: &egui::Context) {
+        let digest = Self::insert_image(self, &image, ctx);
         self.text_to_insert = Some(format!("\n{}\n", Self::image_placeholder(&digest)));
     }
 
     pub fn empty(filename: String, password: String, config: Config) -> Self {
-        Self::new(filename, PlainText::empty(), password, config)
+        EditorState {
+            filename,
+            plaintext: PlainText::empty(),
+            password,
+            selected_index: 0,
+            config,
+            ..Default::default()
+        }
     }
 
     pub fn filename(&self) -> &String {
@@ -263,14 +303,13 @@ impl MyApp {
     pub(super) fn build_editor(
         next_content: &mut Option<Content>,
         editor_state: &mut EditorState,
-        ctx: &egui::Context,
         ui: &mut egui::Ui,
     ) {
         egui::Frame::none()
             .fill(Color32::LIGHT_GRAY.gamma_multiply(0.1))
             .inner_margin(5.0)
             .show(ui, |ui| {
-                Self::build_passage_list(next_content, editor_state, 150.0, ctx, ui);
+                Self::build_passage_list(next_content, editor_state, 150.0, ui);
             });
         if editor_state.plaintext().is_empty() {
             ui.with_layout(
@@ -405,7 +444,6 @@ impl MyApp {
         ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
             // Split the passage by the image placeholders
             let mut remained_text = &text[..];
-            let mut counter: usize = 0;
             while !remained_text.is_empty() {
                 // Find the next "image!(" that is the start of the line and
                 // that line ends with ")"
@@ -457,11 +495,7 @@ impl MyApp {
                     remained_text = &remained_text[72..];
 
                     if let Some(image) = editor_state.image_map.get(digest) {
-                        ui.add(Image::new(ImageSource::Bytes {
-                            uri: Cow::Borrowed(STATIC_URIS[counter]),
-                            bytes: editor_state.plaintext.images()[*image].clone().into(),
-                        }));
-                        counter += 1;
+                        ui.add(Image::from_texture(SizedTexture::from_handle(&image.1)));
                     } else {
                         let area = Label::new(WidgetText::RichText(
                             RichText::new(format!("Error loading image: {}", digest))
@@ -486,12 +520,7 @@ impl MyApp {
         );
     }
 
-    fn build_toggle_button(
-        editor_state: &mut EditorState,
-        width: f32,
-        _ctx: &egui::Context,
-        ui: &mut egui::Ui,
-    ) {
+    fn build_toggle_button(editor_state: &mut EditorState, width: f32, ui: &mut egui::Ui) {
         if ui
             .add(
                 Self::make_control_button("...", ButtonStyle::Normal, false)
@@ -504,12 +533,7 @@ impl MyApp {
         }
     }
 
-    fn build_preview_button(
-        editor_state: &mut EditorState,
-        width: f32,
-        _ctx: &egui::Context,
-        ui: &mut egui::Ui,
-    ) {
+    fn build_preview_button(editor_state: &mut EditorState, width: f32, ui: &mut egui::Ui) {
         if ui
             .add(
                 Self::make_control_button(
@@ -529,12 +553,7 @@ impl MyApp {
         }
     }
 
-    fn build_insert_image_button(
-        editor_state: &mut EditorState,
-        width: f32,
-        _ctx: &egui::Context,
-        ui: &mut egui::Ui,
-    ) {
+    fn build_insert_image_button(editor_state: &mut EditorState, width: f32, ui: &mut egui::Ui) {
         if ui
             .add(
                 Self::make_control_button("Image", ButtonStyle::Normal, false)
@@ -548,18 +567,13 @@ impl MyApp {
             {
                 let image = std::fs::read(path);
                 if let Ok(image) = image {
-                    editor_state.insert_image_at_cursor(image);
+                    editor_state.insert_image_at_cursor(image, ui.ctx());
                 }
             }
         }
     }
 
-    fn build_add_button(
-        editor_state: &mut EditorState,
-        width: f32,
-        _ctx: &egui::Context,
-        ui: &mut egui::Ui,
-    ) {
+    fn build_add_button(editor_state: &mut EditorState, width: f32, ui: &mut egui::Ui) {
         if ui
             .add(
                 Self::make_control_button("Add", ButtonStyle::Normal, false)
@@ -573,12 +587,7 @@ impl MyApp {
         }
     }
 
-    fn build_save_button(
-        editor_state: &mut EditorState,
-        width: f32,
-        _ctx: &egui::Context,
-        ui: &mut egui::Ui,
-    ) {
+    fn build_save_button(editor_state: &mut EditorState, width: f32, ui: &mut egui::Ui) {
         if ui
             .add(
                 Self::make_control_button("Save", ButtonStyle::Normal, !editor_state.dirty)
@@ -587,7 +596,7 @@ impl MyApp {
             .clicked()
             && editor_state.dirty
         {
-            Self::save(editor_state);
+            Self::save(editor_state, ui.ctx());
         }
     }
 
@@ -595,7 +604,6 @@ impl MyApp {
         next_content: &mut Option<Content>,
         editor_state: &mut EditorState,
         width: f32,
-        _ctx: &egui::Context,
         ui: &mut egui::Ui,
     ) {
         if ui
@@ -605,7 +613,7 @@ impl MyApp {
             )
             .clicked()
         {
-            Self::save_and_lock(next_content, editor_state);
+            Self::save_and_lock(next_content, editor_state, ui.ctx());
         }
     }
 
@@ -614,7 +622,6 @@ impl MyApp {
         selected_index: usize,
         up: bool,
         width: f32,
-        _ctx: &egui::Context,
         ui: &mut egui::Ui,
     ) {
         if ui
@@ -642,12 +649,7 @@ impl MyApp {
         }
     }
 
-    fn build_rename_button(
-        editor_state: &mut EditorState,
-        width: f32,
-        _ctx: &egui::Context,
-        ui: &mut egui::Ui,
-    ) {
+    fn build_rename_button(editor_state: &mut EditorState, width: f32, ui: &mut egui::Ui) {
         if ui
             .add(
                 Self::make_control_button("Rename", ButtonStyle::Normal, false)
@@ -670,7 +672,6 @@ impl MyApp {
         editor_state: &mut EditorState,
         selected_index: usize,
         width: f32,
-        _ctx: &egui::Context,
         ui: &mut egui::Ui,
     ) {
         if ui
@@ -688,7 +689,6 @@ impl MyApp {
         editor_state: &mut EditorState,
         selected_index: usize,
         width: f32,
-        _ctx: &egui::Context,
         ui: &mut egui::Ui,
     ) {
         if ui
@@ -717,12 +717,7 @@ impl MyApp {
         }
     }
 
-    fn build_append_file_button(
-        editor_state: &mut EditorState,
-        width: f32,
-        ctx: &egui::Context,
-        ui: &mut egui::Ui,
-    ) {
+    fn build_append_file_button(editor_state: &mut EditorState, width: f32, ui: &mut egui::Ui) {
         if ui
             .add(
                 Self::make_control_button("Append File", ButtonStyle::Normal, false)
@@ -759,7 +754,7 @@ impl MyApp {
             );
         }
         if let Some((filename, password)) = editor_state.appending_another_file.clone() {
-            if ctx.input(|i| i.key_pressed(egui::Key::Enter)) && !filename.is_empty() {
+            if ui.ctx().input(|i| i.key_pressed(egui::Key::Enter)) && !filename.is_empty() {
                 Self::try_appending_safe_file(editor_state, &filename, &password);
                 editor_state.appending_another_file = None;
             }
@@ -841,29 +836,33 @@ impl MyApp {
         next_content: &mut Option<Content>,
         editor_state: &mut EditorState,
         width: f32,
-        ctx: &egui::Context,
         ui: &mut egui::Ui,
     ) {
         ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
-            Self::build_toggle_button(editor_state, width, ctx, ui);
-            if ctx.input(|i| i.key_pressed(Key::S) && i.modifiers.command) {
-                Self::save(editor_state);
+            Self::build_toggle_button(editor_state, width, ui);
+            if ui
+                .ctx()
+                .input(|i| i.key_pressed(Key::S) && i.modifiers.command)
+            {
+                Self::save(editor_state, ui.ctx());
             }
-            if ctx.input(|i| i.key_pressed(Key::L) && i.modifiers.command) {
-                Self::save_and_lock(next_content, editor_state);
+            if ui
+                .ctx()
+                .input(|i| i.key_pressed(Key::L) && i.modifiers.command)
+            {
+                Self::save_and_lock(next_content, editor_state, ui.ctx());
             }
             if editor_state.show_passage_operation_buttons {
-                Self::build_preview_button(editor_state, width, ctx, ui);
-                Self::build_insert_image_button(editor_state, width, ctx, ui);
-                Self::build_add_button(editor_state, width, ctx, ui);
-                Self::build_save_button(editor_state, width, ctx, ui);
-                Self::build_save_lock_button(next_content, editor_state, width, ctx, ui);
+                Self::build_preview_button(editor_state, width, ui);
+                Self::build_insert_image_button(editor_state, width, ui);
+                Self::build_add_button(editor_state, width, ui);
+                Self::build_save_button(editor_state, width, ui);
+                Self::build_save_lock_button(next_content, editor_state, width, ui);
                 Self::build_move_button(
                     editor_state,
                     editor_state.selected_index(),
                     true,
                     width,
-                    ctx,
                     ui,
                 );
                 Self::build_move_button(
@@ -871,25 +870,17 @@ impl MyApp {
                     editor_state.selected_index(),
                     false,
                     width,
-                    ctx,
                     ui,
                 );
-                Self::build_rename_button(editor_state, width, ctx, ui);
-                Self::build_delete_button(
-                    editor_state,
-                    editor_state.selected_index(),
-                    width,
-                    ctx,
-                    ui,
-                );
+                Self::build_rename_button(editor_state, width, ui);
+                Self::build_delete_button(editor_state, editor_state.selected_index(), width, ui);
                 Self::build_read_temp_button(
                     editor_state,
                     editor_state.selected_index(),
                     width,
-                    ctx,
                     ui,
                 );
-                Self::build_append_file_button(editor_state, width, ctx, ui);
+                Self::build_append_file_button(editor_state, width, ui);
             }
             egui::ScrollArea::vertical()
                 .id_source("passage_list")
@@ -898,7 +889,7 @@ impl MyApp {
                 .max_width(width)
                 .show(ui, |ui| {
                     if editor_state.plaintext.is_empty() {
-                        Self::build_new_passage_add(editor_state, 0, width, ctx, ui);
+                        Self::build_new_passage_add(editor_state, 0, width, ui);
                     }
                     (0..editor_state.plaintext.num_passages()).for_each(|i| {
                         if editor_state
@@ -907,9 +898,9 @@ impl MyApp {
                             .map(|(_, index)| index)
                             == Some(i)
                         {
-                            Self::build_passage_rename(editor_state, width, ctx, ui);
+                            Self::build_passage_rename(editor_state, width, ui);
                         } else {
-                            Self::build_passage_button(editor_state, i, width, ctx, ui);
+                            Self::build_passage_button(editor_state, i, width, ui);
                         }
                     });
                 });
@@ -920,7 +911,6 @@ impl MyApp {
         editor_state: &mut EditorState,
         current_index: usize,
         width: f32,
-        ctx: &egui::Context,
         ui: &mut egui::Ui,
     ) {
         if let Some((ref mut title, to_insert_index)) = editor_state.add_new_passage {
@@ -944,7 +934,7 @@ impl MyApp {
             );
         }
         if let Some((title, _)) = &editor_state.add_new_passage.clone() {
-            if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+            if ui.ctx().input(|i| i.key_pressed(egui::Key::Enter)) {
                 editor_state
                     .plaintext_mut()
                     .insert_new_passage(current_index, title.clone());
@@ -958,7 +948,6 @@ impl MyApp {
         editor_state: &mut EditorState,
         curr_index: usize,
         width: f32,
-        ctx: &egui::Context,
         ui: &mut egui::Ui,
     ) {
         if ui
@@ -991,15 +980,10 @@ impl MyApp {
                 editor_state.selected_index = curr_index;
             }
         }
-        Self::build_new_passage_add(editor_state, curr_index + 1, width, ctx, ui);
+        Self::build_new_passage_add(editor_state, curr_index + 1, width, ui);
     }
 
-    fn build_passage_rename(
-        editor_state: &mut EditorState,
-        width: f32,
-        ctx: &egui::Context,
-        ui: &mut egui::Ui,
-    ) {
+    fn build_passage_rename(editor_state: &mut EditorState, width: f32, ui: &mut egui::Ui) {
         ui.add(
             egui::TextEdit::singleline(&mut editor_state.editing_passage_name.as_mut().unwrap().0)
                 .min_size(Vec2::new(width, 24.0))
@@ -1009,7 +993,7 @@ impl MyApp {
                     FontFamily::Proportional,
                 ))),
         );
-        if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+        if ui.ctx().input(|i| i.key_pressed(egui::Key::Enter)) {
             let selected_index = editor_state.selected_index;
             let title = editor_state.editing_passage_name.clone().unwrap().0;
             editor_state
@@ -1020,15 +1004,19 @@ impl MyApp {
         }
     }
 
-    fn save(editor_state: &mut EditorState) {
-        EditorState::clean_non_referenced_images(editor_state);
+    fn save(editor_state: &mut EditorState, ctx: &egui::Context) {
+        EditorState::clean_non_referenced_images(editor_state, ctx);
         let path = editor_state.full_path();
         std::fs::write(path, editor_state.plaintext.encrypt(&editor_state.password)).unwrap();
         editor_state.dirty = false;
     }
 
-    fn save_and_lock(next_content: &mut Option<Content>, editor_state: &mut EditorState) {
-        EditorState::clean_non_referenced_images(editor_state);
+    fn save_and_lock(
+        next_content: &mut Option<Content>,
+        editor_state: &mut EditorState,
+        ctx: &egui::Context,
+    ) {
+        EditorState::clean_non_referenced_images(editor_state, ctx);
         let path = editor_state.full_path();
         let ciphertext = editor_state.plaintext.encrypt(&editor_state.password);
         std::fs::write(path, &ciphertext).unwrap();

@@ -46,7 +46,7 @@ impl MyApp {
                     );
                 }
                 Content::PlainText(editor_state) => {
-                    Self::build_editor(&mut self.next_content, editor_state, ctx, ui);
+                    Self::build_editor(&mut self.next_content, editor_state, ui);
                 }
                 Content::Error(err) => {
                     ui.with_layout(

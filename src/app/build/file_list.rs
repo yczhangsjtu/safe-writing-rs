@@ -140,6 +140,7 @@ impl MyApp {
                                     plaintext.clone(),
                                     password.clone(),
                                     self.config.clone(),
+                                    &ctx,
                                 ));
                             }
                         }
