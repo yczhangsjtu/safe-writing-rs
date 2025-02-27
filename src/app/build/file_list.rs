@@ -15,7 +15,7 @@ impl MyApp {
         if ui
             .add(
                 egui::Button::new(egui::WidgetText::RichText(
-                    RichText::from("Create New File")
+                    RichText::from(egui_material_icons::icons::ICON_ADD)
                         .size(18.0)
                         .color(if self.is_dirty() {
                             Color32::WHITE.gamma_multiply(0.2)
@@ -23,7 +23,7 @@ impl MyApp {
                             Color32::WHITE
                         }),
                 ))
-                .min_size(Vec2::new(width, 24.0))
+                .min_size(Vec2::new(24.0, 24.0))
                 .fill(Color32::GRAY.gamma_multiply(0.5)),
             )
             .clicked()
@@ -60,106 +60,118 @@ impl MyApp {
         }
     }
 
-    fn build_load_safe_note_button(&mut self, width: f32, ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn build_file_list_menu_button(&mut self, width: f32, ctx: &egui::Context, ui: &mut egui::Ui) {
         let data_dir = self.data_dir().clone();
-        if ui
-            .add(
-                egui::Button::new(egui::WidgetText::RichText(
-                    RichText::from("Load Safe Notes File")
-                        .size(18.0)
-                        .color(if self.is_dirty() {
-                            Color32::WHITE.gamma_multiply(0.2)
-                        } else {
-                            Color32::WHITE
-                        }),
-                ))
-                .min_size(Vec2::new(width, 24.0))
-                .fill(Color32::GRAY.gamma_multiply(0.5)),
-            )
-            .clicked()
-            && !self.is_dirty()
-        {
-            if self.waiting_for_password_for_safe_note.is_none() {
-                if let Some(path) = rfd::FileDialog::new()
-                    .add_filter("JSON Files", &["json"])
-                    .pick_file()
+        egui::menu::menu_custom_button(
+            ui,
+            egui::Button::new(egui::WidgetText::RichText(
+                RichText::from("...").size(18.0).color(Color32::WHITE),
+            ))
+            .min_size(Vec2::new(24.0, 24.0))
+            .fill(Color32::GRAY.gamma_multiply(0.5)),
+            |ui| {
+                if ui
+                    .add(
+                        egui::Button::new(egui::WidgetText::RichText(
+                            RichText::from("Load Safe Notes File").size(18.0).color(
+                                if self.is_dirty() {
+                                    Color32::GRAY.gamma_multiply(0.2)
+                                } else {
+                                    Color32::BLACK
+                                },
+                            ),
+                        ))
+                        .min_size(Vec2::new(24.0, 24.0))
+                        .fill(Color32::WHITE),
+                    )
+                    .clicked()
+                    && !self.is_dirty()
                 {
-                    let default_name = path
-                        .file_stem()
-                        .unwrap_or(OsStr::new(""))
-                        .to_string_lossy()
-                        .to_string();
-                    self.waiting_for_password_for_safe_note =
-                        Some((path, default_name, "".to_string()));
+                    if self.waiting_for_password_for_safe_note.is_none() {
+                        if let Some(path) = rfd::FileDialog::new()
+                            .add_filter("JSON Files", &["json"])
+                            .pick_file()
+                        {
+                            let default_name = path
+                                .file_stem()
+                                .unwrap_or(OsStr::new(""))
+                                .to_string_lossy()
+                                .to_string();
+                            self.waiting_for_password_for_safe_note =
+                                Some((path, default_name, "".to_string()));
+                        }
+                    } else {
+                        self.waiting_for_password_for_safe_note = None;
+                    }
                 }
-            } else {
-                self.waiting_for_password_for_safe_note = None;
-            }
-        }
 
-        if let Some((path, ref mut new_file_name, ref mut password)) =
-            &mut self.waiting_for_password_for_safe_note
-        {
-            ui.add(
-                TextEdit::singleline(new_file_name)
-                    .desired_width(width)
-                    .font(FontSelection::FontId(FontId::new(
-                        18.0,
-                        FontFamily::Proportional,
-                    )))
-                    .hint_text("New Name"),
-            );
-            ui.add(
-                TextEdit::singleline(password)
-                    .desired_width(width)
-                    .font(FontSelection::FontId(FontId::new(
-                        18.0,
-                        FontFamily::Proportional,
-                    )))
-                    .hint_text("Password")
-                    .password(true),
-            );
-            if ctx.input(|i| i.key_pressed(Key::Enter)) && !new_file_name.is_empty() {
-                match load_safe_note_file(password, &path) {
-                    Ok(safe_note) => {
-                        let plaintext = safe_note.into_plaintext();
-                        if self.file_names.contains(new_file_name) {
-                            self.content = Content::Error(format!(
-                                "File with name {} already exists",
-                                new_file_name
-                            ));
-                        } else {
-                            let content = plaintext.encrypt(password);
-                            let path =
-                                PathBuf::from(&data_dir).join(format!("{}.safe", new_file_name));
-                            if std::fs::write(path, content).is_ok() {
-                                self.file_names.push(new_file_name.clone());
-                                self.file_names.sort();
-                                self.content = Content::PlainText(EditorState::new(
-                                    new_file_name.clone(),
-                                    plaintext.clone(),
-                                    password.clone(),
-                                    self.config.clone(),
-                                    &ctx,
+                if let Some((path, ref mut new_file_name, ref mut password)) =
+                    &mut self.waiting_for_password_for_safe_note
+                {
+                    ui.add(
+                        TextEdit::singleline(new_file_name)
+                            .desired_width(width)
+                            .font(FontSelection::FontId(FontId::new(
+                                18.0,
+                                FontFamily::Proportional,
+                            )))
+                            .hint_text("New Name"),
+                    );
+                    ui.add(
+                        TextEdit::singleline(password)
+                            .desired_width(width)
+                            .font(FontSelection::FontId(FontId::new(
+                                18.0,
+                                FontFamily::Proportional,
+                            )))
+                            .hint_text("Password")
+                            .password(true),
+                    );
+                    if ctx.input(|i| i.key_pressed(Key::Enter)) && !new_file_name.is_empty() {
+                        match load_safe_note_file(password, &path) {
+                            Ok(safe_note) => {
+                                let plaintext = safe_note.into_plaintext();
+                                if self.file_names.contains(new_file_name) {
+                                    self.content = Content::Error(format!(
+                                        "File with name {} already exists",
+                                        new_file_name
+                                    ));
+                                } else {
+                                    let content = plaintext.encrypt(password);
+                                    let path = PathBuf::from(&data_dir)
+                                        .join(format!("{}.safe", new_file_name));
+                                    if std::fs::write(path, content).is_ok() {
+                                        self.file_names.push(new_file_name.clone());
+                                        self.file_names.sort();
+                                        self.content = Content::PlainText(EditorState::new(
+                                            new_file_name.clone(),
+                                            plaintext.clone(),
+                                            password.clone(),
+                                            self.config.clone(),
+                                            &ctx,
+                                        ));
+                                    }
+                                }
+                            }
+                            Err(err) => {
+                                self.content = Content::Error(format!(
+                                    "Error loading safenote file: {:?}",
+                                    err
                                 ));
                             }
                         }
-                    }
-                    Err(err) => {
-                        self.content =
-                            Content::Error(format!("Error loading safenote file: {:?}", err));
+                        self.waiting_for_password_for_safe_note = None;
                     }
                 }
-                self.waiting_for_password_for_safe_note = None;
-            }
-        }
+            },
+        );
     }
 
-    fn build_refresh_button(&mut self, width: f32, _ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn build_refresh_button(&mut self, _width: f32, _ctx: &egui::Context, ui: &mut egui::Ui) {
         if ui
             .add(
                 egui::Button::new(egui::WidgetText::RichText(
-                    RichText::from("Refresh")
+                    RichText::from(egui_material_icons::icons::ICON_REFRESH)
                         .size(18.0)
                         .color(if self.is_dirty() {
                             Color32::WHITE.gamma_multiply(0.2)
@@ -167,7 +179,7 @@ impl MyApp {
                             Color32::WHITE
                         }),
                 ))
-                .min_size(Vec2::new(width, 24.0))
+                .min_size(Vec2::new(24.0, 24.0))
                 .fill(Color32::GRAY.gamma_multiply(0.5)),
             )
             .clicked()
@@ -234,9 +246,11 @@ impl MyApp {
             .inner_margin(5.0)
             .show(ui, |ui| {
                 ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
-                    self.build_create_new_file_button(width, ctx, ui);
-                    self.build_load_safe_note_button(width, ctx, ui);
-                    self.build_refresh_button(width, ctx, ui);
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
+                        self.build_create_new_file_button(width, ctx, ui);
+                        self.build_refresh_button(width, ctx, ui);
+                        self.build_file_list_menu_button(width, ctx, ui);
+                    });
 
                     egui::ScrollArea::vertical()
                         .id_salt("file_name_list")

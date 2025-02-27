@@ -110,6 +110,23 @@ impl MyApp {
         &self.config.data_dir
     }
 
+    fn formatted_data_dir(&self) -> String {
+        // If the prefix is home directory of the current user, replace it
+        // with "$HOME"
+        if self
+            .data_dir()
+            .starts_with(my_home().unwrap().unwrap().to_str().unwrap())
+        {
+            let folder_icon = egui_material_icons::icons::ICON_FOLDER;
+            return format!(
+                "{} $HOME{}",
+                folder_icon,
+                &self.config.data_dir[my_home().unwrap().unwrap().to_str().unwrap().len()..]
+            );
+        }
+        self.data_dir().to_string()
+    }
+
     #[allow(unused)]
     fn font_size(&self) -> f32 {
         self.config.font_size
