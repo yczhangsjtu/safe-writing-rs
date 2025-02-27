@@ -23,9 +23,10 @@ impl MyApp {
             .unwrap()
             .copy_font_data()
             .unwrap();
-        fonts
-            .font_data
-            .insert(id.to_owned(), egui::FontData::from_owned(font.to_vec()));
+        fonts.font_data.insert(
+            id.to_owned(),
+            std::sync::Arc::new(egui::FontData::from_owned(font.to_vec())),
+        );
 
         fonts
             .families

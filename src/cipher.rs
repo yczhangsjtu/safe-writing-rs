@@ -19,7 +19,7 @@ pub fn encrypt(password: &str, data: &PlainText) -> String {
     let key = key_derive(password);
 
     let mut iv = [0u8; 16];
-    StdRng::from_entropy().fill_bytes(&mut iv);
+    StdRng::from_os_rng().fill_bytes(&mut iv);
 
     let encrypted = cbc::Encryptor::<aes::Aes128>::new(&key.into(), &iv.into())
         .encrypt_padded_vec_mut::<Pkcs7>(&data);

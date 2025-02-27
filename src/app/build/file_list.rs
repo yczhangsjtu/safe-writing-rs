@@ -229,7 +229,7 @@ impl MyApp {
     }
 
     pub(super) fn build_file_list(&mut self, width: f32, ctx: &egui::Context, ui: &mut egui::Ui) {
-        egui::Frame::none()
+        egui::Frame::new()
             .fill(Color32::GRAY.gamma_multiply(0.2))
             .inner_margin(5.0)
             .show(ui, |ui| {
@@ -239,7 +239,7 @@ impl MyApp {
                     self.build_refresh_button(width, ctx, ui);
 
                     egui::ScrollArea::vertical()
-                        .id_source("file_name_list")
+                        .id_salt("file_name_list")
                         .max_height(f32::INFINITY)
                         .auto_shrink([true, false])
                         .max_width(width)

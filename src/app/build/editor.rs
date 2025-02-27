@@ -315,7 +315,7 @@ impl MyApp {
         editor_state: &mut EditorState,
         ui: &mut egui::Ui,
     ) {
-        egui::Frame::none()
+        egui::Frame::new()
             .fill(Color32::LIGHT_GRAY.gamma_multiply(0.1))
             .inner_margin(5.0)
             .show(ui, |ui| {
@@ -388,7 +388,7 @@ impl MyApp {
             });
         } else {
             egui::ScrollArea::vertical()
-                .id_source(format!(
+                .id_salt(format!(
                     "editor:{}:{}",
                     editor_state.filename(),
                     editor_state
@@ -1153,7 +1153,7 @@ impl MyApp {
                 Self::build_append_file_button(editor_state, width, ui);
             }
             egui::ScrollArea::vertical()
-                .id_source("passage_list")
+                .id_salt("passage_list")
                 .max_height(f32::INFINITY)
                 .auto_shrink([true, false])
                 .max_width(width)
