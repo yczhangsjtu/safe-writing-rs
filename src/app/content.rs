@@ -6,7 +6,7 @@ use super::build::{
 };
 
 #[derive(Default, Clone)]
-pub(super) enum Content {
+pub(crate) enum Content {
     #[default]
     None,
     NewFile(NewFileState),

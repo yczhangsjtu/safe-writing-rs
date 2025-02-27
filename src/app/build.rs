@@ -6,6 +6,7 @@ const FILE_LIST_WIDTH: f32 = 200.0;
 const PASSWORD_SCREEN_TOP_SPACE: f32 = 200.0;
 const INFO_TEXT_SIZE: f32 = 18.0;
 
+pub(super) mod button_style;
 pub(super) mod editor;
 pub(super) mod file_list;
 pub(super) mod locked;
