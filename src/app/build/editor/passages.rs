@@ -9,6 +9,35 @@ use eframe::egui;
 use egui::{Color32, FontFamily, FontId, FontSelection, Key, RichText, Vec2};
 
 impl MyApp {
+    pub(super) fn build_passage_list_menu_button(
+        editor_state: &mut EditorState,
+        width: f32,
+        ui: &mut egui::Ui,
+        next_content: &mut Option<Content>,
+    ) {
+        egui::menu::menu_custom_button(
+            ui,
+            Self::make_control_button("...", ButtonStyle::Normal, false)
+                .min_size(Vec2::new(24.0, 24.0)),
+            |ui| {
+                Self::build_preview_button(editor_state, width, ui);
+                Self::build_insert_image_button(editor_state, width, ui);
+                Self::build_insert_safe_image_button(editor_state, width, ui);
+                Self::build_clean_nonexist_image_button(editor_state, width, ui);
+                Self::build_save_lock_button(next_content, editor_state, width, ui);
+                Self::build_rename_button(editor_state, width, ui);
+                Self::build_delete_button(editor_state, editor_state.selected_index(), width, ui);
+                Self::build_read_temp_button(
+                    editor_state,
+                    editor_state.selected_index(),
+                    width,
+                    ui,
+                );
+                Self::build_append_file_button(editor_state, width, ui);
+            },
+        );
+    }
+
     pub(super) fn try_appending_safe_file_content(
         editor_state: &mut EditorState,
         filename: &str,
@@ -44,27 +73,9 @@ impl MyApp {
         ui: &mut egui::Ui,
     ) {
         ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
-            Self::build_toggle_button(editor_state, width, ui);
-            if ui
-                .ctx()
-                .input(|i| i.key_pressed(Key::S) && i.modifiers.command)
-            {
-                Self::save(editor_state);
-            }
-            if ui
-                .ctx()
-                .input(|i| i.key_pressed(Key::L) && i.modifiers.command)
-            {
-                Self::save_and_lock(next_content, editor_state);
-            }
-            if editor_state.show_passage_operation_buttons {
-                Self::build_preview_button(editor_state, width, ui);
-                Self::build_insert_image_button(editor_state, width, ui);
-                Self::build_insert_safe_image_button(editor_state, width, ui);
-                Self::build_clean_nonexist_image_button(editor_state, width, ui);
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
                 Self::build_add_button(editor_state, width, ui);
                 Self::build_save_button(editor_state, width, ui);
-                Self::build_save_lock_button(next_content, editor_state, width, ui);
                 Self::build_move_button(
                     editor_state,
                     editor_state.selected_index(),
@@ -79,15 +90,19 @@ impl MyApp {
                     width,
                     ui,
                 );
-                Self::build_rename_button(editor_state, width, ui);
-                Self::build_delete_button(editor_state, editor_state.selected_index(), width, ui);
-                Self::build_read_temp_button(
-                    editor_state,
-                    editor_state.selected_index(),
-                    width,
-                    ui,
-                );
-                Self::build_append_file_button(editor_state, width, ui);
+                Self::build_passage_list_menu_button(editor_state, width, ui, next_content);
+            });
+            if ui
+                .ctx()
+                .input(|i| i.key_pressed(Key::S) && i.modifiers.command)
+            {
+                Self::save(editor_state);
+            }
+            if ui
+                .ctx()
+                .input(|i| i.key_pressed(Key::L) && i.modifiers.command)
+            {
+                Self::save_and_lock(next_content, editor_state);
             }
             egui::ScrollArea::vertical()
                 .id_salt("passage_list")
@@ -211,11 +226,15 @@ impl MyApp {
         }
     }
 
-    fn build_add_button(editor_state: &mut EditorState, width: f32, ui: &mut egui::Ui) {
+    fn build_add_button(editor_state: &mut EditorState, _width: f32, ui: &mut egui::Ui) {
         if ui
             .add(
-                Self::make_control_button("Add", ButtonStyle::Normal, false)
-                    .min_size(Vec2::new(width, 24.0)),
+                Self::make_control_button(
+                    egui_material_icons::icons::ICON_ADD,
+                    ButtonStyle::Normal,
+                    false,
+                )
+                .min_size(Vec2::new(24.0, 24.0)),
             )
             .clicked()
         {
@@ -225,11 +244,15 @@ impl MyApp {
         }
     }
 
-    fn build_save_button(editor_state: &mut EditorState, width: f32, ui: &mut egui::Ui) {
+    fn build_save_button(editor_state: &mut EditorState, _width: f32, ui: &mut egui::Ui) {
         if ui
             .add(
-                Self::make_control_button("Save", ButtonStyle::Normal, !editor_state.dirty)
-                    .min_size(Vec2::new(width, 24.0)),
+                Self::make_control_button(
+                    egui_material_icons::icons::ICON_SAVE,
+                    ButtonStyle::Normal,
+                    !editor_state.dirty,
+                )
+                .min_size(Vec2::new(24.0, 24.0)),
             )
             .clicked()
             && editor_state.dirty
@@ -246,7 +269,7 @@ impl MyApp {
     ) {
         if ui
             .add(
-                Self::make_control_button("Save & Lock", ButtonStyle::Warning, false)
+                Self::make_control_button("Save & Lock", ButtonStyle::WarningInMenu, false)
                     .min_size(Vec2::new(width, 24.0)),
             )
             .clicked()
@@ -259,17 +282,21 @@ impl MyApp {
         editor_state: &mut EditorState,
         selected_index: usize,
         up: bool,
-        width: f32,
+        _width: f32,
         ui: &mut egui::Ui,
     ) {
         if ui
             .add(
                 Self::make_control_button(
-                    if up { "Move Up" } else { "Move Down" },
+                    if up {
+                        egui_material_icons::icons::ICON_MOVE_UP
+                    } else {
+                        egui_material_icons::icons::ICON_MOVE_DOWN
+                    },
                     ButtonStyle::Normal,
                     false,
                 )
-                .min_size(Vec2::new(width, 24.0)),
+                .min_size(Vec2::new(24.0, 24.0)),
             )
             .clicked()
         {
@@ -290,7 +317,7 @@ impl MyApp {
     fn build_rename_button(editor_state: &mut EditorState, width: f32, ui: &mut egui::Ui) {
         if ui
             .add(
-                Self::make_control_button("Rename", ButtonStyle::Normal, false)
+                Self::make_control_button("Rename", ButtonStyle::NormalInMenu, false)
                     .min_size(Vec2::new(width, 24.0)),
             )
             .clicked()
@@ -314,7 +341,7 @@ impl MyApp {
     ) {
         if ui
             .add(
-                Self::make_control_button("Delete", ButtonStyle::Warning, false)
+                Self::make_control_button("Delete", ButtonStyle::WarningInMenu, false)
                     .min_size(Vec2::new(width, 24.0)),
             )
             .clicked()
@@ -333,7 +360,7 @@ impl MyApp {
             .add(
                 Self::make_control_button(
                     "Read Temp",
-                    ButtonStyle::Normal,
+                    ButtonStyle::NormalInMenu,
                     editor_state.preview_mode,
                 )
                 .min_size(Vec2::new(width, 24.0)),
@@ -363,7 +390,7 @@ impl MyApp {
     fn build_append_file_button(editor_state: &mut EditorState, width: f32, ui: &mut egui::Ui) {
         if ui
             .add(
-                Self::make_control_button("Append File", ButtonStyle::Normal, false)
+                Self::make_control_button("Append File", ButtonStyle::NormalInMenu, false)
                     .min_size(Vec2::new(width, 24.0)),
             )
             .clicked()

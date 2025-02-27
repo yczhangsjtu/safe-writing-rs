@@ -17,8 +17,12 @@ impl MyApp {
     ) {
         if ui
             .add(
-                Self::make_control_button("Image", ButtonStyle::Normal, editor_state.preview_mode)
-                    .min_size(Vec2::new(width, 24.0)),
+                Self::make_control_button(
+                    "Image",
+                    ButtonStyle::NormalInMenu,
+                    editor_state.preview_mode,
+                )
+                .min_size(Vec2::new(width, 24.0)),
             )
             .clicked()
             && !editor_state.preview_mode
@@ -44,7 +48,7 @@ impl MyApp {
             .add(
                 Self::make_control_button(
                     "Safe Image",
-                    ButtonStyle::Normal,
+                    ButtonStyle::NormalInMenu,
                     editor_state.preview_mode,
                 )
                 .min_size(Vec2::new(width, 24.0)),
@@ -120,7 +124,7 @@ impl MyApp {
     ) {
         if ui
             .add(
-                Self::make_control_button("Clean Images", ButtonStyle::Normal, false)
+                Self::make_control_button("Clean Images", ButtonStyle::NormalInMenu, false)
                     .min_size(Vec2::new(width, 24.0)),
             )
             .clicked()

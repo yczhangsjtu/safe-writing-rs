@@ -325,23 +325,6 @@ impl MyApp {
         );
     }
 
-    pub(super) fn build_toggle_button(
-        editor_state: &mut EditorState,
-        width: f32,
-        ui: &mut egui::Ui,
-    ) {
-        if ui
-            .add(
-                Self::make_control_button("...", ButtonStyle::Normal, false)
-                    .min_size(Vec2::new(width, 24.0)),
-            )
-            .clicked()
-        {
-            editor_state.show_passage_operation_buttons =
-                !editor_state.show_passage_operation_buttons;
-        }
-    }
-
     pub(super) fn build_preview_button(
         editor_state: &mut EditorState,
         width: f32,
@@ -355,7 +338,7 @@ impl MyApp {
                     } else {
                         "Preview"
                     },
-                    ButtonStyle::Normal,
+                    ButtonStyle::NormalInMenu,
                     false,
                 )
                 .min_size(Vec2::new(width, 24.0)),

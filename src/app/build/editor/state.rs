@@ -20,7 +20,6 @@ pub struct EditorState {
     pub(super) editing_passage_name: Option<(String, usize)>,
     pub(super) confirm_delete_passage: Option<usize>,
     pub(super) confirm_clean_nonexist_images: bool,
-    pub(super) show_passage_operation_buttons: bool,
     pub(super) appending_another_file: Option<(String, String)>,
     pub(super) error_appending_another_file: Option<String>,
     pub(super) preview_mode: bool,
