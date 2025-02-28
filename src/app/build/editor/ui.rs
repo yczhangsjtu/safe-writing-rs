@@ -120,49 +120,54 @@ impl MyApp {
                 ))
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
-                    let font_size = editor_state.font_size();
-                    if editor_state.preview_mode {
-                        if let Some(text) = editor_state
-                            .plaintext
-                            .content_of_passage(editor_state.selected_index)
-                        {
-                            Self::build_reading_area(
-                                &editor_state.plaintext,
-                                &editor_state.image_map,
-                                ui,
-                                text,
-                                font_size,
-                                &mut editor_state.show_png_meta_data,
-                            );
-                        } else {
-                            Self::build_no_passage_selected_screen(ui);
-                        }
-                    } else {
-                        if let Some(edited_text) = editor_state
-                            .plaintext
-                            .content_of_passage_mut(editor_state.selected_index)
-                        {
-                            Self::build_editing_area(
-                                ui,
-                                edited_text,
-                                &mut editor_state.dirty,
-                                font_size,
-                                &mut editor_state.text_to_insert,
-                                &mut editor_state.image_to_insert,
-                            );
-                        } else {
-                            Self::build_no_passage_selected_screen(ui);
-                        }
-                        if let Some(data) = editor_state.image_to_insert.take() {
-                            if editor_state
-                                .plaintext
-                                .content_of_passage(editor_state.selected_index)
-                                .is_some()
-                            {
-                                editor_state.insert_image_at_cursor(data, ui.ctx());
+                    egui::Frame::new()
+                        .fill(Color32::LIGHT_GRAY.gamma_multiply(0.1))
+                        .inner_margin(20.0)
+                        .show(ui, |ui| {
+                            let font_size = editor_state.font_size();
+                            if editor_state.preview_mode {
+                                if let Some(text) = editor_state
+                                    .plaintext
+                                    .content_of_passage(editor_state.selected_index)
+                                {
+                                    Self::build_reading_area(
+                                        &editor_state.plaintext,
+                                        &editor_state.image_map,
+                                        ui,
+                                        text,
+                                        font_size,
+                                        &mut editor_state.show_png_meta_data,
+                                    );
+                                } else {
+                                    Self::build_no_passage_selected_screen(ui);
+                                }
+                            } else {
+                                if let Some(edited_text) = editor_state
+                                    .plaintext
+                                    .content_of_passage_mut(editor_state.selected_index)
+                                {
+                                    Self::build_editing_area(
+                                        ui,
+                                        edited_text,
+                                        &mut editor_state.dirty,
+                                        font_size,
+                                        &mut editor_state.text_to_insert,
+                                        &mut editor_state.image_to_insert,
+                                    );
+                                } else {
+                                    Self::build_no_passage_selected_screen(ui);
+                                }
+                                if let Some(data) = editor_state.image_to_insert.take() {
+                                    if editor_state
+                                        .plaintext
+                                        .content_of_passage(editor_state.selected_index)
+                                        .is_some()
+                                    {
+                                        editor_state.insert_image_at_cursor(data, ui.ctx());
+                                    }
+                                }
                             }
-                        }
-                    }
+                        });
                 });
         }
     }
