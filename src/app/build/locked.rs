@@ -52,6 +52,7 @@ pub struct EncryptedFileState {
     new_password: String,
     confirm_password: String,
     error_message: Option<String>,
+    change_password_show: bool,
     config: Config,
 }
 
@@ -186,49 +187,74 @@ impl MyApp {
             }
         }
         ui.allocate_space(Vec2::new(0.0, 100.0));
-        ui.add(
-            TextEdit::singleline(&mut encrypted_file_state.new_password)
-                .password(true)
-                .hint_text("New Password"),
-        );
-        ui.add(
-            TextEdit::singleline(&mut encrypted_file_state.confirm_password)
-                .password(true)
-                .hint_text("Confirm Password"),
-        );
         if ui
-            .button(
-                egui::WidgetText::RichText(RichText::from("Change Password").size(18.0)).color(
-                    if encrypted_file_state.new_password == encrypted_file_state.confirm_password {
-                        Color32::BLACK
-                    } else {
-                        Color32::WHITE.gamma_multiply(0.3)
-                    },
-                ),
+            .add(
+                egui::Button::new(egui::WidgetText::RichText(
+                    RichText::from(format!(
+                        "Change Password {}",
+                        if encrypted_file_state.change_password_show {
+                            egui_material_icons::icons::ICON_ARROW_UPWARD
+                        } else {
+                            egui_material_icons::icons::ICON_ARROW_DOWNWARD
+                        }
+                    ))
+                    .size(12.0)
+                    .color(egui::Color32::WHITE),
+                ))
+                .fill(egui::Color32::GRAY.gamma_multiply(0.3)),
             )
             .clicked()
         {
-            if encrypted_file_state.new_password == encrypted_file_state.confirm_password {
-                match PlainText::decrypt(
-                    &encrypted_file_state.password,
-                    &encrypted_file_state.ciphertext,
-                ) {
-                    Ok(plaintext) => {
-                        let ciphertext = plaintext.encrypt(&encrypted_file_state.new_password);
-                        let path = PathBuf::from(encrypted_file_state.data_dir().clone())
-                            .join(format!("{}.safe", encrypted_file_state.filename));
-                        std::fs::write(path, &ciphertext).unwrap();
-                        return Some(Content::Success(
-                            "Password changed successfully".to_string(),
-                        ));
-                    }
-                    Err(_err) => {
-                        let mut encrypted_file_state = encrypted_file_state.clone();
-                        encrypted_file_state.password = "".to_string();
-                        encrypted_file_state.confirm_password = "".to_string();
-                        encrypted_file_state.new_password = "".to_string();
-                        encrypted_file_state.error_message = Some("Wrong password".to_string());
-                        return Some(Content::Encrypted(encrypted_file_state));
+            encrypted_file_state.change_password_show = !encrypted_file_state.change_password_show;
+        }
+        if encrypted_file_state.change_password_show {
+            ui.allocate_space(Vec2::new(0.0, 10.0));
+            ui.add(
+                TextEdit::singleline(&mut encrypted_file_state.new_password)
+                    .password(true)
+                    .hint_text("New Password"),
+            );
+            ui.add(
+                TextEdit::singleline(&mut encrypted_file_state.confirm_password)
+                    .password(true)
+                    .hint_text("Confirm Password"),
+            );
+            if ui
+                .button(
+                    egui::WidgetText::RichText(RichText::from("Change Password").size(18.0)).color(
+                        if encrypted_file_state.new_password
+                            == encrypted_file_state.confirm_password
+                        {
+                            Color32::BLACK
+                        } else {
+                            Color32::WHITE.gamma_multiply(0.3)
+                        },
+                    ),
+                )
+                .clicked()
+            {
+                if encrypted_file_state.new_password == encrypted_file_state.confirm_password {
+                    match PlainText::decrypt(
+                        &encrypted_file_state.password,
+                        &encrypted_file_state.ciphertext,
+                    ) {
+                        Ok(plaintext) => {
+                            let ciphertext = plaintext.encrypt(&encrypted_file_state.new_password);
+                            let path = PathBuf::from(encrypted_file_state.data_dir().clone())
+                                .join(format!("{}.safe", encrypted_file_state.filename));
+                            std::fs::write(path, &ciphertext).unwrap();
+                            return Some(Content::Success(
+                                "Password changed successfully".to_string(),
+                            ));
+                        }
+                        Err(_err) => {
+                            let mut encrypted_file_state = encrypted_file_state.clone();
+                            encrypted_file_state.password = "".to_string();
+                            encrypted_file_state.confirm_password = "".to_string();
+                            encrypted_file_state.new_password = "".to_string();
+                            encrypted_file_state.error_message = Some("Wrong password".to_string());
+                            return Some(Content::Encrypted(encrypted_file_state));
+                        }
                     }
                 }
             }
