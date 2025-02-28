@@ -2,7 +2,7 @@ use homedir::my_home;
 use std::path::PathBuf;
 
 use eframe::egui;
-use egui::Color32;
+use egui::{Color32, FontDefinitions};
 
 mod config;
 use config::Config;
@@ -31,6 +31,7 @@ impl MyApp {
 
         let mut fonts = egui::FontDefinitions::default();
 
+        Self::load_local_font_and_insert("LXGW", 0, &mut fonts);
         #[cfg(target_os = "macos")]
         {
             Self::load_font_and_insert("Hei", "heiti", 0, &mut fonts);
@@ -52,6 +53,39 @@ impl MyApp {
             config,
             ..Default::default()
         }
+    }
+
+    fn load_local_font_and_insert(name: &'static str, index: usize, fonts: &mut FontDefinitions) {
+        // SystemSource::new()
+        //     .all_families()
+        //     .unwrap()
+        //     .iter()
+        //     .for_each(|name| println!("Family: {}", name));
+        let font_data = if name == "LXGW" {
+            egui::FontData::from_static(include_bytes!("../assets/LXGWWenKaiGB-Regular.ttf"))
+        } else {
+            panic!("Unknown font name: {}", name);
+        };
+
+        fonts
+            .font_data
+            .insert(name.to_owned(), std::sync::Arc::new(font_data));
+
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default()
+            .insert(index, name.to_owned());
+        fonts
+            .families
+            .entry(egui::FontFamily::Monospace)
+            .or_default()
+            .push(name.to_owned());
+        fonts
+            .families
+            .entry(egui::FontFamily::Name(name.into()))
+            .or_default()
+            .push(name.to_owned());
     }
 
     fn get_config_and_filenames() -> (Config, Vec<String>) {

@@ -184,7 +184,7 @@ impl MyApp {
                 // .desired_rows(50)
                 .font(FontSelection::FontId(FontId::new(
                     font_size,
-                    FontFamily::Proportional,
+                    FontFamily::Name("LXGW".into()),
                 )))
                 .text_color(Color32::WHITE);
 
@@ -271,7 +271,8 @@ impl MyApp {
                     let area = Label::new(WidgetText::RichText(
                         RichText::new(text_before_image)
                             .size(font_size)
-                            .color(Color32::WHITE),
+                            .color(Color32::WHITE)
+                            .family(FontFamily::Name("LXGW".into())),
                     ))
                     .selectable(true);
                     ui.add(area);
