@@ -121,7 +121,7 @@ impl MyApp {
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     egui::Frame::new()
-                        .fill(Color32::LIGHT_GRAY.gamma_multiply(0.1))
+                        .fill(Color32::BLACK)
                         .inner_margin(20.0)
                         .show(ui, |ui| {
                             let font_size = editor_state.font_size();

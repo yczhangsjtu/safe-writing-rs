@@ -51,6 +51,7 @@ pub struct EncryptedFileState {
     password: String,
     new_password: String,
     confirm_password: String,
+    error_message: Option<String>,
     config: Config,
 }
 
@@ -130,6 +131,23 @@ impl MyApp {
         ctx: &egui::Context,
         ui: &mut egui::Ui,
     ) -> Option<Content> {
+        if let Some(error_message) = encrypted_file_state.error_message.clone() {
+            ui.label(RichText::from(error_message).color(Color32::RED));
+            if ui
+                .add(
+                    egui::Button::new(egui::WidgetText::RichText(
+                        RichText::from("Dismiss")
+                            .size(12.0)
+                            .color(egui::Color32::RED),
+                    ))
+                    .fill(egui::Color32::GRAY.gamma_multiply(0.3)),
+                )
+                .clicked()
+            {
+                encrypted_file_state.error_message = None;
+            }
+            ui.allocate_space(Vec2::new(0.0, 10.0));
+        }
         ui.add(
             TextEdit::singleline(&mut encrypted_file_state.password)
                 .password(true)
@@ -157,8 +175,13 @@ impl MyApp {
                     );
                     return Some(Content::PlainText(editor_state));
                 }
-                Err(err) => {
-                    return Some(Content::Error(format!("{:?}", err)));
+                Err(_err) => {
+                    let mut encrypted_file_state = encrypted_file_state.clone();
+                    encrypted_file_state.password = "".to_string();
+                    encrypted_file_state.confirm_password = "".to_string();
+                    encrypted_file_state.new_password = "".to_string();
+                    encrypted_file_state.error_message = Some("Failed to decrypt".to_string());
+                    return Some(Content::Encrypted(encrypted_file_state));
                 }
             }
         }
@@ -199,8 +222,13 @@ impl MyApp {
                             "Password changed successfully".to_string(),
                         ));
                     }
-                    Err(err) => {
-                        return Some(Content::Error(format!("{:?}", err)));
+                    Err(_err) => {
+                        let mut encrypted_file_state = encrypted_file_state.clone();
+                        encrypted_file_state.password = "".to_string();
+                        encrypted_file_state.confirm_password = "".to_string();
+                        encrypted_file_state.new_password = "".to_string();
+                        encrypted_file_state.error_message = Some("Wrong password".to_string());
+                        return Some(Content::Encrypted(encrypted_file_state));
                     }
                 }
             }
