@@ -27,3 +27,6 @@ png = "0.17"
 
 [build-dependencies]
 winres = "0.1.12"
+
+[patch.crates-io]
+pathfinder_simd = { git = "https://github.com/theoparis/pathfinder.git" }
