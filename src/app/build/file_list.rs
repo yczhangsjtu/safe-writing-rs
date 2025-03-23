@@ -15,8 +15,7 @@ use eframe::egui;
 use egui::{Color32, FontFamily, FontId, FontSelection, Key, RichText, TextEdit, Vec2};
 
 impl MyApp {
-    fn build_create_new_file_button(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
-        let data_dir = self.data_dir().clone();
+    fn build_create_new_file_button(&mut self, ui: &mut egui::Ui) {
         if ui
             .add(Self::make_file_list_top_button(
                 egui_material_icons::icons::ICON_ADD,
@@ -31,37 +30,9 @@ impl MyApp {
                 self.creating_new_file = None;
             }
         }
-        if let Some(ref mut filename) = self.creating_new_file {
-            ui.add(
-                egui::TextEdit::singleline(filename)
-                    .font(FontSelection::FontId(FontId::new(
-                        18.0,
-                        FontFamily::Proportional,
-                    )))
-                    .desired_width(FILE_LIST_BUTTON_WIDTH),
-            );
-            if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-                let path = PathBuf::from(&data_dir).join(format!("{}.safe", filename));
-                if path.exists() {
-                    self.content = Content::Error(format!("File {} already exists", filename));
-                } else if filename.is_empty() {
-                    // Do nothing when input none, i.e., just cancel
-                } else {
-                    std::fs::write(path, "").unwrap();
-                    self.file_names.push(filename.clone());
-                    self.file_names.sort();
-                    self.content =
-                        Content::NewFile(NewFileState::new(filename.clone(), self.config.clone()));
-                }
-                self.creating_new_file = None;
-            }
-            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-                self.creating_new_file = None;
-            }
-        }
     }
 
-    fn build_file_list_menu_button(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn build_file_list_menu_button(&mut self, ui: &mut egui::Ui) {
         let data_dir = self.data_dir().clone();
         egui::menu::menu_custom_button(
             ui,
@@ -124,7 +95,7 @@ impl MyApp {
                             .hint_text("Password")
                             .password(true),
                     );
-                    if ctx.input(|i| i.key_pressed(Key::Enter)) && !new_file_name.is_empty() {
+                    if ui.ctx().input(|i| i.key_pressed(Key::Enter)) && !new_file_name.is_empty() {
                         match load_safe_note_file(password, &path) {
                             Ok(safe_note) => {
                                 let plaintext = safe_note.into_plaintext();
@@ -145,7 +116,7 @@ impl MyApp {
                                             plaintext.clone(),
                                             password.clone(),
                                             self.config.clone(),
-                                            &ctx,
+                                            &ui.ctx(),
                                         ));
                                     }
                                 }
@@ -164,7 +135,7 @@ impl MyApp {
         );
     }
 
-    fn build_refresh_button(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn build_refresh_button(&mut self, ui: &mut egui::Ui) {
         if ui
             .add(Self::make_file_list_top_button(
                 egui_material_icons::icons::ICON_REFRESH,
@@ -224,16 +195,49 @@ impl MyApp {
     }
 
     pub(super) fn build_file_list(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+        let data_dir = self.data_dir().clone();
         egui::Frame::new()
             .fill(Color32::GRAY.gamma_multiply(0.2))
             .inner_margin(5.0)
             .show(ui, |ui| {
                 ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
-                        self.build_create_new_file_button(ctx, ui);
-                        self.build_refresh_button(ctx, ui);
-                        self.build_file_list_menu_button(ctx, ui);
+                        self.build_create_new_file_button(ui);
+                        self.build_refresh_button(ui);
+                        self.build_file_list_menu_button(ui);
                     });
+
+                    if let Some(ref mut filename) = self.creating_new_file {
+                        ui.add(
+                            egui::TextEdit::singleline(filename)
+                                .font(FontSelection::FontId(FontId::new(
+                                    18.0,
+                                    FontFamily::Proportional,
+                                )))
+                                .desired_width(FILE_LIST_BUTTON_WIDTH),
+                        );
+                        if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+                            let path = PathBuf::from(&data_dir).join(format!("{}.safe", filename));
+                            if path.exists() {
+                                self.content =
+                                    Content::Error(format!("File {} already exists", filename));
+                            } else if filename.is_empty() {
+                                // Do nothing when input none, i.e., just cancel
+                            } else {
+                                std::fs::write(path, "").unwrap();
+                                self.file_names.push(filename.clone());
+                                self.file_names.sort();
+                                self.content = Content::NewFile(NewFileState::new(
+                                    filename.clone(),
+                                    self.config.clone(),
+                                ));
+                            }
+                            self.creating_new_file = None;
+                        }
+                        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                            self.creating_new_file = None;
+                        }
+                    }
 
                     egui::ScrollArea::vertical()
                         .id_salt("file_name_list")
