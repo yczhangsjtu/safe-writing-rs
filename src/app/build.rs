@@ -2,7 +2,6 @@ use super::{content::Content, MyApp};
 use eframe::egui;
 use egui::{Color32, InnerResponse, RichText, Vec2, WidgetText};
 
-const FILE_LIST_WIDTH: f32 = 200.0;
 const PASSWORD_SCREEN_TOP_SPACE: f32 = 200.0;
 const INFO_TEXT_SIZE: f32 = 18.0;
 
@@ -21,7 +20,7 @@ impl MyApp {
             RichText::new(self.formatted_data_dir().as_str()).color(Color32::CYAN),
         ));
         ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
-            self.build_file_list(FILE_LIST_WIDTH, ctx, ui);
+            self.build_file_list(ctx, ui);
             match &mut self.content {
                 Content::NewFile(ref mut new_file_state) => {
                     ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {

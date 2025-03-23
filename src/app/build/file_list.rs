@@ -3,14 +3,19 @@ use super::{
     locked::{EncryptedFileState, NewFileState},
     MyApp,
 };
-use crate::{app::content::Content, error::Error, safe_note::load_safe_note_file};
+use crate::{
+    app::content::Content,
+    consts::{FILE_LIST_BUTTON_WIDTH, FILE_LIST_WIDTH},
+    error::Error,
+    safe_note::load_safe_note_file,
+};
 use std::{ffi::OsStr, path::PathBuf};
 
 use eframe::egui;
 use egui::{Color32, FontFamily, FontId, FontSelection, Key, RichText, TextEdit, Vec2};
 
 impl MyApp {
-    fn build_create_new_file_button(&mut self, width: f32, ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn build_create_new_file_button(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         let data_dir = self.data_dir().clone();
         if ui
             .add(
@@ -42,7 +47,7 @@ impl MyApp {
                         18.0,
                         FontFamily::Proportional,
                     )))
-                    .desired_width(width),
+                    .desired_width(FILE_LIST_BUTTON_WIDTH),
             );
             if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
                 let path = PathBuf::from(&data_dir).join(format!("{}.safe", filename));
@@ -60,7 +65,7 @@ impl MyApp {
         }
     }
 
-    fn build_file_list_menu_button(&mut self, width: f32, ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn build_file_list_menu_button(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         let data_dir = self.data_dir().clone();
         egui::menu::menu_custom_button(
             ui,
@@ -110,7 +115,7 @@ impl MyApp {
                 {
                     ui.add(
                         TextEdit::singleline(new_file_name)
-                            .desired_width(width)
+                            .desired_width(FILE_LIST_BUTTON_WIDTH)
                             .font(FontSelection::FontId(FontId::new(
                                 18.0,
                                 FontFamily::Proportional,
@@ -119,7 +124,7 @@ impl MyApp {
                     );
                     ui.add(
                         TextEdit::singleline(password)
-                            .desired_width(width)
+                            .desired_width(FILE_LIST_BUTTON_WIDTH)
                             .font(FontSelection::FontId(FontId::new(
                                 18.0,
                                 FontFamily::Proportional,
@@ -167,7 +172,7 @@ impl MyApp {
         );
     }
 
-    fn build_refresh_button(&mut self, _width: f32, _ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn build_refresh_button(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
         if ui
             .add(
                 egui::Button::new(egui::WidgetText::RichText(
@@ -190,12 +195,7 @@ impl MyApp {
         }
     }
 
-    fn build_filename_button(
-        &mut self,
-        file_name: String,
-        width: f32,
-        ui: &mut egui::Ui,
-    ) -> Result<(), Error> {
+    fn build_filename_button(&mut self, file_name: String, ui: &mut egui::Ui) -> Result<(), Error> {
         let selected = self.content.get_file_name() == Some(&file_name);
         let disabled = self.is_dirty() || selected;
         if ui
@@ -211,7 +211,7 @@ impl MyApp {
                             Color32::WHITE
                         }),
                 ))
-                .min_size(Vec2::new(width, 24.0))
+                .min_size(Vec2::new(FILE_LIST_BUTTON_WIDTH, 24.0))
                 .fill(if selected {
                     Color32::LIGHT_GRAY
                 } else {
@@ -240,27 +240,27 @@ impl MyApp {
         Ok(())
     }
 
-    pub(super) fn build_file_list(&mut self, width: f32, ctx: &egui::Context, ui: &mut egui::Ui) {
+    pub(super) fn build_file_list(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         egui::Frame::new()
             .fill(Color32::GRAY.gamma_multiply(0.2))
             .inner_margin(5.0)
             .show(ui, |ui| {
                 ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
-                        self.build_create_new_file_button(width, ctx, ui);
-                        self.build_refresh_button(width, ctx, ui);
-                        self.build_file_list_menu_button(width, ctx, ui);
+                        self.build_create_new_file_button(ctx, ui);
+                        self.build_refresh_button(ctx, ui);
+                        self.build_file_list_menu_button(ctx, ui);
                     });
 
                     egui::ScrollArea::vertical()
                         .id_salt("file_name_list")
                         .max_height(f32::INFINITY)
                         .auto_shrink([true, false])
-                        .max_width(width)
+                        .max_width(FILE_LIST_WIDTH)
                         .show(ui, |ui| {
                             self.file_names.clone().iter().for_each(|file_name| {
                                 if let Err(Error::FailedToOpenFile(s)) =
-                                    self.build_filename_button(file_name.clone(), width, ui)
+                                    self.build_filename_button(file_name.clone(), ui)
                                 {
                                     self.content = Content::Error(s);
                                 }
