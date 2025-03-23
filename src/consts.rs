@@ -1,4 +1,5 @@
 pub const LONG_BUTTON_FONT_SIZE: f32 = 18.0;
+pub const SMALL_BUTTON_FONT_SIZE: f32 = 18.0;
 pub const FILE_LIST_WIDTH: f32 = 200.0;
 pub const FILE_LIST_BUTTON_WIDTH: f32 = 200.0;
 pub const FILE_LIST_BUTTON_HEIGHT: f32 = 24.0;

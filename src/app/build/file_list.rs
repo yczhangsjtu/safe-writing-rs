@@ -18,19 +18,10 @@ impl MyApp {
     fn build_create_new_file_button(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         let data_dir = self.data_dir().clone();
         if ui
-            .add(
-                egui::Button::new(egui::WidgetText::RichText(
-                    RichText::from(egui_material_icons::icons::ICON_ADD)
-                        .size(18.0)
-                        .color(if self.is_dirty() {
-                            Color32::WHITE.gamma_multiply(0.2)
-                        } else {
-                            Color32::WHITE
-                        }),
-                ))
-                .min_size(Vec2::new(24.0, 24.0))
-                .fill(Color32::GRAY.gamma_multiply(0.5)),
-            )
+            .add(Self::make_file_list_top_button(
+                egui_material_icons::icons::ICON_ADD,
+                self.is_dirty(),
+            ))
             .clicked()
             && !self.is_dirty()
         {
@@ -53,6 +44,8 @@ impl MyApp {
                 let path = PathBuf::from(&data_dir).join(format!("{}.safe", filename));
                 if path.exists() {
                     self.content = Content::Error(format!("File {} already exists", filename));
+                } else if filename.is_empty() {
+                    // Do nothing when input none, i.e., just cancel
                 } else {
                     std::fs::write(path, "").unwrap();
                     self.file_names.push(filename.clone());
@@ -62,6 +55,9 @@ impl MyApp {
                 }
                 self.creating_new_file = None;
             }
+            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.creating_new_file = None;
+            }
         }
     }
 
@@ -69,11 +65,7 @@ impl MyApp {
         let data_dir = self.data_dir().clone();
         egui::menu::menu_custom_button(
             ui,
-            egui::Button::new(egui::WidgetText::RichText(
-                RichText::from("...").size(18.0).color(Color32::WHITE),
-            ))
-            .min_size(Vec2::new(24.0, 24.0))
-            .fill(Color32::GRAY.gamma_multiply(0.5)),
+            Self::make_file_list_top_button("...", self.is_dirty()),
             |ui| {
                 if ui
                     .add(
@@ -174,19 +166,10 @@ impl MyApp {
 
     fn build_refresh_button(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
         if ui
-            .add(
-                egui::Button::new(egui::WidgetText::RichText(
-                    RichText::from(egui_material_icons::icons::ICON_REFRESH)
-                        .size(18.0)
-                        .color(if self.is_dirty() {
-                            Color32::WHITE.gamma_multiply(0.2)
-                        } else {
-                            Color32::WHITE
-                        }),
-                ))
-                .min_size(Vec2::new(24.0, 24.0))
-                .fill(Color32::GRAY.gamma_multiply(0.5)),
-            )
+            .add(Self::make_file_list_top_button(
+                egui_material_icons::icons::ICON_REFRESH,
+                self.is_dirty(),
+            ))
             .clicked()
             && !self.is_dirty()
         {

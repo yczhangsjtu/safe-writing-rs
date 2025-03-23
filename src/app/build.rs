@@ -29,11 +29,15 @@ impl MyApp {
                     });
                 }
                 Content::Encrypted(ref mut encrypted_file_state) => {
-                    ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-                        ui.allocate_space(Vec2::new(0.0, PASSWORD_SCREEN_TOP_SPACE));
-                        self.next_content =
-                            Self::build_encrypted_file(encrypted_file_state, ctx, ui);
-                    });
+                    if self.creating_new_file == None {
+                        ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                            ui.allocate_space(Vec2::new(0.0, PASSWORD_SCREEN_TOP_SPACE));
+                            self.next_content =
+                                Self::build_encrypted_file(encrypted_file_state, ctx, ui);
+                        });
+                    } else {
+                        self.next_content = Some(Content::None);
+                    }
                 }
                 Content::None => {
                     ui.with_layout(

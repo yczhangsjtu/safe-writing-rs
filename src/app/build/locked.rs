@@ -160,7 +160,7 @@ impl MyApp {
                 RichText::from("Decrypt").size(18.0),
             ))
             .clicked()
-            || ctx.input(|i| i.key_pressed(egui::Key::Enter))
+            || (ctx.input(|i| i.key_pressed(egui::Key::Enter)))
         {
             match PlainText::decrypt(
                 &encrypted_file_state.password,

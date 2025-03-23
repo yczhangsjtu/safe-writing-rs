@@ -4,8 +4,8 @@ pub use super::state::EditorState;
 
 use crate::app::build::button_style::ButtonStyle;
 use crate::consts::{
-    LONG_BUTTON_FONT_SIZE, PASSAGE_LIST_BUTTON_HEIGHT, PASSAGE_LIST_BUTTON_WIDTH,
-    PASSAGE_LIST_SMALL_BUTTON_SIZE,
+    FILE_LIST_SMALL_BUTTON_SIZE, LONG_BUTTON_FONT_SIZE, PASSAGE_LIST_BUTTON_HEIGHT,
+    PASSAGE_LIST_BUTTON_WIDTH, PASSAGE_LIST_SMALL_BUTTON_SIZE, SMALL_BUTTON_FONT_SIZE,
 };
 use crate::{app::content::Content, data_structures::PlainText, png::read_png_metadata};
 use std::collections::HashMap;
@@ -47,6 +47,23 @@ impl MyApp {
             PASSAGE_LIST_SMALL_BUTTON_SIZE,
             PASSAGE_LIST_SMALL_BUTTON_SIZE,
         ))
+    }
+
+    pub(crate) fn make_file_list_top_button(caption: &str, disabled: bool) -> egui::Button {
+        egui::Button::new(egui::WidgetText::RichText(
+            RichText::from(caption)
+                .size(SMALL_BUTTON_FONT_SIZE)
+                .color(if disabled {
+                    Color32::WHITE.gamma_multiply(0.2)
+                } else {
+                    Color32::WHITE
+                }),
+        ))
+        .min_size(Vec2::new(
+            FILE_LIST_SMALL_BUTTON_SIZE,
+            FILE_LIST_SMALL_BUTTON_SIZE,
+        ))
+        .fill(Color32::GRAY.gamma_multiply(0.5))
     }
 
     pub(crate) fn make_passage_list_main_button(
