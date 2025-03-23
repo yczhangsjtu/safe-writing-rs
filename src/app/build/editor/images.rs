@@ -2,28 +2,22 @@ use super::MyApp;
 
 pub use super::state::EditorState;
 
-use crate::app::build::button_style::ButtonStyle;
+use crate::consts::LONG_BUTTON_FONT_SIZE;
 use crate::data_structures::PlainText;
+use crate::{app::build::button_style::ButtonStyle, consts::PASSAGE_LIST_BUTTON_WIDTH};
 
 use eframe::egui;
-use egui::{Color32, FontFamily, FontId, FontSelection, RichText, Vec2};
+use egui::{Color32, FontFamily, FontId, FontSelection, RichText};
 use sha2::Digest;
 
 impl MyApp {
-    pub(super) fn build_insert_image_button(
-        editor_state: &mut EditorState,
-        width: f32,
-        ui: &mut egui::Ui,
-    ) {
+    pub(super) fn build_insert_image_button(editor_state: &mut EditorState, ui: &mut egui::Ui) {
         if ui
-            .add(
-                Self::make_control_button(
-                    "Image",
-                    ButtonStyle::NormalInMenu,
-                    editor_state.preview_mode,
-                )
-                .min_size(Vec2::new(width, 24.0)),
-            )
+            .add(Self::make_passage_list_main_button(
+                "Image",
+                ButtonStyle::NormalInMenu,
+                editor_state.preview_mode,
+            ))
             .clicked()
             && !editor_state.preview_mode
         {
@@ -41,18 +35,14 @@ impl MyApp {
 
     pub(super) fn build_insert_safe_image_button(
         editor_state: &mut EditorState,
-        width: f32,
         ui: &mut egui::Ui,
     ) {
         if ui
-            .add(
-                Self::make_control_button(
-                    "Safe Image",
-                    ButtonStyle::NormalInMenu,
-                    editor_state.preview_mode,
-                )
-                .min_size(Vec2::new(width, 24.0)),
-            )
+            .add(Self::make_passage_list_main_button(
+                "Safe Image",
+                ButtonStyle::NormalInMenu,
+                editor_state.preview_mode,
+            ))
             .clicked()
             && !editor_state.preview_mode
         {
@@ -71,30 +61,30 @@ impl MyApp {
             ui.add(
                 egui::TextEdit::singleline(filename)
                     .font(FontSelection::FontId(FontId::new(
-                        18.0,
+                        LONG_BUTTON_FONT_SIZE,
                         FontFamily::Proportional,
                     )))
                     .hint_text("Name")
-                    .desired_width(width),
+                    .desired_width(PASSAGE_LIST_BUTTON_WIDTH),
             );
             ui.add(
                 egui::TextEdit::singleline(image_digest)
                     .font(FontSelection::FontId(FontId::new(
-                        18.0,
+                        LONG_BUTTON_FONT_SIZE,
                         FontFamily::Proportional,
                     )))
                     .hint_text("Image ID")
-                    .desired_width(width),
+                    .desired_width(PASSAGE_LIST_BUTTON_WIDTH),
             );
             ui.add(
                 egui::TextEdit::singleline(password)
                     .font(FontSelection::FontId(FontId::new(
-                        18.0,
+                        LONG_BUTTON_FONT_SIZE,
                         FontFamily::Proportional,
                     )))
                     .password(true)
                     .hint_text("Password")
-                    .desired_width(width),
+                    .desired_width(PASSAGE_LIST_BUTTON_WIDTH),
             );
         }
         if let Some((ref mut filename, ref mut image_digest, ref mut password)) =
@@ -119,14 +109,14 @@ impl MyApp {
 
     pub(super) fn build_clean_nonexist_image_button(
         editor_state: &mut EditorState,
-        width: f32,
         ui: &mut egui::Ui,
     ) {
         if ui
-            .add(
-                Self::make_control_button("Clean Images", ButtonStyle::NormalInMenu, false)
-                    .min_size(Vec2::new(width, 24.0)),
-            )
+            .add(Self::make_control_button(
+                "Clean Images",
+                ButtonStyle::NormalInMenu,
+                false,
+            ))
             .clicked()
         {
             editor_state.confirm_clean_nonexist_images = true;

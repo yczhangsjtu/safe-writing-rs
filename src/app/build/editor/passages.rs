@@ -3,37 +3,34 @@ use super::MyApp;
 pub use super::state::EditorState;
 
 use crate::app::build::button_style::ButtonStyle;
+use crate::consts::{
+    LONG_BUTTON_FONT_SIZE, PASSAGE_LIST_BUTTON_HEIGHT, PASSAGE_LIST_BUTTON_WIDTH,
+    PASSAGE_LIST_WIDTH,
+};
 use crate::{app::content::Content, data_structures::PlainText};
 
 use eframe::egui;
 use egui::{Color32, FontFamily, FontId, FontSelection, Key, RichText, Vec2};
 
 impl MyApp {
-    pub(super) fn build_passage_list_menu_button(
+    pub(super) fn build_passage_list_menu_buttons(
         editor_state: &mut EditorState,
-        width: f32,
         ui: &mut egui::Ui,
         next_content: &mut Option<Content>,
     ) {
         egui::menu::menu_custom_button(
             ui,
-            Self::make_control_button("...", ButtonStyle::Normal, false)
-                .min_size(Vec2::new(24.0, 24.0)),
+            Self::make_passage_list_top_button("...", ButtonStyle::Normal, false),
             |ui| {
-                Self::build_preview_button(editor_state, width, ui);
-                Self::build_insert_image_button(editor_state, width, ui);
-                Self::build_insert_safe_image_button(editor_state, width, ui);
-                Self::build_clean_nonexist_image_button(editor_state, width, ui);
-                Self::build_save_lock_button(next_content, editor_state, width, ui);
-                Self::build_rename_button(editor_state, width, ui);
-                Self::build_delete_button(editor_state, editor_state.selected_index(), width, ui);
-                Self::build_read_temp_button(
-                    editor_state,
-                    editor_state.selected_index(),
-                    width,
-                    ui,
-                );
-                Self::build_append_file_button(editor_state, width, ui);
+                Self::build_preview_button(editor_state, ui);
+                Self::build_insert_image_button(editor_state, ui);
+                Self::build_insert_safe_image_button(editor_state, ui);
+                Self::build_clean_nonexist_image_button(editor_state, ui);
+                Self::build_save_lock_button(next_content, editor_state, ui);
+                Self::build_rename_button(editor_state, ui);
+                Self::build_delete_button(editor_state, editor_state.selected_index(), ui);
+                Self::build_read_temp_button(editor_state, editor_state.selected_index(), ui);
+                Self::build_append_file_button(editor_state, ui);
             },
         );
     }
@@ -69,28 +66,15 @@ impl MyApp {
     pub(super) fn build_passage_list(
         next_content: &mut Option<Content>,
         editor_state: &mut EditorState,
-        width: f32,
         ui: &mut egui::Ui,
     ) {
         ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
-                Self::build_add_button(editor_state, width, ui);
-                Self::build_save_button(editor_state, width, ui);
-                Self::build_move_button(
-                    editor_state,
-                    editor_state.selected_index(),
-                    true,
-                    width,
-                    ui,
-                );
-                Self::build_move_button(
-                    editor_state,
-                    editor_state.selected_index(),
-                    false,
-                    width,
-                    ui,
-                );
-                Self::build_passage_list_menu_button(editor_state, width, ui, next_content);
+                Self::build_add_button(editor_state, ui);
+                Self::build_save_button(editor_state, ui);
+                Self::build_move_button(editor_state, editor_state.selected_index(), true, ui);
+                Self::build_move_button(editor_state, editor_state.selected_index(), false, ui);
+                Self::build_passage_list_menu_buttons(editor_state, ui, next_content);
             });
             if ui
                 .ctx()
@@ -108,10 +92,10 @@ impl MyApp {
                 .id_salt("passage_list")
                 .max_height(f32::INFINITY)
                 .auto_shrink([true, false])
-                .max_width(width)
+                .max_width(PASSAGE_LIST_WIDTH)
                 .show(ui, |ui| {
                     if editor_state.plaintext.is_empty() {
-                        Self::build_new_passage_add(editor_state, 0, width, ui);
+                        Self::build_new_passage_add(editor_state, 0, ui);
                     }
                     (0..editor_state.plaintext.num_passages()).for_each(|i| {
                         if editor_state
@@ -120,9 +104,9 @@ impl MyApp {
                             .map(|(_, index)| index)
                             == Some(i)
                         {
-                            Self::build_passage_rename(editor_state, width, ui);
+                            Self::build_passage_rename(editor_state, ui);
                         } else {
-                            Self::build_passage_button(editor_state, i, width, ui);
+                            Self::build_passage_button(editor_state, i, ui);
                         }
                     });
                 });
@@ -132,7 +116,6 @@ impl MyApp {
     fn build_new_passage_add(
         editor_state: &mut EditorState,
         current_index: usize,
-        width: f32,
         ui: &mut egui::Ui,
     ) {
         if let Some((ref mut title, to_insert_index)) = editor_state.add_new_passage {
@@ -150,7 +133,7 @@ impl MyApp {
                         18.0,
                         FontFamily::Proportional,
                     )))
-                    .desired_width(width)
+                    .desired_width(PASSAGE_LIST_BUTTON_WIDTH)
                     .text_color(Color32::BLACK)
                     .hint_text("Passage Title"),
             );
@@ -166,12 +149,7 @@ impl MyApp {
         }
     }
 
-    fn build_passage_button(
-        editor_state: &mut EditorState,
-        curr_index: usize,
-        width: f32,
-        ui: &mut egui::Ui,
-    ) {
+    fn build_passage_button(editor_state: &mut EditorState, curr_index: usize, ui: &mut egui::Ui) {
         if ui
             .add(
                 egui::Button::new(egui::WidgetText::RichText(
@@ -189,7 +167,10 @@ impl MyApp {
                         Color32::WHITE
                     }),
                 ))
-                .min_size(Vec2::new(width, 24.0))
+                .min_size(Vec2::new(
+                    PASSAGE_LIST_BUTTON_WIDTH,
+                    PASSAGE_LIST_BUTTON_HEIGHT,
+                ))
                 .fill(if curr_index == editor_state.selected_index() {
                     Color32::WHITE.gamma_multiply(0.5)
                 } else {
@@ -202,16 +183,19 @@ impl MyApp {
                 editor_state.selected_index = curr_index;
             }
         }
-        Self::build_new_passage_add(editor_state, curr_index + 1, width, ui);
+        Self::build_new_passage_add(editor_state, curr_index + 1, ui);
     }
 
-    fn build_passage_rename(editor_state: &mut EditorState, width: f32, ui: &mut egui::Ui) {
+    fn build_passage_rename(editor_state: &mut EditorState, ui: &mut egui::Ui) {
         ui.add(
             egui::TextEdit::singleline(&mut editor_state.editing_passage_name.as_mut().unwrap().0)
-                .min_size(Vec2::new(width, 24.0))
+                .min_size(Vec2::new(
+                    PASSAGE_LIST_BUTTON_WIDTH,
+                    PASSAGE_LIST_BUTTON_HEIGHT,
+                ))
                 .text_color(Color32::BLACK)
                 .font(FontSelection::FontId(FontId::new(
-                    18.0,
+                    LONG_BUTTON_FONT_SIZE,
                     FontFamily::Proportional,
                 ))),
         );
@@ -226,7 +210,7 @@ impl MyApp {
         }
     }
 
-    fn build_add_button(editor_state: &mut EditorState, _width: f32, ui: &mut egui::Ui) {
+    fn build_add_button(editor_state: &mut EditorState, ui: &mut egui::Ui) {
         if ui
             .add(
                 Self::make_control_button(
@@ -244,7 +228,7 @@ impl MyApp {
         }
     }
 
-    fn build_save_button(editor_state: &mut EditorState, _width: f32, ui: &mut egui::Ui) {
+    fn build_save_button(editor_state: &mut EditorState, ui: &mut egui::Ui) {
         if ui
             .add(
                 Self::make_control_button(
@@ -264,14 +248,14 @@ impl MyApp {
     fn build_save_lock_button(
         next_content: &mut Option<Content>,
         editor_state: &mut EditorState,
-        width: f32,
         ui: &mut egui::Ui,
     ) {
         if ui
-            .add(
-                Self::make_control_button("Save & Lock", ButtonStyle::WarningInMenu, false)
-                    .min_size(Vec2::new(width, 24.0)),
-            )
+            .add(Self::make_passage_list_main_button(
+                "Save & Lock",
+                ButtonStyle::WarningInMenu,
+                false,
+            ))
             .clicked()
         {
             Self::save_and_lock(next_content, editor_state);
@@ -282,22 +266,18 @@ impl MyApp {
         editor_state: &mut EditorState,
         selected_index: usize,
         up: bool,
-        _width: f32,
         ui: &mut egui::Ui,
     ) {
         if ui
-            .add(
-                Self::make_control_button(
-                    if up {
-                        egui_material_icons::icons::ICON_MOVE_UP
-                    } else {
-                        egui_material_icons::icons::ICON_MOVE_DOWN
-                    },
-                    ButtonStyle::Normal,
-                    false,
-                )
-                .min_size(Vec2::new(24.0, 24.0)),
-            )
+            .add(Self::make_passage_list_top_button(
+                if up {
+                    egui_material_icons::icons::ICON_MOVE_UP
+                } else {
+                    egui_material_icons::icons::ICON_MOVE_DOWN
+                },
+                ButtonStyle::Normal,
+                false,
+            ))
             .clicked()
         {
             let plaintext = editor_state.plaintext_mut();
@@ -314,12 +294,13 @@ impl MyApp {
         }
     }
 
-    fn build_rename_button(editor_state: &mut EditorState, width: f32, ui: &mut egui::Ui) {
+    fn build_rename_button(editor_state: &mut EditorState, ui: &mut egui::Ui) {
         if ui
-            .add(
-                Self::make_control_button("Rename", ButtonStyle::NormalInMenu, false)
-                    .min_size(Vec2::new(width, 24.0)),
-            )
+            .add(Self::make_passage_list_main_button(
+                "Rename",
+                ButtonStyle::NormalInMenu,
+                false,
+            ))
             .clicked()
         {
             editor_state.add_new_passage = None;
@@ -336,14 +317,14 @@ impl MyApp {
     fn build_delete_button(
         editor_state: &mut EditorState,
         selected_index: usize,
-        width: f32,
         ui: &mut egui::Ui,
     ) {
         if ui
-            .add(
-                Self::make_control_button("Delete", ButtonStyle::WarningInMenu, false)
-                    .min_size(Vec2::new(width, 24.0)),
-            )
+            .add(Self::make_control_button(
+                "Delete",
+                ButtonStyle::WarningInMenu,
+                false,
+            ))
             .clicked()
         {
             editor_state.confirm_delete_passage = Some(selected_index);
@@ -353,18 +334,14 @@ impl MyApp {
     fn build_read_temp_button(
         editor_state: &mut EditorState,
         selected_index: usize,
-        width: f32,
         ui: &mut egui::Ui,
     ) {
         if ui
-            .add(
-                Self::make_control_button(
-                    "Read Temp",
-                    ButtonStyle::NormalInMenu,
-                    editor_state.preview_mode,
-                )
-                .min_size(Vec2::new(width, 24.0)),
-            )
+            .add(Self::make_control_button(
+                "Read Temp",
+                ButtonStyle::NormalInMenu,
+                editor_state.preview_mode,
+            ))
             .clicked()
             && !editor_state.preview_mode
         {
@@ -387,12 +364,13 @@ impl MyApp {
         }
     }
 
-    fn build_append_file_button(editor_state: &mut EditorState, width: f32, ui: &mut egui::Ui) {
+    fn build_append_file_button(editor_state: &mut EditorState, ui: &mut egui::Ui) {
         if ui
-            .add(
-                Self::make_control_button("Append File", ButtonStyle::NormalInMenu, false)
-                    .min_size(Vec2::new(width, 24.0)),
-            )
+            .add(Self::make_passage_list_main_button(
+                "Append File",
+                ButtonStyle::NormalInMenu,
+                false,
+            ))
             .clicked()
         {
             if editor_state.appending_another_file.is_some() {
@@ -410,7 +388,7 @@ impl MyApp {
                         FontFamily::Proportional,
                     )))
                     .hint_text("Name")
-                    .desired_width(width),
+                    .desired_width(PASSAGE_LIST_BUTTON_WIDTH),
             );
             ui.add(
                 egui::TextEdit::singleline(password)
@@ -420,7 +398,7 @@ impl MyApp {
                     )))
                     .password(true)
                     .hint_text("Password")
-                    .desired_width(width),
+                    .desired_width(PASSAGE_LIST_BUTTON_WIDTH),
             );
         }
         if let Some((filename, password)) = editor_state.appending_another_file.clone() {

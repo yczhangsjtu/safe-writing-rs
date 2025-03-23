@@ -3,6 +3,10 @@ use super::MyApp;
 pub use super::state::EditorState;
 
 use crate::app::build::button_style::ButtonStyle;
+use crate::consts::{
+    LONG_BUTTON_FONT_SIZE, PASSAGE_LIST_BUTTON_HEIGHT, PASSAGE_LIST_BUTTON_WIDTH,
+    PASSAGE_LIST_SMALL_BUTTON_SIZE,
+};
 use crate::{app::content::Content, data_structures::PlainText, png::read_png_metadata};
 use std::collections::HashMap;
 
@@ -19,17 +23,46 @@ impl MyApp {
         disabled: bool,
     ) -> egui::Button {
         egui::Button::new(egui::WidgetText::RichText(
-            RichText::from(caption).size(18.0).color(if disabled {
-                style.disabled_text_color()
-            } else {
-                style.text_color()
-            }),
+            RichText::from(caption)
+                .size(LONG_BUTTON_FONT_SIZE)
+                .color(if disabled {
+                    style.disabled_text_color()
+                } else {
+                    style.text_color()
+                }),
         ))
         .fill(if disabled {
             style.disabled_background_color()
         } else {
             style.background_color()
         })
+    }
+
+    pub(crate) fn make_passage_list_top_button(
+        caption: &str,
+        style: ButtonStyle,
+        disabled: bool,
+    ) -> egui::Button {
+        Self::make_control_button(caption, style, disabled).min_size(Vec2::new(
+            PASSAGE_LIST_SMALL_BUTTON_SIZE,
+            PASSAGE_LIST_SMALL_BUTTON_SIZE,
+        ))
+    }
+
+    pub(crate) fn make_passage_list_main_button(
+        caption: &str,
+        style: ButtonStyle,
+        disabled: bool,
+    ) -> egui::Button {
+        Self::make_control_button(caption, style, disabled)
+            .min_size(Vec2::new(
+                PASSAGE_LIST_SMALL_BUTTON_SIZE,
+                PASSAGE_LIST_SMALL_BUTTON_SIZE,
+            ))
+            .min_size(Vec2::new(
+                PASSAGE_LIST_BUTTON_WIDTH,
+                PASSAGE_LIST_BUTTON_HEIGHT,
+            ))
     }
 
     pub(crate) fn build_editor(
@@ -41,7 +74,7 @@ impl MyApp {
             .fill(Color32::LIGHT_GRAY.gamma_multiply(0.1))
             .inner_margin(5.0)
             .show(ui, |ui| {
-                Self::build_passage_list(next_content, editor_state, 150.0, ui);
+                Self::build_passage_list(next_content, editor_state, ui);
             });
         if editor_state.plaintext().is_empty() {
             ui.with_layout(
@@ -331,24 +364,17 @@ impl MyApp {
         );
     }
 
-    pub(super) fn build_preview_button(
-        editor_state: &mut EditorState,
-        width: f32,
-        ui: &mut egui::Ui,
-    ) {
+    pub(super) fn build_preview_button(editor_state: &mut EditorState, ui: &mut egui::Ui) {
         if ui
-            .add(
-                Self::make_control_button(
-                    if editor_state.preview_mode {
-                        "Edit"
-                    } else {
-                        "Preview"
-                    },
-                    ButtonStyle::NormalInMenu,
-                    false,
-                )
-                .min_size(Vec2::new(width, 24.0)),
-            )
+            .add(Self::make_passage_list_main_button(
+                if editor_state.preview_mode {
+                    "Edit"
+                } else {
+                    "Preview"
+                },
+                ButtonStyle::NormalInMenu,
+                false,
+            ))
             .clicked()
         {
             editor_state.preview_mode = !editor_state.preview_mode;
