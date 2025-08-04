@@ -7,7 +7,7 @@ use eframe::egui;
 #[cfg(target_os = "windows")]
 const ICON: &[u8] = include_bytes!("..\\assets\\icon.png");
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 const ICON: &[u8] = include_bytes!("../assets/icon.png");
 
 fn main() -> Result<(), eframe::Error> {

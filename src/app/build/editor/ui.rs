@@ -17,11 +17,11 @@ use egui::{
 };
 
 impl MyApp {
-    pub(super) fn make_control_button(
-        caption: &str,
+    pub(super) fn make_control_button<'a>(
+        caption: &'a str,
         style: ButtonStyle,
         disabled: bool,
-    ) -> egui::Button {
+    ) -> egui::Button<'a> {
         egui::Button::new(egui::WidgetText::RichText(
             RichText::from(caption)
                 .size(LONG_BUTTON_FONT_SIZE)
@@ -38,18 +38,21 @@ impl MyApp {
         })
     }
 
-    pub(crate) fn make_passage_list_top_button(
-        caption: &str,
+    pub(crate) fn make_passage_list_top_button<'a>(
+        caption: &'a str,
         style: ButtonStyle,
         disabled: bool,
-    ) -> egui::Button {
+    ) -> egui::Button<'a> {
         Self::make_control_button(caption, style, disabled).min_size(Vec2::new(
             PASSAGE_LIST_SMALL_BUTTON_SIZE,
             PASSAGE_LIST_SMALL_BUTTON_SIZE,
         ))
     }
 
-    pub(crate) fn make_file_list_top_button(caption: &str, disabled: bool) -> egui::Button {
+    pub(crate) fn make_file_list_top_button<'a>(
+        caption: &'a str,
+        disabled: bool,
+    ) -> egui::Button<'a> {
         egui::Button::new(egui::WidgetText::RichText(
             RichText::from(caption)
                 .size(SMALL_BUTTON_FONT_SIZE)
@@ -66,11 +69,11 @@ impl MyApp {
         .fill(Color32::GRAY.gamma_multiply(0.5))
     }
 
-    pub(crate) fn make_passage_list_main_button(
-        caption: &str,
+    pub(crate) fn make_passage_list_main_button<'a>(
+        caption: &'a str,
         style: ButtonStyle,
         disabled: bool,
-    ) -> egui::Button {
+    ) -> egui::Button<'a> {
         Self::make_control_button(caption, style, disabled)
             .min_size(Vec2::new(
                 PASSAGE_LIST_SMALL_BUTTON_SIZE,
