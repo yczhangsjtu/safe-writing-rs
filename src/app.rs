@@ -2,7 +2,7 @@ use homedir::my_home;
 use std::path::PathBuf;
 
 use eframe::egui;
-use egui::{Color32, FontDefinitions};
+use egui::{Color32, FontDefinitions, Theme};
 
 mod config;
 use config::Config;
@@ -169,6 +169,7 @@ impl MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        ctx.set_theme(Theme::Light);
         if let Some(content) = self.next_content.take() {
             self.content = content;
         }
