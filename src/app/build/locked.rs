@@ -103,13 +103,16 @@ impl MyApp {
         ui.allocate_space(Vec2::new(0.0, 10.0));
         if ui
             .button(egui::WidgetText::RichText(
-                RichText::from("Create").size(18.0).color(
-                    if new_file_state.new_password == new_file_state.confirm_password {
-                        Color32::BLACK
-                    } else {
-                        Color32::WHITE.gamma_multiply(0.3)
-                    },
-                ),
+                RichText::from("Create")
+                    .size(18.0)
+                    .color(
+                        if new_file_state.new_password == new_file_state.confirm_password {
+                            Color32::BLACK
+                        } else {
+                            Color32::WHITE.gamma_multiply(0.3)
+                        },
+                    )
+                    .into(),
             ))
             .clicked()
             || ctx.input(|i| i.key_pressed(egui::Key::Enter))
@@ -139,7 +142,8 @@ impl MyApp {
                     egui::Button::new(egui::WidgetText::RichText(
                         RichText::from("Dismiss")
                             .size(12.0)
-                            .color(egui::Color32::RED),
+                            .color(egui::Color32::RED)
+                            .into(),
                     ))
                     .fill(egui::Color32::GRAY.gamma_multiply(0.3)),
                 )
@@ -157,7 +161,7 @@ impl MyApp {
         ui.allocate_space(Vec2::new(0.0, 10.0));
         if ui
             .button(egui::WidgetText::RichText(
-                RichText::from("Decrypt").size(18.0),
+                RichText::from("Decrypt").size(18.0).into(),
             ))
             .clicked()
             || (ctx.input(|i| i.key_pressed(egui::Key::Enter)))
@@ -199,7 +203,8 @@ impl MyApp {
                         }
                     ))
                     .size(12.0)
-                    .color(egui::Color32::WHITE),
+                    .color(egui::Color32::WHITE)
+                    .into(),
                 ))
                 .fill(egui::Color32::GRAY.gamma_multiply(0.3)),
             )
@@ -221,15 +226,16 @@ impl MyApp {
             );
             if ui
                 .button(
-                    egui::WidgetText::RichText(RichText::from("Change Password").size(18.0)).color(
-                        if encrypted_file_state.new_password
-                            == encrypted_file_state.confirm_password
-                        {
-                            Color32::BLACK
-                        } else {
-                            Color32::WHITE.gamma_multiply(0.3)
-                        },
-                    ),
+                    egui::WidgetText::RichText(RichText::from("Change Password").size(18.0).into())
+                        .color(
+                            if encrypted_file_state.new_password
+                                == encrypted_file_state.confirm_password
+                            {
+                                Color32::BLACK
+                            } else {
+                                Color32::WHITE.gamma_multiply(0.3)
+                            },
+                        ),
                 )
                 .clicked()
             {

@@ -18,10 +18,10 @@ use egui::{
 
 impl MyApp {
     pub(super) fn make_control_button(
-        caption: &str,
+        caption: &'_ str,
         style: ButtonStyle,
         disabled: bool,
-    ) -> egui::Button {
+    ) -> egui::Button<'_> {
         egui::Button::new(egui::WidgetText::RichText(
             RichText::from(caption)
                 .size(LONG_BUTTON_FONT_SIZE)
@@ -29,7 +29,8 @@ impl MyApp {
                     style.disabled_text_color()
                 } else {
                     style.text_color()
-                }),
+                })
+                .into(),
         ))
         .fill(if disabled {
             style.disabled_background_color()
@@ -39,17 +40,17 @@ impl MyApp {
     }
 
     pub(crate) fn make_passage_list_top_button(
-        caption: &str,
+        caption: &'_ str,
         style: ButtonStyle,
         disabled: bool,
-    ) -> egui::Button {
+    ) -> egui::Button<'_> {
         Self::make_control_button(caption, style, disabled).min_size(Vec2::new(
             PASSAGE_LIST_SMALL_BUTTON_SIZE,
             PASSAGE_LIST_SMALL_BUTTON_SIZE,
         ))
     }
 
-    pub(crate) fn make_file_list_top_button(caption: &str, disabled: bool) -> egui::Button {
+    pub(crate) fn make_file_list_top_button(caption: &'_ str, disabled: bool) -> egui::Button<'_> {
         egui::Button::new(egui::WidgetText::RichText(
             RichText::from(caption)
                 .size(SMALL_BUTTON_FONT_SIZE)
@@ -57,7 +58,8 @@ impl MyApp {
                     Color32::WHITE.gamma_multiply(0.2)
                 } else {
                     Color32::WHITE
-                }),
+                })
+                .into(),
         ))
         .min_size(Vec2::new(
             FILE_LIST_SMALL_BUTTON_SIZE,
@@ -67,10 +69,10 @@ impl MyApp {
     }
 
     pub(crate) fn make_passage_list_main_button(
-        caption: &str,
+        caption: &'_ str,
         style: ButtonStyle,
         disabled: bool,
-    ) -> egui::Button {
+    ) -> egui::Button<'_> {
         Self::make_control_button(caption, style, disabled)
             .min_size(Vec2::new(
                 PASSAGE_LIST_SMALL_BUTTON_SIZE,
@@ -98,7 +100,7 @@ impl MyApp {
                 egui::Layout::centered_and_justified(egui::Direction::TopDown),
                 |ui| {
                     ui.add(egui::Label::new(egui::WidgetText::RichText(
-                        RichText::from("Empty file").size(18.0),
+                        RichText::from("Empty file").size(18.0).into(),
                     )));
                 },
             );
@@ -231,7 +233,7 @@ impl MyApp {
         image_to_insert: &mut Option<Vec<u8>>,
     ) {
         ui.with_layout(egui::Layout::top_down_justified(egui::Align::Max), |ui| {
-            let screen_size = ui.ctx().input(|input| input.screen_rect());
+            let screen_size = ui.ctx().input(|input| input.content_rect());
             let editor_area = TextEdit::multiline(text)
                 .frame(false)
                 .desired_width(f32::INFINITY)
@@ -267,7 +269,8 @@ impl MyApp {
                 let cursor = state.cursor.char_range();
                 if let Some(text_to_insert) = text_to_insert.take() {
                     if let Some(cursor) = cursor {
-                        let mut cursor = text.delete_selected_ccursor_range(cursor.sorted());
+                        let mut cursor =
+                            text.delete_selected_ccursor_range(cursor.sorted_cursors());
                         text.insert_text_at(&mut cursor, &text_to_insert, usize::MAX);
                         *dirty = true;
                         state.cursor.set_char_range(Some(CCursorRange::one(cursor)));
@@ -327,7 +330,8 @@ impl MyApp {
                         RichText::new(text_before_image)
                             .size(font_size)
                             .color(Color32::WHITE)
-                            .family(FontFamily::Name("LXGW".into())),
+                            .family(FontFamily::Name("LXGW".into()))
+                            .into(),
                     ))
                     .selectable(true);
                     ui.add(area);
@@ -354,13 +358,16 @@ impl MyApp {
                         }
                         if show_png_meta_data == &Some(index) {
                             if let Some(metadata) = read_png_metadata(&plaintext.images()[index]) {
-                                ui.add(Label::new(WidgetText::RichText(RichText::new(metadata))));
+                                ui.add(Label::new(WidgetText::RichText(
+                                    RichText::new(metadata).into(),
+                                )));
                             }
                         }
                     } else {
                         let area = Label::new(WidgetText::RichText(
                             RichText::new(format!("Error loading image: {}", digest))
-                                .color(Color32::RED),
+                                .color(Color32::RED)
+                                .into(),
                         ))
                         .selectable(true);
                         ui.add(area);
@@ -375,7 +382,7 @@ impl MyApp {
             egui::Layout::centered_and_justified(egui::Direction::TopDown),
             |ui| {
                 ui.add(egui::Label::new(egui::WidgetText::RichText(
-                    RichText::from("No passage selected").size(18.0),
+                    RichText::from("No passage selected").size(18.0).into(),
                 )));
             },
         );

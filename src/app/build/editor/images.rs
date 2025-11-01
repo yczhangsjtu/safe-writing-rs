@@ -101,7 +101,7 @@ impl MyApp {
             }
             if let Some(error) = &editor_state.error_inserting_safe_image {
                 ui.add(egui::Label::new(egui::WidgetText::RichText(
-                    RichText::from(error).color(Color32::RED),
+                    RichText::from(error).color(Color32::RED).into(),
                 )));
             }
         }

@@ -18,21 +18,22 @@ impl MyApp {
         ui: &mut egui::Ui,
         next_content: &mut Option<Content>,
     ) {
-        egui::menu::menu_custom_button(
-            ui,
-            Self::make_passage_list_top_button("...", ButtonStyle::Normal, false),
-            |ui| {
-                Self::build_preview_button(editor_state, ui);
-                Self::build_insert_image_button(editor_state, ui);
-                Self::build_insert_safe_image_button(editor_state, ui);
-                Self::build_clean_nonexist_image_button(editor_state, ui);
-                Self::build_save_lock_button(next_content, editor_state, ui);
-                Self::build_rename_button(editor_state, ui);
-                Self::build_delete_button(editor_state, editor_state.selected_index(), ui);
-                Self::build_read_temp_button(editor_state, editor_state.selected_index(), ui);
-                Self::build_append_file_button(editor_state, ui);
-            },
-        );
+        egui::containers::menu::MenuButton::from_button(Self::make_passage_list_top_button(
+            "...",
+            ButtonStyle::Normal,
+            false,
+        ))
+        .ui(ui, |ui| {
+            Self::build_preview_button(editor_state, ui);
+            Self::build_insert_image_button(editor_state, ui);
+            Self::build_insert_safe_image_button(editor_state, ui);
+            Self::build_clean_nonexist_image_button(editor_state, ui);
+            Self::build_save_lock_button(next_content, editor_state, ui);
+            Self::build_rename_button(editor_state, ui);
+            Self::build_delete_button(editor_state, editor_state.selected_index(), ui);
+            Self::build_read_temp_button(editor_state, editor_state.selected_index(), ui);
+            Self::build_append_file_button(editor_state, ui);
+        });
     }
 
     pub(super) fn try_appending_safe_file_content(
@@ -165,7 +166,8 @@ impl MyApp {
                         Color32::BLACK
                     } else {
                         Color32::WHITE
-                    }),
+                    })
+                    .into(),
                 ))
                 .min_size(Vec2::new(
                     PASSAGE_LIST_BUTTON_WIDTH,
@@ -408,7 +410,7 @@ impl MyApp {
             }
             if let Some(error) = &editor_state.error_appending_another_file {
                 ui.add(egui::Label::new(egui::WidgetText::RichText(
-                    RichText::from(error).color(Color32::RED),
+                    RichText::from(error).color(Color32::RED).into(),
                 )));
             }
         }

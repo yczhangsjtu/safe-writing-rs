@@ -17,7 +17,9 @@ impl MyApp {
         ui: &mut egui::Ui,
     ) -> InnerResponse<()> {
         ui.label(WidgetText::RichText(
-            RichText::new(self.formatted_data_dir().as_str()).color(Color32::CYAN),
+            RichText::new(self.formatted_data_dir().as_str())
+                .color(Color32::CYAN)
+                .into(),
         ));
         ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
             self.build_file_list(ctx, ui);
@@ -44,7 +46,9 @@ impl MyApp {
                         egui::Layout::centered_and_justified(egui::Direction::TopDown),
                         |ui| {
                             ui.add(egui::Label::new(egui::WidgetText::RichText(
-                                RichText::from("Please select a file to open").size(INFO_TEXT_SIZE),
+                                RichText::from("Please select a file to open")
+                                    .size(INFO_TEXT_SIZE)
+                                    .into(),
                             )));
                         },
                     );
@@ -57,7 +61,7 @@ impl MyApp {
                         egui::Layout::centered_and_justified(egui::Direction::TopDown),
                         |ui| {
                             ui.add(egui::Label::new(egui::WidgetText::RichText(
-                                RichText::from(err).size(18.0).color(Color32::RED),
+                                RichText::from(err).size(18.0).color(Color32::RED).into(),
                             )));
                         },
                     );
@@ -67,7 +71,7 @@ impl MyApp {
                         egui::Layout::centered_and_justified(egui::Direction::TopDown),
                         |ui| {
                             ui.add(egui::Label::new(egui::WidgetText::RichText(
-                                RichText::from(err).size(18.0).color(Color32::GREEN),
+                                RichText::from(err).size(18.0).color(Color32::GREEN).into(),
                             )));
                         },
                     );
