@@ -141,27 +141,36 @@ pub fn from_xml(xml: &str) -> Option<Self> {
     }
 
     pub fn load_from_plaintext(&mut self, plaintext: &PlainText, _filename: &str) {
+        let mut found = false;
         for passage in plaintext.passages() {
             if passage.title() == AI_PASSAGE_NAME {
                 if let Some(state) = Self::from_xml(passage.content()) {
                     self.system_prompt = state.system_prompt;
                     self.favorite_prompts = state.favorite_prompts;
                 }
+                found = true;
                 break;
             }
+        }
+        if !found {
+            self.clear();
         }
     }
 
     pub fn refresh_from_plaintext(&mut self, plaintext: &PlainText) {
-        self.favorite_prompts.clear();
+        let mut found = false;
         for passage in plaintext.passages() {
             if passage.title() == AI_PASSAGE_NAME {
                 if let Some(state) = Self::from_xml(passage.content()) {
                     self.system_prompt = state.system_prompt;
                     self.favorite_prompts = state.favorite_prompts;
                 }
+                found = true;
                 break;
             }
+        }
+        if !found {
+            self.clear();
         }
     }
 
@@ -397,6 +406,17 @@ pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
     pub fn clear_history(&mut self) {
         self.messages.clear();
         self.output.clear();
+        self.waiting = false;
+        self.stream_receiver = None;
+        self.abort_sender = None;
+    }
+
+    pub fn clear(&mut self) {
+        self.clear_history();
+        self.system_prompt = Self::default().system_prompt;
+        self.favorite_prompts.clear();
+        self.user_input.clear();
+        self.buffers.clear();
     }
 }
 

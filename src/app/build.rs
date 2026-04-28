@@ -97,6 +97,7 @@ impl MyApp {
                             self.copilot.save_to_plaintext(editor_state.plaintext_mut());
                         }
                         Self::save_and_lock(&mut self.next_content, editor_state);
+                        self.copilot.clear();
                         editor_state.set_save_and_lock_with_copilot(false);
                     }
                 }
