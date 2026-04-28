@@ -64,23 +64,25 @@ impl MyApp {
                     } else {
                         0.0
                     };
-                    let editor_width = (ui.available_width() - copilot_width).max(0.0);
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
-                        ui.allocate_ui(Vec2::new(editor_width, ui.available_height()), |ui| {
+                        let editor_width = (ui.available_width() - copilot_width).max(0.0);
+                        ui.allocate_ui(egui::Vec2::new(editor_width, ui.available_height()), |ui| {
                             Self::build_editor(&mut self.next_content, editor_state, copilot_visible, ui);
                         });
                         if copilot_visible {
-                            let selected_text = Some(editor_state.selected_text());
-                            let output_to_insert = copilot::build_copilot_panel(
-                                &mut self.copilot,
-                                &self.config,
-                                selected_text,
-                                editor_state.plaintext(),
-                                ui,
-                            );
-                            if let Some(output) = output_to_insert {
-                                editor_state.set_text_to_insert(output);
-                            }
+                            ui.allocate_ui(egui::Vec2::new(copilot_width, ui.available_height()), |ui| {
+                                let selected_text = Some(editor_state.selected_text());
+                                let output_to_insert = copilot::build_copilot_panel(
+                                    &mut self.copilot,
+                                    &self.config,
+                                    selected_text,
+                                    editor_state.plaintext(),
+                                    ui,
+                                );
+                                if let Some(output) = output_to_insert {
+                                    editor_state.set_text_to_insert(output);
+                                }
+                            });
                         }
                     });
                     if editor_state.save_with_copilot() {

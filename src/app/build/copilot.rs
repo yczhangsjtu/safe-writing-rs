@@ -1,5 +1,4 @@
 use crate::app::config::Config;
-use crate::consts::COPILOT_PANEL_WIDTH;
 use crate::data_structures::PlainText;
 use std::io::BufRead;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -8,6 +7,19 @@ use eframe::egui;
 use egui::{Color32, FontFamily, FontId, FontSelection, RichText, ScrollArea, TextEdit};
 
 pub const AI_PASSAGE_NAME: &str = ".ai";
+
+fn make_brief_summary(text: &str, max_len: usize) -> String {
+    let chars = text.chars().collect::<Vec<_>>();
+    let len = chars.len();
+    if len <= max_len {
+        text.to_string()
+    } else {
+        let half = max_len / 2;
+        let start = chars[..half].iter().collect::<String>();
+        let end = chars[len - half..].iter().collect::<String>();
+        format!("{}...{}", start, end)
+    }
+}
 
 #[derive(Clone)]
 pub struct Message {
@@ -400,9 +412,6 @@ pub fn build_copilot_panel(
         .fill(bg)
         .inner_margin(8.0)
         .show(ui, |ui| {
-            ui.set_min_width(COPILOT_PANEL_WIDTH);
-            ui.set_max_width(COPILOT_PANEL_WIDTH);
-
             let ctx = ui.ctx().clone();
             if copilot_state.poll_stream(&ctx) {
                 ctx.request_repaint();
@@ -446,17 +455,17 @@ pub fn build_copilot_panel(
                 ui.collapsing(
                     RichText::new("System Prompt").color(text_dark).strong(),
                     |ui| {
-                        ui.add(
-                            TextEdit::multiline(&mut copilot_state.system_prompt)
-                                .desired_width(COPILOT_PANEL_WIDTH - 20.0)
-                                .desired_rows(3)
-                                .font(FontSelection::FontId(FontId::new(
-                                    14.0,
-                                    FontFamily::Proportional,
-                                )))
-                                .text_color(text_dark)
-                                .background_color(input_bg),
-                        );
+ui.add(
+                        TextEdit::multiline(&mut copilot_state.system_prompt)
+                            .desired_width(ui.available_width() - 4.0)
+                            .desired_rows(3)
+                            .font(FontSelection::FontId(FontId::new(
+                                14.0,
+                                FontFamily::Proportional,
+                            )))
+                            .text_color(text_dark)
+                            .background_color(input_bg),
+                    );
                     },
                 );
 
@@ -488,9 +497,10 @@ pub fn build_copilot_panel(
                         let mut to_remove = None;
                         for (i, buf) in copilot_state.buffers.iter().enumerate() {
                             let name = buffer_names.get(i).copied().unwrap_or("?");
+                            let summary = make_brief_summary(buf, 30);
                             ui.horizontal(|ui| {
                                 ui.label(
-                                    RichText::new(format!("#{} ({}): {} chars", i, name, buf.chars().count()))
+                                    RichText::new(format!("#{} ({}): {} ({})", i, name, summary, buf.chars().count()))
                                         .size(14.0)
                                         .color(text_gray),
                                 );
@@ -545,7 +555,7 @@ pub fn build_copilot_panel(
                                 );
                                 if msg.role == "user" {
                                     let msg_display = msg.display.clone();
-                                    let prompt_name = format!("Prompt {}", msg_idx + 1);
+                                    let prompt_name = make_brief_summary(&msg_display, 20);
                                     let btn = ui.add(
                                         egui::Button::new(
                                             RichText::new("+").size(14.0).color(Color32::WHITE),
@@ -579,7 +589,7 @@ pub fn build_copilot_panel(
                             };
                             ui.add(
                                 TextEdit::multiline(&mut display_text.clone())
-                                    .desired_width(COPILOT_PANEL_WIDTH - 20.0)
+                                    .desired_width(ui.available_width() - 4.0)
                                     .font(FontSelection::FontId(FontId::new(
                                         14.0,
                                         FontFamily::Proportional,
@@ -623,7 +633,7 @@ pub fn build_copilot_panel(
                             });
                             ui.add(
                                 TextEdit::multiline(&mut copilot_state.output.clone())
-                                    .desired_width(COPILOT_PANEL_WIDTH - 20.0)
+                                    .desired_width(ui.available_width() - 4.0)
                                     .font(FontSelection::FontId(FontId::new(
                                         14.0,
                                         FontFamily::Proportional,
@@ -637,10 +647,10 @@ pub fn build_copilot_panel(
 
                 ui.horizontal(|ui| {
                     egui::ComboBox::from_id_salt("fav_prompts_combo")
-                        .width(80.0)
-                        .selected_text("Favorites")
+                        .width(70.0)
+                        .selected_text("Favs")
                         .show_ui(ui, |ui| {
-                            for (_i, fav) in copilot_state.favorite_prompts.iter().enumerate() {
+                            for fav in &copilot_state.favorite_prompts {
                                 ui.selectable_value(
                                     &mut copilot_state.user_input,
                                     fav.prompt.clone(),
@@ -648,9 +658,9 @@ pub fn build_copilot_panel(
                                 );
                             }
                         });
-                    ui.add(
+                    ui.add_sized(
+                        egui::Vec2::new(ui.available_width() - 50.0, 20.0),
                         TextEdit::singleline(&mut copilot_state.user_input)
-                            .desired_width(COPILOT_PANEL_WIDTH - 140.0)
                             .font(FontSelection::FontId(FontId::new(
                                 14.0,
                                 FontFamily::Proportional,
