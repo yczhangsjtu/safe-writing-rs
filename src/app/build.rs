@@ -55,7 +55,8 @@ impl MyApp {
                     );
                 }
                 Content::PlainText(editor_state) => {
-                    let copilot_width = if self.copilot.visible {
+                    let copilot_visible = self.copilot.visible;
+                    let copilot_width = if copilot_visible {
                         crate::consts::COPILOT_PANEL_WIDTH
                     } else {
                         0.0
@@ -63,18 +64,38 @@ impl MyApp {
                     let editor_width = (ui.available_width() - copilot_width).max(0.0);
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
                         ui.allocate_ui(Vec2::new(editor_width, ui.available_height()), |ui| {
-                            Self::build_editor(&mut self.next_content, editor_state, ui);
+                            if copilot_visible {
+                                self.copilot.load_from_plaintext(editor_state.plaintext());
+                            }
+                            Self::build_editor(&mut self.next_content, editor_state, copilot_visible, ui);
                         });
-                        if self.copilot.visible {
+                        if copilot_visible {
                             let selected_text = Some(editor_state.selected_text());
-                            copilot::build_copilot_panel(
+                            let output_to_insert = copilot::build_copilot_panel(
                                 &mut self.copilot,
                                 &self.config,
                                 selected_text,
                                 ui,
                             );
+                            if let Some(output) = output_to_insert {
+                                editor_state.set_text_to_insert(output);
+                            }
                         }
                     });
+                    if editor_state.save_with_copilot() {
+                        if copilot_visible {
+                            self.copilot.save_to_plaintext(editor_state.plaintext_mut());
+                        }
+                        Self::save(editor_state);
+                        editor_state.set_save_with_copilot(false);
+                    }
+                    if editor_state.save_and_lock_with_copilot() {
+                        if copilot_visible {
+                            self.copilot.save_to_plaintext(editor_state.plaintext_mut());
+                        }
+                        Self::save_and_lock(&mut self.next_content, editor_state);
+                        editor_state.set_save_and_lock_with_copilot(false);
+                    }
                 }
                 Content::Error(err) => {
                     ui.with_layout(

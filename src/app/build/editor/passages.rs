@@ -15,6 +15,7 @@ use egui::{Color32, FontFamily, FontId, FontSelection, Key, RichText, Vec2};
 impl MyApp {
     pub(super) fn build_passage_list_menu_buttons(
         editor_state: &mut EditorState,
+        copilot_visible: bool,
         ui: &mut egui::Ui,
         next_content: &mut Option<Content>,
     ) {
@@ -28,7 +29,7 @@ impl MyApp {
             Self::build_insert_image_button(editor_state, ui);
             Self::build_insert_safe_image_button(editor_state, ui);
             Self::build_clean_nonexist_image_button(editor_state, ui);
-            Self::build_save_lock_button(next_content, editor_state, ui);
+            Self::build_save_lock_button(next_content, editor_state, copilot_visible, ui);
             Self::build_rename_button(editor_state, ui);
             Self::build_delete_button(editor_state, editor_state.selected_index(), ui);
             Self::build_read_temp_button(editor_state, editor_state.selected_index(), ui);
@@ -67,27 +68,28 @@ impl MyApp {
     pub(super) fn build_passage_list(
         next_content: &mut Option<Content>,
         editor_state: &mut EditorState,
+        copilot_visible: bool,
         ui: &mut egui::Ui,
     ) {
         ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
                 Self::build_add_button(editor_state, ui);
-                Self::build_save_button(editor_state, ui);
+                Self::build_save_button(editor_state, copilot_visible, ui);
                 Self::build_move_button(editor_state, editor_state.selected_index(), true, ui);
                 Self::build_move_button(editor_state, editor_state.selected_index(), false, ui);
-                Self::build_passage_list_menu_buttons(editor_state, ui, next_content);
+                Self::build_passage_list_menu_buttons(editor_state, copilot_visible, ui, next_content);
             });
             if ui
                 .ctx()
                 .input(|i| i.key_pressed(Key::S) && i.modifiers.command)
             {
-                Self::save(editor_state);
+                editor_state.set_save_with_copilot(copilot_visible);
             }
             if ui
                 .ctx()
                 .input(|i| i.key_pressed(Key::L) && i.modifiers.command)
             {
-                Self::save_and_lock(next_content, editor_state);
+                editor_state.set_save_and_lock_with_copilot(copilot_visible);
             }
             egui::ScrollArea::vertical()
                 .id_salt("passage_list")
@@ -230,7 +232,7 @@ impl MyApp {
         }
     }
 
-    fn build_save_button(editor_state: &mut EditorState, ui: &mut egui::Ui) {
+    fn build_save_button(editor_state: &mut EditorState, copilot_visible: bool, ui: &mut egui::Ui) {
         if ui
             .add(
                 Self::make_control_button(
@@ -243,13 +245,14 @@ impl MyApp {
             .clicked()
             && editor_state.dirty
         {
-            Self::save(editor_state);
+            editor_state.set_save_with_copilot(copilot_visible);
         }
     }
 
     fn build_save_lock_button(
         next_content: &mut Option<Content>,
         editor_state: &mut EditorState,
+        copilot_visible: bool,
         ui: &mut egui::Ui,
     ) {
         if ui
@@ -260,7 +263,8 @@ impl MyApp {
             ))
             .clicked()
         {
-            Self::save_and_lock(next_content, editor_state);
+            editor_state.set_save_and_lock_with_copilot(copilot_visible);
+            *next_content = Some(Content::None);
         }
     }
 

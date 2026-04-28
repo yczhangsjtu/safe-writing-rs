@@ -1,16 +1,25 @@
 use crate::app::config::Config;
 use crate::consts::COPILOT_PANEL_WIDTH;
+use crate::data_structures::PlainText;
 use std::io::BufRead;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use eframe::egui;
 use egui::{Color32, FontFamily, FontId, FontSelection, RichText, ScrollArea, TextEdit};
 
+pub const AI_PASSAGE_NAME: &str = ".ai";
+
 #[derive(Clone)]
 pub struct Message {
     pub role: String,
-    pub content: String, // XML-structured content sent to API
-    pub display: String, // Raw prompt shown in UI
+    pub content: String,
+    pub display: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct FavoritePrompt {
+    pub name: String,
+    pub prompt: String,
 }
 
 pub struct CopilotState {
@@ -23,6 +32,47 @@ pub struct CopilotState {
     pub stream_receiver: Option<Receiver<String>>,
     pub abort_sender: Option<Sender<()>>,
     pub waiting: bool,
+    pub favorite_prompts: Vec<FavoritePrompt>,
+    pub new_favorite_name: String,
+}
+
+fn escape_xml(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+fn unescape_xml(s: &str) -> String {
+    s.replace("&gt;", ">")
+        .replace("&lt;", "<")
+        .replace("&amp;", "&")
+}
+
+fn extract_tag(xml: &str, tag: &str) -> Option<String> {
+    let start_tag = format!("<{}>", tag);
+    let end_tag = format!("</{}>", tag);
+    let start = xml.find(&start_tag)? + start_tag.len();
+    let end = xml[start..].find(&end_tag)?;
+    Some(xml[start..start + end].to_string())
+}
+
+fn extract_favorite_prompts(xml: &str) -> Option<Vec<(String, String)>> {
+    let favs_section = extract_tag(xml, "favorite_prompts")?;
+    let mut result = Vec::new();
+    let mut remaining = favs_section.as_str();
+    while let Some(prompt_start) = remaining.find("<prompt>") {
+        let after_prompt_start = &remaining[prompt_start + 8..];
+        if let Some(prompt_end) = after_prompt_start.find("</prompt>") {
+            let prompt_content = &after_prompt_start[..prompt_end];
+            if let (Some(name), Some(content)) = (extract_tag(prompt_content, "name"), extract_tag(prompt_content, "content")) {
+                result.push((name, content));
+            }
+            remaining = &after_prompt_start[prompt_end + 9..];
+        } else {
+            break;
+        }
+    }
+    Some(result)
 }
 
 impl Default for CopilotState {
@@ -37,11 +87,84 @@ impl Default for CopilotState {
             stream_receiver: None,
             abort_sender: None,
             waiting: false,
+            favorite_prompts: Vec::new(),
+            new_favorite_name: String::new(),
         }
     }
 }
 
 impl CopilotState {
+    pub fn to_xml(&self) -> String {
+        let mut xml = String::new();
+        xml.push_str("<ai_settings>\n");
+        xml.push_str(&format!("  <system_prompt>{}</system_prompt>\n", escape_xml(&self.system_prompt)));
+        xml.push_str("  <favorite_prompts>\n");
+        for fav in &self.favorite_prompts {
+            xml.push_str("    <prompt>\n");
+            xml.push_str(&format!("      <name>{}</name>\n", escape_xml(&fav.name)));
+            xml.push_str(&format!("      <content>{}</content>\n", escape_xml(&fav.prompt)));
+            xml.push_str("    </prompt>\n");
+        }
+        xml.push_str("  </favorite_prompts>\n");
+        xml.push_str("</ai_settings>");
+        xml
+    }
+
+    pub fn from_xml(xml: &str) -> Option<Self> {
+        let system_prompt = extract_tag(xml, "system_prompt")?;
+        let favorite_prompts = extract_favorite_prompts(xml)?;
+        Some(Self {
+            visible: false,
+            system_prompt: unescape_xml(&system_prompt),
+            user_input: String::new(),
+            output: String::new(),
+            buffers: Vec::new(),
+            messages: Vec::new(),
+            stream_receiver: None,
+            abort_sender: None,
+            waiting: false,
+            favorite_prompts: favorite_prompts.into_iter().map(|(name, prompt)| FavoritePrompt {
+                name: unescape_xml(&name),
+                prompt: unescape_xml(&prompt),
+            }).collect(),
+            new_favorite_name: String::new(),
+        })
+    }
+
+    pub fn add_favorite_prompt(&mut self, name: String, prompt: String) {
+        if !name.is_empty() && !prompt.is_empty() {
+            self.favorite_prompts.push(FavoritePrompt { name, prompt });
+        }
+    }
+
+    pub fn remove_favorite_prompt(&mut self, index: usize) {
+        if index < self.favorite_prompts.len() {
+            self.favorite_prompts.remove(index);
+        }
+    }
+
+    pub fn load_from_plaintext(&mut self, plaintext: &PlainText) {
+        for passage in plaintext.passages() {
+            if passage.title() == AI_PASSAGE_NAME {
+                if let Some(state) = Self::from_xml(passage.content()) {
+                    self.system_prompt = state.system_prompt;
+                    self.favorite_prompts = state.favorite_prompts;
+                }
+                break;
+            }
+        }
+    }
+
+    pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
+        let ai_passage_index = plaintext.passages().iter().position(|p| p.title() == AI_PASSAGE_NAME);
+        let xml = self.to_xml();
+        if let Some(index) = ai_passage_index {
+            plaintext.set_content(index, xml);
+        } else {
+            plaintext.insert_new_passage(plaintext.num_passages(), AI_PASSAGE_NAME.to_string());
+            plaintext.set_content(plaintext.num_passages() - 1, xml);
+        }
+    }
     pub fn send_message(&mut self, config: &Config) {
         if self.user_input.trim().is_empty() {
             return;
@@ -252,8 +375,7 @@ pub fn build_copilot_panel(
     config: &Config,
     selected_text: Option<&str>,
     ui: &mut egui::Ui,
-) {
-    // Light theme color palette
+) -> Option<String> {
     let bg = Color32::from_rgb(245, 245, 250);
     let text_dark = Color32::from_rgb(30, 30, 40);
     let text_gray = Color32::from_rgb(80, 80, 90);
@@ -265,6 +387,8 @@ pub fn build_copilot_panel(
     let button_secondary = Color32::from_rgb(220, 220, 230);
     let button_secondary_text = Color32::from_rgb(50, 50, 60);
 
+    let mut output_to_insert = None;
+
     egui::Frame::new()
         .fill(bg)
         .inner_margin(8.0)
@@ -272,11 +396,9 @@ pub fn build_copilot_panel(
             ui.set_min_width(COPILOT_PANEL_WIDTH);
             ui.set_max_width(COPILOT_PANEL_WIDTH);
 
-            // Poll stream every frame
             copilot_state.poll_stream();
 
             ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
-                // Header
                 ui.horizontal(|ui| {
                     ui.label(
                         RichText::new("AI Copilot")
@@ -300,7 +422,6 @@ pub fn build_copilot_panel(
                 });
                 ui.separator();
 
-                // System prompt
                 ui.collapsing(
                     RichText::new("System Prompt").color(text_dark).strong(),
                     |ui| {
@@ -318,7 +439,68 @@ pub fn build_copilot_panel(
                     },
                 );
 
-                // Buffers
+                ui.collapsing(
+                    RichText::new(format!("Favorite Prompts ({})", copilot_state.favorite_prompts.len()))
+                        .color(text_dark)
+                        .strong(),
+                    |ui| {
+                        egui::ComboBox::from_id_salt("fav_prompts_combo")
+                            .width(COPILOT_PANEL_WIDTH - 20.0)
+                            .show_ui(ui, |ui| {
+                                for (_i, fav) in copilot_state.favorite_prompts.iter().enumerate() {
+                                    ui.selectable_value(
+                                        &mut copilot_state.user_input,
+                                        fav.prompt.clone(),
+                                        fav.name.clone(),
+                                    );
+                                }
+                            });
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new("Add current as favorite:").size(12.0).color(text_gray));
+                        });
+                        ui.add(
+                            TextEdit::singleline(&mut copilot_state.new_favorite_name)
+                                .desired_width(COPILOT_PANEL_WIDTH - 100.0)
+                                .font(FontSelection::FontId(FontId::new(12.0, FontFamily::Proportional)))
+                                .hint_text("Name")
+                                .text_color(text_dark)
+                                .background_color(input_bg),
+                        );
+                        if ui
+                            .add(
+                                egui::Button::new(RichText::new("Add").size(12.0).color(Color32::WHITE))
+                                    .fill(button_primary),
+                            )
+                            .clicked()
+                        {
+                            if !copilot_state.new_favorite_name.is_empty() && !copilot_state.user_input.is_empty() {
+                                copilot_state.add_favorite_prompt(copilot_state.new_favorite_name.clone(), copilot_state.user_input.clone());
+                                copilot_state.new_favorite_name.clear();
+                            }
+                        }
+                        let mut to_remove_fav = None;
+                        for (i, fav) in copilot_state.favorite_prompts.iter().enumerate() {
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    RichText::new(fav.name.clone()).size(12.0).color(text_gray),
+                                );
+                                if ui
+                                    .add(
+                                        egui::Button::new(RichText::new("×").size(12.0).color(button_danger))
+                                            .fill(Color32::from_rgb(255, 220, 220)),
+                                    )
+                                    .clicked()
+                                {
+                                    to_remove_fav = Some(i);
+                                }
+                            });
+                        }
+                        if let Some(i) = to_remove_fav {
+                            copilot_state.remove_favorite_prompt(i);
+                        }
+                    },
+                );
+
                 ui.collapsing(
                     RichText::new(format!("Buffers ({})", copilot_state.buffers.len()))
                         .color(text_dark)
@@ -374,13 +556,11 @@ pub fn build_copilot_panel(
 
                 ui.separator();
 
-                // Output area
                 ScrollArea::vertical()
                     .id_salt("copilot_output")
                     .auto_shrink([false, false])
-                    .max_height(ui.available_height() - 120.0)
+                    .max_height(ui.available_height() - 160.0)
                     .show(ui, |ui| {
-                        // Show conversation history
                         for msg in &copilot_state.messages {
                             let (label, color) = match msg.role.as_str() {
                                 "user" => ("User", user_color),
@@ -412,7 +592,6 @@ pub fn build_copilot_panel(
                             ui.separator();
                         }
 
-                        // Show streaming output
                         if copilot_state.waiting || !copilot_state.output.is_empty() {
                             ui.label(
                                 RichText::new("Assistant:")
@@ -431,10 +610,22 @@ pub fn build_copilot_panel(
                                     .background_color(input_bg)
                                     .interactive(false),
                             );
+                            if !copilot_state.waiting && !copilot_state.output.is_empty() {
+                                if ui
+                                    .add(
+                                        egui::Button::new(
+                                            RichText::new("Insert Output").size(12.0).color(Color32::WHITE),
+                                        )
+                                        .fill(Color32::from_rgb(60, 100, 180)),
+                                    )
+                                    .clicked()
+                                {
+                                    output_to_insert = Some(copilot_state.output.clone());
+                                }
+                            }
                         }
                     });
 
-                // Input area
                 ui.horizontal(|ui| {
                     ui.add(
                         TextEdit::singleline(&mut copilot_state.user_input)
@@ -478,4 +669,5 @@ pub fn build_copilot_panel(
                 });
             });
         });
+    output_to_insert
 }

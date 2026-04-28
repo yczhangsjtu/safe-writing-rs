@@ -31,9 +31,26 @@ pub struct EditorState {
     pub(super) error_inserting_safe_image: Option<String>,
     pub(super) show_png_meta_data: Option<usize>,
     pub(super) selected_text: String,
+    pub(super) save_with_copilot: bool,
+    pub(super) save_and_lock_with_copilot: bool,
 }
 
 impl EditorState {
+    pub fn save_with_copilot(&self) -> bool {
+        self.save_with_copilot
+    }
+
+    pub fn set_save_with_copilot(&mut self, value: bool) {
+        self.save_with_copilot = value;
+    }
+
+    pub fn save_and_lock_with_copilot(&self) -> bool {
+        self.save_and_lock_with_copilot
+    }
+
+    pub fn set_save_and_lock_with_copilot(&mut self, value: bool) {
+        self.save_and_lock_with_copilot = value;
+    }
     pub fn new(
         filename: String,
         plaintext: PlainText,
@@ -246,5 +263,9 @@ impl EditorState {
 
     pub fn selected_text(&self) -> &str {
         &self.selected_text
+    }
+
+    pub fn set_text_to_insert(&mut self, text: String) {
+        self.text_to_insert = Some(text);
     }
 }

@@ -87,15 +87,15 @@ impl MyApp {
     pub(crate) fn build_editor(
         next_content: &mut Option<Content>,
         editor_state: &mut EditorState,
+        copilot_visible: bool,
         ui: &mut egui::Ui,
     ) {
-        // Clear selected text at the start of each frame
         editor_state.selected_text.clear();
         egui::Frame::new()
             .fill(Color32::LIGHT_GRAY.gamma_multiply(0.1))
             .inner_margin(5.0)
             .show(ui, |ui| {
-                Self::build_passage_list(next_content, editor_state, ui);
+                Self::build_passage_list(next_content, editor_state, copilot_visible, ui);
             });
         if editor_state.plaintext().is_empty() {
             ui.with_layout(

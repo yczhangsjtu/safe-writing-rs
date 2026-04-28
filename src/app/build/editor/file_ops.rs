@@ -44,14 +44,13 @@ impl MyApp {
             }
         }
     }
-    pub(super) fn save(editor_state: &mut EditorState) {
-        // EditorState::clean_non_referenced_images(editor_state, ctx);
+    pub(crate) fn save(editor_state: &mut EditorState) {
         let path = editor_state.full_path();
         std::fs::write(path, editor_state.plaintext.encrypt(&editor_state.password)).unwrap();
         editor_state.dirty = false;
     }
 
-    pub(super) fn save_and_lock(
+    pub(crate) fn save_and_lock(
         next_content: &mut Option<Content>,
         editor_state: &mut EditorState,
     ) {
