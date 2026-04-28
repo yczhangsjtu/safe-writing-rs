@@ -528,7 +528,7 @@ ui.add(
                 ScrollArea::vertical()
                     .id_salt("copilot_output")
                     .auto_shrink([false, false])
-                    .max_height(ui.available_height() - 100.0)
+                    .max_height(ui.available_height() - 120.0)
                     .show(ui, |ui| {
                         let mut last_assistant_index = None;
                         for (msg_idx, msg) in copilot_state.messages.iter().enumerate() {
@@ -658,17 +658,23 @@ ui.add(
                                 );
                             }
                         });
-                    ui.add_sized(
-                        egui::Vec2::new(ui.available_width() - 50.0, 20.0),
-                        TextEdit::singleline(&mut copilot_state.user_input)
-                            .font(FontSelection::FontId(FontId::new(
-                                14.0,
-                                FontFamily::Proportional,
-                            )))
-                            .hint_text("Type prompt, use #0-#9")
-                            .text_color(text_dark)
-                            .background_color(input_bg),
-                    );
+                    ui.label(RichText::new("#0-#9 for buffers").size(12.0).color(text_gray));
+                });
+                
+                ui.add(
+                    TextEdit::multiline(&mut copilot_state.user_input)
+                        .desired_width(ui.available_width() - 4.0)
+                        .desired_rows(3)
+                        .font(FontSelection::FontId(FontId::new(
+                            14.0,
+                            FontFamily::Proportional,
+                        )))
+                        .hint_text("Ctrl+Enter to send")
+                        .text_color(text_dark)
+                        .background_color(input_bg),
+                );
+                
+                ui.horizontal(|ui| {
                     if copilot_state.waiting {
                         if ui
                             .add(
@@ -692,7 +698,7 @@ ui.add(
                             .clicked()
                             || ui
                                 .ctx()
-                                .input(|i| i.key_pressed(egui::Key::Enter) && !i.modifiers.shift)
+                                .input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.ctrl)
                         {
                             copilot_state.send_message(config);
                         }
