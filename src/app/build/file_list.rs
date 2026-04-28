@@ -143,13 +143,15 @@ impl MyApp {
                                 if std::fs::write(path, content).is_ok() {
                                     self.file_names.push(new_file_name.clone());
                                     self.file_names.sort();
-                                    self.content = Content::PlainText(EditorState::new(
+                                    let editor_state = EditorState::new(
                                         new_file_name.clone(),
                                         plaintext.clone(),
                                         password.clone(),
                                         self.config.clone(),
                                         &ui.ctx(),
-                                    ));
+                                    );
+                                    self.copilot.load_from_plaintext(&plaintext, &new_file_name);
+                                    self.content = Content::PlainText(editor_state);
                                 }
                             }
                         }

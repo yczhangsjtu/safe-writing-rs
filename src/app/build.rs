@@ -35,8 +35,11 @@ impl MyApp {
                     if self.creating_new_file == None {
                         ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
                             ui.allocate_space(Vec2::new(0.0, PASSWORD_SCREEN_TOP_SPACE));
-                            self.next_content =
-                                Self::build_encrypted_file(encrypted_file_state, ctx, ui);
+                            let result = Self::build_encrypted_file(encrypted_file_state, ctx, ui);
+                            if let Some(Content::PlainText(ref editor_state)) = result {
+                                self.copilot.load_from_plaintext(editor_state.plaintext(), editor_state.filename());
+                            }
+                            self.next_content = result;
                         });
                     } else {
                         self.next_content = Some(Content::None);
@@ -64,9 +67,6 @@ impl MyApp {
                     let editor_width = (ui.available_width() - copilot_width).max(0.0);
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
                         ui.allocate_ui(Vec2::new(editor_width, ui.available_height()), |ui| {
-                            if copilot_visible {
-                                self.copilot.load_from_plaintext(editor_state.plaintext());
-                            }
                             Self::build_editor(&mut self.next_content, editor_state, copilot_visible, ui);
                         });
                         if copilot_visible {
@@ -75,6 +75,7 @@ impl MyApp {
                                 &mut self.copilot,
                                 &self.config,
                                 selected_text,
+                                editor_state.plaintext(),
                                 ui,
                             );
                             if let Some(output) = output_to_insert {

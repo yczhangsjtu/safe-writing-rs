@@ -108,7 +108,7 @@ impl CopilotState {
         xml
     }
 
-    pub fn from_xml(xml: &str) -> Option<Self> {
+pub fn from_xml(xml: &str) -> Option<Self> {
         let system_prompt = extract_tag(xml, "system_prompt")?;
         let favorite_prompts = extract_favorite_prompts(xml)?;
         Some(Self {
@@ -128,18 +128,7 @@ impl CopilotState {
         })
     }
 
-pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
-        let ai_passage_index = plaintext.passages().iter().position(|p| p.title() == AI_PASSAGE_NAME);
-        let xml = self.to_xml();
-        if let Some(index) = ai_passage_index {
-            plaintext.set_content(index, xml);
-        } else {
-            plaintext.insert_new_passage(plaintext.num_passages(), AI_PASSAGE_NAME.to_string());
-            plaintext.set_content(plaintext.num_passages() - 1, xml);
-        }
-    }
-
-    pub fn load_from_plaintext(&mut self, plaintext: &PlainText) {
+    pub fn load_from_plaintext(&mut self, plaintext: &PlainText, _filename: &str) {
         for passage in plaintext.passages() {
             if passage.title() == AI_PASSAGE_NAME {
                 if let Some(state) = Self::from_xml(passage.content()) {
@@ -148,6 +137,30 @@ pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
                 }
                 break;
             }
+        }
+    }
+
+    pub fn refresh_from_plaintext(&mut self, plaintext: &PlainText) {
+        self.favorite_prompts.clear();
+        for passage in plaintext.passages() {
+            if passage.title() == AI_PASSAGE_NAME {
+                if let Some(state) = Self::from_xml(passage.content()) {
+                    self.system_prompt = state.system_prompt;
+                    self.favorite_prompts = state.favorite_prompts;
+                }
+                break;
+            }
+        }
+    }
+
+pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
+        let ai_passage_index = plaintext.passages().iter().position(|p| p.title() == AI_PASSAGE_NAME);
+        let xml = self.to_xml();
+        if let Some(index) = ai_passage_index {
+            plaintext.set_content(index, xml);
+        } else {
+            plaintext.insert_new_passage(plaintext.num_passages(), AI_PASSAGE_NAME.to_string());
+            plaintext.set_content(plaintext.num_passages() - 1, xml);
         }
     }
 
@@ -367,6 +380,7 @@ pub fn build_copilot_panel(
     copilot_state: &mut CopilotState,
     config: &Config,
     selected_text: Option<&str>,
+    plaintext: &PlainText,
     ui: &mut egui::Ui,
 ) -> Option<String> {
     let bg = Color32::from_rgb(245, 245, 250);
@@ -402,6 +416,17 @@ pub fn build_copilot_panel(
                             .color(assistant_color)
                             .strong(),
                     );
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                RichText::new("↻").size(14.0).color(button_secondary_text),
+                            )
+                            .fill(button_secondary),
+                        )
+                        .clicked()
+                    {
+                        copilot_state.refresh_from_plaintext(plaintext);
+                    }
                     if ui
                         .add(
                             egui::Button::new(
@@ -521,15 +546,14 @@ pub fn build_copilot_panel(
                                 if msg.role == "user" {
                                     let msg_display = msg.display.clone();
                                     let prompt_name = format!("Prompt {}", msg_idx + 1);
-                                    if ui
-                                        .add(
-                                            egui::Button::new(
-                                                RichText::new("+").size(12.0).color(Color32::WHITE),
-                                            )
-                                            .fill(button_primary),
+                                    let btn = ui.add(
+                                        egui::Button::new(
+                                            RichText::new("+").size(14.0).color(Color32::WHITE),
                                         )
-                                        .clicked()
-                                    {
+                                        .fill(button_primary)
+                                        .min_size(egui::Vec2::new(20.0, 20.0)),
+                                    );
+                                    if btn.clicked() {
                                         prompts_to_add.push((prompt_name, msg_display));
                                     }
                                 }
