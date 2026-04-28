@@ -176,7 +176,7 @@ pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
         }
     }
 
-    pub fn send_message(&mut self, config: &Config) {
+    pub fn send_message(&mut self, config: &Config, full_passage: &str) {
         if self.user_input.trim().is_empty() {
             return;
         }
@@ -184,8 +184,7 @@ pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
         let prompt = self.user_input.clone();
         self.user_input.clear();
 
-        // Build XML-structured content
-        let xml_content = Self::build_prompt(&prompt, &self.buffers);
+        let xml_content = Self::build_prompt(&prompt, &self.buffers, full_passage);
 
         // Add user message to history (store both raw and XML)
         self.messages.push(Message {
@@ -276,7 +275,7 @@ pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
         });
     }
 
-    fn build_prompt(prompt: &str, buffers: &[String]) -> String {
+    fn build_prompt(prompt: &str, buffers: &[String], full_passage: &str) -> String {
         let buffer_names = [
             "first", "second", "third", "fourth", "fifth",
             "sixth", "seventh", "eighth", "ninth", "tenth",
@@ -284,6 +283,11 @@ pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
         
         let mut result = String::new();
         let mut referenced_names: Vec<(&str, usize)> = Vec::new();
+        let mut include_all = false;
+        
+        if prompt.contains("<all>") {
+            include_all = true;
+        }
         
         for (i, _) in buffers.iter().enumerate().take(10) {
             let id = format!("#{}", i);
@@ -292,10 +296,13 @@ pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
             }
         }
 
-        if !referenced_names.is_empty() {
+        if !referenced_names.is_empty() || include_all {
             result.push_str("<instructions>\n");
             result.push_str("The user references text buffers using placeholders like <first>, <second>, etc. ");
             result.push_str("Each referenced buffer content is provided below.\n");
+            if include_all {
+                result.push_str("The special buffer <all> contains the entire passage.\n");
+            }
             result.push_str("</instructions>\n\n");
         }
 
@@ -310,12 +317,17 @@ pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
         result.push_str(&processed_prompt);
         result.push_str("\n</user_message>\n");
 
-        if !referenced_names.is_empty() {
+        if !referenced_names.is_empty() || include_all {
             result.push_str("\n<referenced_buffers>\n");
             for (name, i) in &referenced_names {
                 result.push_str(&format!("<{}>\n", name));
                 result.push_str(&buffers[*i]);
                 result.push_str(&format!("\n</{}>\n", name));
+            }
+            if include_all {
+                result.push_str("<all>\n");
+                result.push_str(full_passage);
+                result.push_str("\n</all>\n");
             }
             result.push_str("</referenced_buffers>\n");
         }
@@ -395,6 +407,7 @@ pub fn build_copilot_panel(
     plaintext: &PlainText,
     ui: &mut egui::Ui,
 ) -> Option<String> {
+    let full_passage: String = plaintext.passages().iter().map(|p| p.content().as_str()).collect::<Vec<_>>().join("\n\n");
     let bg = Color32::from_rgb(245, 245, 250);
     let text_dark = Color32::from_rgb(30, 30, 40);
     let text_gray = Color32::from_rgb(80, 80, 90);
@@ -658,7 +671,7 @@ ui.add(
                                 );
                             }
                         });
-                    ui.label(RichText::new("#0-#9 for buffers").size(12.0).color(text_gray));
+                    ui.label(RichText::new("#0-#9 buffers, <all> entire passage").size(12.0).color(text_gray));
                 });
                 
                 ui.add(
@@ -700,7 +713,7 @@ ui.add(
                                 .ctx()
                                 .input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.ctrl)
                         {
-                            copilot_state.send_message(config);
+                            copilot_state.send_message(config, &full_passage);
                         }
                     }
                 });
