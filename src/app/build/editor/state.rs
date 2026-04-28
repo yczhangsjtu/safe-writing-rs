@@ -30,6 +30,7 @@ pub struct EditorState {
     pub(super) inserting_safe_image: Option<(String, String, String)>,
     pub(super) error_inserting_safe_image: Option<String>,
     pub(super) show_png_meta_data: Option<usize>,
+    pub(super) selected_text: String,
 }
 
 impl EditorState {
@@ -241,5 +242,9 @@ impl EditorState {
 
     pub fn font_size(&self) -> f32 {
         self.config.font_size
+    }
+
+    pub fn selected_text(&self) -> &str {
+        &self.selected_text
     }
 }

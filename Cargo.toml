@@ -24,6 +24,7 @@ rand = { version = "0.9", features = ["std_rng"] }
 rfd = "0.15"
 homedir = "0.3"
 png = "0.17"
+ureq = "3.0"
 
 [build-dependencies]
 winres = "0.1.12"

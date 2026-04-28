@@ -32,6 +32,36 @@ impl MyApp {
         }
     }
 
+    fn build_copilot_toggle_button(&mut self, ui: &mut egui::Ui) {
+        let label = if self.copilot.visible { "AI✓" } else { "AI" };
+        if ui
+            .add(
+                egui::Button::new(egui::WidgetText::RichText(
+                    RichText::from(label)
+                        .size(crate::consts::SMALL_BUTTON_FONT_SIZE)
+                        .color(if self.copilot.visible {
+                            Color32::LIGHT_GREEN
+                        } else {
+                            Color32::WHITE
+                        })
+                        .into(),
+                ))
+                .min_size(Vec2::new(
+                    crate::consts::FILE_LIST_SMALL_BUTTON_SIZE,
+                    crate::consts::FILE_LIST_SMALL_BUTTON_SIZE,
+                ))
+                .fill(if self.copilot.visible {
+                    Color32::DARK_GREEN.gamma_multiply(0.5)
+                } else {
+                    Color32::GRAY.gamma_multiply(0.5)
+                }),
+            )
+            .clicked()
+        {
+            self.copilot.visible = !self.copilot.visible;
+        }
+    }
+
     fn build_file_list_menu_button(&mut self, ui: &mut egui::Ui) {
         let data_dir = self.data_dir().clone();
         egui::containers::menu::MenuButton::from_button(Self::make_file_list_top_button(
@@ -204,6 +234,7 @@ impl MyApp {
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
                         self.build_create_new_file_button(ui);
                         self.build_refresh_button(ui);
+                        self.build_copilot_toggle_button(ui);
                         self.build_file_list_menu_button(ui);
                     });
 

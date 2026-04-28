@@ -89,6 +89,8 @@ impl MyApp {
         editor_state: &mut EditorState,
         ui: &mut egui::Ui,
     ) {
+        // Clear selected text at the start of each frame
+        editor_state.selected_text.clear();
         egui::Frame::new()
             .fill(Color32::LIGHT_GRAY.gamma_multiply(0.1))
             .inner_margin(5.0)
@@ -205,6 +207,7 @@ impl MyApp {
                                         font_size,
                                         &mut editor_state.text_to_insert,
                                         &mut editor_state.image_to_insert,
+                                        &mut editor_state.selected_text,
                                     );
                                 } else {
                                     Self::build_no_passage_selected_screen(ui);
@@ -231,6 +234,7 @@ impl MyApp {
         font_size: f32,
         text_to_insert: &mut Option<String>,
         image_to_insert: &mut Option<Vec<u8>>,
+        selected_text: &mut String,
     ) {
         ui.with_layout(egui::Layout::top_down_justified(egui::Align::Max), |ui| {
             let screen_size = ui.ctx().input(|input| input.content_rect());
@@ -267,13 +271,20 @@ impl MyApp {
 
             if let Some(mut state) = TextEdit::load_state(ui.ctx(), response.id) {
                 let cursor = state.cursor.char_range();
-                if let Some(text_to_insert) = text_to_insert.take() {
-                    if let Some(cursor) = cursor {
+                if let Some(cursor) = cursor {
+                    if let Some(text_to_insert) = text_to_insert.take() {
                         let mut cursor =
                             text.delete_selected_ccursor_range(cursor.sorted_cursors());
                         text.insert_text_at(&mut cursor, &text_to_insert, usize::MAX);
                         *dirty = true;
                         state.cursor.set_char_range(Some(CCursorRange::one(cursor)));
+                    }
+                    // Capture selected text for copilot
+                    let sorted = cursor.sorted_cursors();
+                    let start = sorted[0].index;
+                    let end = sorted[1].index;
+                    if start != end && end <= text.len() {
+                        *selected_text = text[start..end].to_string();
                     }
                 }
             }

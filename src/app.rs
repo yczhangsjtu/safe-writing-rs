@@ -23,6 +23,7 @@ pub struct MyApp {
     creating_new_file: Option<String>,
     waiting_for_password_for_safe_note: Option<(PathBuf, String, String)>,
     config: Config,
+    copilot: build::copilot::CopilotState,
 }
 
 impl MyApp {
@@ -104,6 +105,7 @@ impl MyApp {
             let config = Config {
                 font_size: 24.0,
                 data_dir: config_path.to_str().unwrap().to_owned(),
+                llamacpp_url: "http://localhost:8080".to_string(),
             };
             std::fs::write(config_file.clone(), toml::to_string(&config).unwrap()).unwrap();
             config
