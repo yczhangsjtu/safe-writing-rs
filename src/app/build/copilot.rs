@@ -4,7 +4,8 @@ use std::io::BufRead;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use eframe::egui;
-use egui::{Color32, FontFamily, FontId, FontSelection, RichText, ScrollArea, TextEdit};
+use egui::{Color32, FontFamily, FontId, FontSelection, RichText, ScrollArea, TextEdit, Widget};
+use egui::containers::menu::MenuButton;
 
 pub const AI_PASSAGE_NAME: &str = ".ai";
 
@@ -491,16 +492,16 @@ pub fn build_copilot_panel(
     ui: &mut egui::Ui,
 ) -> (Option<String>, bool) {
     let full_passage: String = plaintext.passages().iter().map(|p| p.content().as_str()).collect::<Vec<_>>().join("\n\n");
-    let bg = Color32::from_rgb(245, 245, 250);
-    let text_dark = Color32::from_rgb(30, 30, 40);
-    let text_gray = Color32::from_rgb(80, 80, 90);
-    let user_color = Color32::from_rgb(0, 100, 40);
-    let assistant_color = Color32::from_rgb(0, 60, 150);
-    let input_bg = Color32::WHITE;
+    let bg = Color32::from_rgb(30, 30, 35);
+    let text_light = Color32::from_rgb(220, 220, 230);
+    let text_gray = Color32::from_rgb(150, 150, 160);
+    let user_color = Color32::from_rgb(100, 200, 140);
+    let assistant_color = Color32::from_rgb(100, 150, 230);
+    let input_bg = Color32::from_rgb(45, 45, 50);
     let button_primary = Color32::from_rgb(0, 120, 60);
     let button_danger = Color32::from_rgb(200, 40, 40);
-    let button_secondary = Color32::from_rgb(220, 220, 230);
-    let button_secondary_text = Color32::from_rgb(50, 50, 60);
+    let button_secondary = Color32::from_rgb(60, 60, 70);
+    let button_secondary_text = Color32::from_rgb(200, 200, 210);
 
     let mut output_to_insert = None;
     let mut needs_save_ai = false;
@@ -509,6 +510,16 @@ pub fn build_copilot_panel(
         .fill(bg)
         .inner_margin(8.0)
         .show(ui, |ui| {
+            ui.visuals_mut().widgets.noninteractive.fg_stroke.color = text_light;
+            ui.visuals_mut().widgets.noninteractive.bg_fill = bg;
+            ui.visuals_mut().widgets.inactive.fg_stroke.color = text_light;
+            ui.visuals_mut().widgets.inactive.bg_fill = input_bg;
+            ui.visuals_mut().widgets.hovered.fg_stroke.color = text_light;
+            ui.visuals_mut().widgets.hovered.bg_fill = Color32::from_rgb(50, 50, 60);
+            ui.visuals_mut().widgets.active.fg_stroke.color = text_light;
+            ui.visuals_mut().widgets.active.bg_fill = Color32::from_rgb(60, 100, 180);
+            ui.visuals_mut().window_fill = bg;
+            
             let ctx = ui.ctx().clone();
             if copilot_state.poll_stream(&ctx) {
                 ctx.request_repaint();
@@ -559,7 +570,7 @@ pub fn build_copilot_panel(
                 ui.separator();
 
                 ui.collapsing(
-                    RichText::new("System Prompt").color(text_dark).strong(),
+                    RichText::new("System Prompt").color(text_light).strong(),
                     |ui| {
                         if ui.add(
                             TextEdit::multiline(&mut copilot_state.system_prompt)
@@ -569,7 +580,7 @@ pub fn build_copilot_panel(
                                     14.0,
                                     FontFamily::Proportional,
                                 )))
-                                .text_color(text_dark)
+                                .text_color(text_light)
                                 .background_color(input_bg),
                         ).changed() {
                             needs_save_ai = true;
@@ -579,7 +590,7 @@ pub fn build_copilot_panel(
 
                 ui.collapsing(
                     RichText::new(format!("Buffers ({})", copilot_state.buffers.len()))
-                        .color(text_dark)
+                        .color(text_light)
                         .strong(),
                     |ui| {
                         if let Some(text) = selected_text {
@@ -621,7 +632,7 @@ pub fn build_copilot_panel(
                                         egui::Button::new(
                                             RichText::new("×").size(14.0).color(button_danger),
                                         )
-                                        .fill(Color32::from_rgb(255, 220, 220)),
+                                        .fill(Color32::from_rgb(80, 40, 40)),
                                     )
                                     .clicked()
                                 {
@@ -707,7 +718,7 @@ pub fn build_copilot_panel(
                                         14.0,
                                         FontFamily::Proportional,
                                     )))
-                                    .text_color(text_dark)
+                                    .text_color(text_light)
                                     .background_color(input_bg)
                                     .interactive(false),
                             );
@@ -752,7 +763,7 @@ pub fn build_copilot_panel(
                                         14.0,
                                         FontFamily::Proportional,
                                     )))
-                                    .text_color(text_dark)
+                                    .text_color(text_light)
                                     .background_color(input_bg)
                                     .interactive(false),
                             );
@@ -760,18 +771,21 @@ pub fn build_copilot_panel(
                     });
 
                 ui.horizontal(|ui| {
-                    egui::ComboBox::from_id_salt("fav_prompts_combo")
-                        .width(70.0)
-                        .selected_text("Favs")
-                        .show_ui(ui, |ui| {
-                            for fav in &copilot_state.favorite_prompts {
-                                ui.selectable_value(
-                                    &mut copilot_state.user_input,
-                                    fav.prompt.clone(),
-                                    fav.name.clone(),
-                                );
+                    MenuButton::from_button(
+                        egui::Button::new(RichText::new("Favs").color(text_light))
+                            .fill(input_bg)
+                    ).ui(ui, |ui| {
+                        for fav in &copilot_state.favorite_prompts {
+                            if egui::Button::new(RichText::new(&fav.name).color(text_light))
+                                .fill(bg)
+                                .ui(ui)
+                                .clicked()
+                            {
+                                copilot_state.user_input = fav.prompt.clone();
+                                ui.close();
                             }
-                        });
+                        }
+                    });
                     ui.label(RichText::new("#0-#9 buffers, <all> entire passage").size(12.0).color(text_gray));
                 });
                 
@@ -784,7 +798,7 @@ pub fn build_copilot_panel(
                             FontFamily::Proportional,
                         )))
                         .hint_text("Ctrl+Enter to send")
-                        .text_color(text_dark)
+                        .text_color(text_light)
                         .background_color(input_bg),
                 );
                 
