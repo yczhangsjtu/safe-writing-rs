@@ -283,8 +283,8 @@ impl MyApp {
                     let sorted = cursor.sorted_cursors();
                     let start = sorted[0].index;
                     let end = sorted[1].index;
-                    if start != end && end <= text.len() {
-                        *selected_text = text[start..end].to_string();
+                    if start != end && end <= text.chars().count() {
+                        *selected_text = text.chars().skip(start).take(end - start).collect();
                     }
                 }
             }

@@ -143,19 +143,47 @@ impl CopilotState {
     }
 
     fn build_prompt(prompt: &str, buffers: &[String]) -> String {
+        let buffer_names = [
+            "first", "second", "third", "fourth", "fifth",
+            "sixth", "seventh", "eighth", "ninth", "tenth",
+        ];
+        
         let mut result = String::new();
-        result.push_str("<prompt>\n");
-        result.push_str(prompt);
-        result.push_str("\n</prompt>\n");
-
-        // Only include buffers that are referenced in the prompt
-        for (i, buf) in buffers.iter().enumerate() {
+        let mut referenced_names: Vec<(&str, usize)> = Vec::new();
+        
+        for (i, _) in buffers.iter().enumerate().take(10) {
             let id = format!("#{}", i);
             if prompt.contains(&id) {
-                result.push_str(&format!("<buffer id=\"{}\">\n", i));
-                result.push_str(buf);
-                result.push_str("\n</buffer>\n");
+                referenced_names.push((buffer_names[i], i));
             }
+        }
+
+        if !referenced_names.is_empty() {
+            result.push_str("<instructions>\n");
+            result.push_str("The user references text buffers using placeholders like <first>, <second>, etc. ");
+            result.push_str("Each referenced buffer content is provided below.\n");
+            result.push_str("</instructions>\n\n");
+        }
+
+        let mut processed_prompt = prompt.to_string();
+        for (name, i) in &referenced_names {
+            let id = format!("#{}", i);
+            let replacement = format!("<{}>", name);
+            processed_prompt = processed_prompt.replace(&id, &replacement);
+        }
+
+        result.push_str("<user_message>\n");
+        result.push_str(&processed_prompt);
+        result.push_str("\n</user_message>\n");
+
+        if !referenced_names.is_empty() {
+            result.push_str("\n<referenced_buffers>\n");
+            for (name, i) in &referenced_names {
+                result.push_str(&format!("<{}>\n", name));
+                result.push_str(&buffers[*i]);
+                result.push_str(&format!("\n</{}>\n", name));
+            }
+            result.push_str("</referenced_buffers>\n");
         }
 
         result
@@ -184,6 +212,7 @@ impl CopilotState {
                                     content: self.output.clone(),
                                     display: self.output.clone(),
                                 });
+                                self.output.clear();
                             }
                             break;
                         } else {
@@ -242,7 +271,6 @@ pub fn build_copilot_panel(
         .show(ui, |ui| {
             ui.set_min_width(COPILOT_PANEL_WIDTH);
             ui.set_max_width(COPILOT_PANEL_WIDTH);
-            ui.visuals_mut().override_text_color = Some(text_dark);
 
             // Poll stream every frame
             copilot_state.poll_stream();
@@ -312,11 +340,16 @@ pub fn build_copilot_panel(
                                 copilot_state.add_buffer(text.to_string());
                             }
                         }
+                        let buffer_names = [
+                            "first", "second", "third", "fourth", "fifth",
+                            "sixth", "seventh", "eighth", "ninth", "tenth",
+                        ];
                         let mut to_remove = None;
                         for (i, buf) in copilot_state.buffers.iter().enumerate() {
+                            let name = buffer_names.get(i).copied().unwrap_or("?");
                             ui.horizontal(|ui| {
                                 ui.label(
-                                    RichText::new(format!("#{}: {} chars", i, buf.chars().count()))
+                                    RichText::new(format!("#{} ({}): {} chars", i, name, buf.chars().count()))
                                         .size(14.0)
                                         .color(text_gray),
                                 );
@@ -410,7 +443,7 @@ pub fn build_copilot_panel(
                                 14.0,
                                 FontFamily::Proportional,
                             )))
-                            .hint_text("Type prompt, use #0 #1...")
+                            .hint_text("Type prompt, use #0-#9 for buffers")
                             .text_color(text_dark)
                             .background_color(input_bg),
                     );
