@@ -283,9 +283,11 @@ impl CopilotState {
         });
 
         // Build the full messages array for the API
+        let buffer_instructions = "\n\n<buffer_instructions>\nThe user may reference text buffers using placeholders like <first>, <second>, etc. When such placeholders appear, the actual buffer content will be provided in a <referenced_buffers> section within the user's message.\n</buffer_instructions>";
+        
         let mut api_messages = vec![serde_json::json!({
             "role": "system",
-            "content": self.system_prompt,
+            "content": format!("{}{}", self.system_prompt, buffer_instructions),
         })];
 
         for msg in &self.messages {
@@ -385,18 +387,6 @@ impl CopilotState {
             }
         }
 
-        if !referenced_names.is_empty() || include_all {
-            result.push_str("<instructions>\n");
-            result.push_str(
-                "The user references text buffers using placeholders like <first>, <second>, etc. ",
-            );
-            result.push_str("Each referenced buffer content is provided below.\n");
-            if include_all {
-                result.push_str("The special buffer <all> contains the current passage.\n");
-            }
-            result.push_str("</instructions>\n\n");
-        }
-
         let mut processed_prompt = prompt.to_string();
         for (name, i) in &referenced_names {
             let id = format!("#{}", i);
@@ -404,12 +394,10 @@ impl CopilotState {
             processed_prompt = processed_prompt.replace(&id, &replacement);
         }
 
-        result.push_str("<user_message>\n");
         result.push_str(&processed_prompt);
-        result.push_str("\n</user_message>\n");
 
         if !referenced_names.is_empty() || include_all {
-            result.push_str("\n<referenced_buffers>\n");
+            result.push_str("\n\n<referenced_buffers>\n");
             for (name, i) in &referenced_names {
                 result.push_str(&format!("<{}>\n", name));
                 result.push_str(&buffers[*i]);
@@ -544,6 +532,8 @@ pub fn build_copilot_panel(
             ui.visuals_mut().widgets.active.bg_fill = Color32::from_rgb(60, 100, 180);
             ui.visuals_mut().window_fill = bg;
 
+            let available_width = ui.available_width();
+
             let ctx = ui.ctx().clone();
             if copilot_state.poll_stream(&ctx) {
                 ctx.request_repaint();
@@ -595,7 +585,7 @@ pub fn build_copilot_panel(
                         if ui
                             .add(
                                 TextEdit::multiline(&mut copilot_state.system_prompt)
-                                    .desired_width(ui.available_width() - 4.0)
+                                    .desired_width(available_width - 4.0)
                                     .desired_rows(3)
                                     .font(FontSelection::FontId(FontId::new(
                                         14.0,
@@ -645,17 +635,6 @@ pub fn build_copilot_panel(
                             let name = buffer_names.get(i).copied().unwrap_or("?");
                             let summary = make_brief_summary(buf, 30);
                             ui.horizontal(|ui| {
-                                ui.label(
-                                    RichText::new(format!(
-                                        "#{} ({}): {} ({})",
-                                        i,
-                                        name,
-                                        summary,
-                                        buf.chars().count()
-                                    ))
-                                    .size(14.0)
-                                    .color(text_gray),
-                                );
                                 if ui
                                     .add(
                                         egui::Button::new(
@@ -667,6 +646,11 @@ pub fn build_copilot_panel(
                                 {
                                     to_remove = Some(i);
                                 }
+                                let text = format!("#{} ({}): {} ({})", i, name, summary, buf.chars().count());
+                                ui.add_sized(
+                                    egui::vec2(ui.available_width(), 0.0),
+                                    egui::Label::new(RichText::new(text).size(14.0).color(text_gray)).wrap(),
+                                );
                             });
                         }
                         if let Some(i) = to_remove {
@@ -745,7 +729,7 @@ pub fn build_copilot_panel(
                             };
                             ui.add(
                                 TextEdit::multiline(&mut display_text.clone())
-                                    .desired_width(ui.available_width() - 4.0)
+                                    .desired_width(available_width - 4.0)
                                     .font(FontSelection::FontId(FontId::new(
                                         14.0,
                                         FontFamily::Proportional,
@@ -794,7 +778,7 @@ pub fn build_copilot_panel(
                             });
                             ui.add(
                                 TextEdit::multiline(&mut copilot_state.output.clone())
-                                    .desired_width(ui.available_width() - 4.0)
+                                    .desired_width(available_width - 4.0)
                                     .font(FontSelection::FontId(FontId::new(
                                         14.0,
                                         FontFamily::Proportional,
@@ -831,7 +815,7 @@ pub fn build_copilot_panel(
 
                 ui.add(
                     TextEdit::multiline(&mut copilot_state.user_input)
-                        .desired_width(ui.available_width() - 4.0)
+                        .desired_width(available_width - 4.0)
                         .desired_rows(3)
                         .font(FontSelection::FontId(FontId::new(
                             14.0,
