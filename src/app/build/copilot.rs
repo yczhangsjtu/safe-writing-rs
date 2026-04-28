@@ -33,7 +33,6 @@ pub struct CopilotState {
     pub abort_sender: Option<Sender<()>>,
     pub waiting: bool,
     pub favorite_prompts: Vec<FavoritePrompt>,
-    pub new_favorite_name: String,
 }
 
 fn escape_xml(s: &str) -> String {
@@ -88,7 +87,6 @@ impl Default for CopilotState {
             abort_sender: None,
             waiting: false,
             favorite_prompts: Vec::new(),
-            new_favorite_name: String::new(),
         }
     }
 }
@@ -127,19 +125,17 @@ impl CopilotState {
                 name: unescape_xml(&name),
                 prompt: unescape_xml(&prompt),
             }).collect(),
-            new_favorite_name: String::new(),
         })
     }
 
-    pub fn add_favorite_prompt(&mut self, name: String, prompt: String) {
-        if !name.is_empty() && !prompt.is_empty() {
-            self.favorite_prompts.push(FavoritePrompt { name, prompt });
-        }
-    }
-
-    pub fn remove_favorite_prompt(&mut self, index: usize) {
-        if index < self.favorite_prompts.len() {
-            self.favorite_prompts.remove(index);
+pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
+        let ai_passage_index = plaintext.passages().iter().position(|p| p.title() == AI_PASSAGE_NAME);
+        let xml = self.to_xml();
+        if let Some(index) = ai_passage_index {
+            plaintext.set_content(index, xml);
+        } else {
+            plaintext.insert_new_passage(plaintext.num_passages(), AI_PASSAGE_NAME.to_string());
+            plaintext.set_content(plaintext.num_passages() - 1, xml);
         }
     }
 
@@ -155,16 +151,6 @@ impl CopilotState {
         }
     }
 
-    pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
-        let ai_passage_index = plaintext.passages().iter().position(|p| p.title() == AI_PASSAGE_NAME);
-        let xml = self.to_xml();
-        if let Some(index) = ai_passage_index {
-            plaintext.set_content(index, xml);
-        } else {
-            plaintext.insert_new_passage(plaintext.num_passages(), AI_PASSAGE_NAME.to_string());
-            plaintext.set_content(plaintext.num_passages() - 1, xml);
-        }
-    }
     pub fn send_message(&mut self, config: &Config) {
         if self.user_input.trim().is_empty() {
             return;
@@ -319,16 +305,17 @@ impl CopilotState {
         self.waiting = false;
     }
 
-    pub fn poll_stream(&mut self) {
+    pub fn poll_stream(&mut self, ctx: &egui::Context) -> bool {
+        let mut received_data = false;
         if let Some(ref rx) = self.stream_receiver {
             loop {
                 match rx.try_recv() {
                     Ok(chunk) => {
+                        received_data = true;
                         if chunk == "__DONE__" {
                             self.waiting = false;
                             self.stream_receiver = None;
                             self.abort_sender = None;
-                            // Add assistant response to history
                             if !self.output.is_empty() {
                                 self.messages.push(Message {
                                     role: "assistant".to_string(),
@@ -342,7 +329,12 @@ impl CopilotState {
                             self.output.push_str(&chunk);
                         }
                     }
-                    Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        if self.waiting {
+                            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+                        }
+                        break;
+                    }
                     Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                         self.waiting = false;
                         self.stream_receiver = None;
@@ -352,6 +344,7 @@ impl CopilotState {
                 }
             }
         }
+        received_data
     }
 
     pub fn add_buffer(&mut self, text: String) {
@@ -396,7 +389,10 @@ pub fn build_copilot_panel(
             ui.set_min_width(COPILOT_PANEL_WIDTH);
             ui.set_max_width(COPILOT_PANEL_WIDTH);
 
-            copilot_state.poll_stream();
+            let ctx = ui.ctx().clone();
+            if copilot_state.poll_stream(&ctx) {
+                ctx.request_repaint();
+            }
 
             ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                 ui.horizontal(|ui| {
@@ -436,68 +432,6 @@ pub fn build_copilot_panel(
                                 .text_color(text_dark)
                                 .background_color(input_bg),
                         );
-                    },
-                );
-
-                ui.collapsing(
-                    RichText::new(format!("Favorite Prompts ({})", copilot_state.favorite_prompts.len()))
-                        .color(text_dark)
-                        .strong(),
-                    |ui| {
-                        egui::ComboBox::from_id_salt("fav_prompts_combo")
-                            .width(COPILOT_PANEL_WIDTH - 20.0)
-                            .show_ui(ui, |ui| {
-                                for (_i, fav) in copilot_state.favorite_prompts.iter().enumerate() {
-                                    ui.selectable_value(
-                                        &mut copilot_state.user_input,
-                                        fav.prompt.clone(),
-                                        fav.name.clone(),
-                                    );
-                                }
-                            });
-                        ui.horizontal(|ui| {
-                            ui.label(RichText::new("Add current as favorite:").size(12.0).color(text_gray));
-                        });
-                        ui.add(
-                            TextEdit::singleline(&mut copilot_state.new_favorite_name)
-                                .desired_width(COPILOT_PANEL_WIDTH - 100.0)
-                                .font(FontSelection::FontId(FontId::new(12.0, FontFamily::Proportional)))
-                                .hint_text("Name")
-                                .text_color(text_dark)
-                                .background_color(input_bg),
-                        );
-                        if ui
-                            .add(
-                                egui::Button::new(RichText::new("Add").size(12.0).color(Color32::WHITE))
-                                    .fill(button_primary),
-                            )
-                            .clicked()
-                        {
-                            if !copilot_state.new_favorite_name.is_empty() && !copilot_state.user_input.is_empty() {
-                                copilot_state.add_favorite_prompt(copilot_state.new_favorite_name.clone(), copilot_state.user_input.clone());
-                                copilot_state.new_favorite_name.clear();
-                            }
-                        }
-                        let mut to_remove_fav = None;
-                        for (i, fav) in copilot_state.favorite_prompts.iter().enumerate() {
-                            ui.horizontal(|ui| {
-                                ui.label(
-                                    RichText::new(fav.name.clone()).size(12.0).color(text_gray),
-                                );
-                                if ui
-                                    .add(
-                                        egui::Button::new(RichText::new("×").size(12.0).color(button_danger))
-                                            .fill(Color32::from_rgb(255, 220, 220)),
-                                    )
-                                    .clicked()
-                                {
-                                    to_remove_fav = Some(i);
-                                }
-                            });
-                        }
-                        if let Some(i) = to_remove_fav {
-                            copilot_state.remove_favorite_prompt(i);
-                        }
                     },
                 );
 
@@ -559,20 +493,61 @@ pub fn build_copilot_panel(
                 ScrollArea::vertical()
                     .id_salt("copilot_output")
                     .auto_shrink([false, false])
-                    .max_height(ui.available_height() - 160.0)
+                    .max_height(ui.available_height() - 100.0)
                     .show(ui, |ui| {
-                        for msg in &copilot_state.messages {
+                        let mut last_assistant_index = None;
+                        for (msg_idx, msg) in copilot_state.messages.iter().enumerate() {
+                            if msg.role == "assistant" {
+                                last_assistant_index = Some(msg_idx);
+                            }
+                        }
+                        
+                        let mut prompts_to_add: Vec<(String, String)> = Vec::new();
+                        let mut outputs_to_insert_from_history: Vec<String> = Vec::new();
+                        
+                        for (msg_idx, msg) in copilot_state.messages.iter().enumerate() {
                             let (label, color) = match msg.role.as_str() {
                                 "user" => ("User", user_color),
                                 "assistant" => ("Assistant", assistant_color),
                                 _ => ("Unknown", text_gray),
                             };
-                            ui.label(
-                                RichText::new(format!("{}:", label))
-                                    .size(14.0)
-                                    .color(color)
-                                    .strong(),
-                            );
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    RichText::new(format!("{}:", label))
+                                        .size(14.0)
+                                        .color(color)
+                                        .strong(),
+                                );
+                                if msg.role == "user" {
+                                    let msg_display = msg.display.clone();
+                                    let prompt_name = format!("Prompt {}", msg_idx + 1);
+                                    if ui
+                                        .add(
+                                            egui::Button::new(
+                                                RichText::new("+").size(12.0).color(Color32::WHITE),
+                                            )
+                                            .fill(button_primary),
+                                        )
+                                        .clicked()
+                                    {
+                                        prompts_to_add.push((prompt_name, msg_display));
+                                    }
+                                }
+                                if msg.role == "assistant" && last_assistant_index == Some(msg_idx) {
+                                    let msg_content = msg.content.clone();
+                                    if ui
+                                        .add(
+                                            egui::Button::new(
+                                                RichText::new("Insert").size(12.0).color(Color32::WHITE),
+                                            )
+                                            .fill(Color32::from_rgb(60, 100, 180)),
+                                        )
+                                        .clicked()
+                                    {
+                                        outputs_to_insert_from_history.push(msg_content);
+                                    }
+                                }
+                            });
                             let display_text = if msg.role == "user" {
                                 &msg.display
                             } else {
@@ -591,14 +566,37 @@ pub fn build_copilot_panel(
                             );
                             ui.separator();
                         }
+                        
+                        for (name, prompt) in prompts_to_add {
+                            copilot_state.favorite_prompts.push(FavoritePrompt { name, prompt });
+                        }
+                        if let Some(content) = outputs_to_insert_from_history.first() {
+                            output_to_insert = Some(content.clone());
+                        }
 
                         if copilot_state.waiting || !copilot_state.output.is_empty() {
-                            ui.label(
-                                RichText::new("Assistant:")
-                                    .size(14.0)
-                                    .color(assistant_color)
-                                    .strong(),
-                            );
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    RichText::new("Assistant:")
+                                        .size(14.0)
+                                        .color(assistant_color)
+                                        .strong(),
+                                );
+                                if !copilot_state.waiting && !copilot_state.output.is_empty() {
+                                    let output_clone = copilot_state.output.clone();
+                                    if ui
+                                        .add(
+                                            egui::Button::new(
+                                                RichText::new("Insert").size(12.0).color(Color32::WHITE),
+                                            )
+                                            .fill(Color32::from_rgb(60, 100, 180)),
+                                        )
+                                        .clicked()
+                                    {
+                                        output_to_insert = Some(output_clone);
+                                    }
+                                }
+                            });
                             ui.add(
                                 TextEdit::multiline(&mut copilot_state.output.clone())
                                     .desired_width(COPILOT_PANEL_WIDTH - 20.0)
@@ -610,31 +608,30 @@ pub fn build_copilot_panel(
                                     .background_color(input_bg)
                                     .interactive(false),
                             );
-                            if !copilot_state.waiting && !copilot_state.output.is_empty() {
-                                if ui
-                                    .add(
-                                        egui::Button::new(
-                                            RichText::new("Insert Output").size(12.0).color(Color32::WHITE),
-                                        )
-                                        .fill(Color32::from_rgb(60, 100, 180)),
-                                    )
-                                    .clicked()
-                                {
-                                    output_to_insert = Some(copilot_state.output.clone());
-                                }
-                            }
                         }
                     });
 
                 ui.horizontal(|ui| {
+                    egui::ComboBox::from_id_salt("fav_prompts_combo")
+                        .width(80.0)
+                        .selected_text("Favorites")
+                        .show_ui(ui, |ui| {
+                            for (_i, fav) in copilot_state.favorite_prompts.iter().enumerate() {
+                                ui.selectable_value(
+                                    &mut copilot_state.user_input,
+                                    fav.prompt.clone(),
+                                    fav.name.clone(),
+                                );
+                            }
+                        });
                     ui.add(
                         TextEdit::singleline(&mut copilot_state.user_input)
-                            .desired_width(COPILOT_PANEL_WIDTH - 80.0)
+                            .desired_width(COPILOT_PANEL_WIDTH - 140.0)
                             .font(FontSelection::FontId(FontId::new(
                                 14.0,
                                 FontFamily::Proportional,
                             )))
-                            .hint_text("Type prompt, use #0-#9 for buffers")
+                            .hint_text("Type prompt, use #0-#9")
                             .text_color(text_dark)
                             .background_color(input_bg),
                     );
