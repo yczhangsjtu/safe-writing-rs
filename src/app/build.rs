@@ -73,11 +73,16 @@ impl MyApp {
                             ui.allocate_ui(egui::Vec2::new(copilot_width, ui.available_height()), |ui| {
                                 let selected_text = Some(editor_state.selected_text());
                                 let reload_error = editor_state.copilot_reload_error();
+                                let current_passage: &str = editor_state.plaintext()
+                                    .content_of_passage(editor_state.selected_index())
+                                    .map(|s| s.as_str())
+                                    .unwrap_or("");
                                 let (output_to_insert, needs_save_ai) = copilot::build_copilot_panel(
                                     &mut self.copilot,
                                     &self.config,
                                     selected_text,
                                     editor_state.plaintext(),
+                                    current_passage,
                                     reload_error,
                                     ui,
                                 );

@@ -4,8 +4,8 @@ use std::io::BufRead;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use eframe::egui;
-use egui::{Color32, FontFamily, FontId, FontSelection, RichText, ScrollArea, TextEdit, Widget};
 use egui::containers::menu::MenuButton;
+use egui::{Color32, FontFamily, FontId, FontSelection, RichText, ScrollArea, TextEdit, Widget};
 
 pub const AI_PASSAGE_NAME: &str = ".ai";
 
@@ -76,7 +76,10 @@ fn extract_favorite_prompts(xml: &str) -> Option<Vec<(String, String)>> {
         let after_prompt_start = &remaining[prompt_start + 8..];
         if let Some(prompt_end) = after_prompt_start.find("</prompt>") {
             let prompt_content = &after_prompt_start[..prompt_end];
-            if let (Some(name), Some(content)) = (extract_tag(prompt_content, "name"), extract_tag(prompt_content, "content")) {
+            if let (Some(name), Some(content)) = (
+                extract_tag(prompt_content, "name"),
+                extract_tag(prompt_content, "content"),
+            ) {
                 result.push((name, content));
             }
             remaining = &after_prompt_start[prompt_end + 9..];
@@ -95,7 +98,10 @@ fn extract_buffers(xml: &str) -> Option<Vec<String>> {
         let after_buffer_start = &remaining[buffer_start..];
         if let Some(gt_pos) = after_buffer_start.find('>') {
             let attr_part = &after_buffer_start[7..gt_pos];
-            if let Some(index_str) = attr_part.strip_prefix(" index=\"").and_then(|s| s.strip_suffix("\"")) {
+            if let Some(index_str) = attr_part
+                .strip_prefix(" index=\"")
+                .and_then(|s| s.strip_suffix("\""))
+            {
                 if let Ok(index) = index_str.parse::<usize>() {
                     let content_start = gt_pos + 1;
                     if let Some(end_tag) = after_buffer_start.find("</buffer>") {
@@ -135,19 +141,29 @@ impl CopilotState {
     pub fn to_xml(&self) -> String {
         let mut xml = String::new();
         xml.push_str("<ai_settings>\n");
-        xml.push_str(&format!("  <system_prompt>{}</system_prompt>\n", escape_xml(&self.system_prompt)));
+        xml.push_str(&format!(
+            "  <system_prompt>{}</system_prompt>\n",
+            escape_xml(&self.system_prompt)
+        ));
         xml.push_str("  <favorite_prompts>\n");
         for fav in &self.favorite_prompts {
             xml.push_str("    <prompt>\n");
             xml.push_str(&format!("      <name>{}</name>\n", escape_xml(&fav.name)));
-            xml.push_str(&format!("      <content>{}</content>\n", escape_xml(&fav.prompt)));
+            xml.push_str(&format!(
+                "      <content>{}</content>\n",
+                escape_xml(&fav.prompt)
+            ));
             xml.push_str("    </prompt>\n");
         }
         xml.push_str("  </favorite_prompts>\n");
         xml.push_str("  <buffers>\n");
         for (i, buf) in self.buffers.iter().enumerate().take(10) {
             if !buf.is_empty() {
-                xml.push_str(&format!("    <buffer index=\"{}\">{}</buffer>\n", i, escape_xml(buf)));
+                xml.push_str(&format!(
+                    "    <buffer index=\"{}\">{}</buffer>\n",
+                    i,
+                    escape_xml(buf)
+                ));
             }
         }
         xml.push_str("  </buffers>\n");
@@ -155,7 +171,7 @@ impl CopilotState {
         xml
     }
 
-pub fn from_xml(xml: &str) -> Option<Self> {
+    pub fn from_xml(xml: &str) -> Option<Self> {
         let system_prompt = extract_tag(xml, "system_prompt")?;
         let favorite_prompts = extract_favorite_prompts(xml)?;
         let buffers = extract_buffers(xml).unwrap_or_else(|| vec![String::new(); 10]);
@@ -169,10 +185,13 @@ pub fn from_xml(xml: &str) -> Option<Self> {
             stream_receiver: None,
             abort_sender: None,
             waiting: false,
-            favorite_prompts: favorite_prompts.into_iter().map(|(name, prompt)| FavoritePrompt {
-                name: unescape_xml(&name),
-                prompt: unescape_xml(&prompt),
-            }).collect(),
+            favorite_prompts: favorite_prompts
+                .into_iter()
+                .map(|(name, prompt)| FavoritePrompt {
+                    name: unescape_xml(&name),
+                    prompt: unescape_xml(&prompt),
+                })
+                .collect(),
         })
     }
 
@@ -232,8 +251,11 @@ pub fn from_xml(xml: &str) -> Option<Self> {
         Ok(())
     }
 
-pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
-        let ai_passage_index = plaintext.passages().iter().position(|p| p.title() == AI_PASSAGE_NAME);
+    pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
+        let ai_passage_index = plaintext
+            .passages()
+            .iter()
+            .position(|p| p.title() == AI_PASSAGE_NAME);
         let xml = self.to_xml();
         if let Some(index) = ai_passage_index {
             plaintext.set_content(index, xml);
@@ -243,7 +265,7 @@ pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
         }
     }
 
-    pub fn send_message(&mut self, config: &Config, full_passage: &str) {
+    pub fn send_message(&mut self, config: &Config, current_passage: &str) {
         if self.user_input.trim().is_empty() {
             return;
         }
@@ -251,7 +273,7 @@ pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
         let prompt = self.user_input.clone();
         self.user_input.clear();
 
-        let xml_content = Self::build_prompt(&prompt, &self.buffers, full_passage);
+        let xml_content = Self::build_prompt(&prompt, &self.buffers, current_passage);
 
         // Add user message to history (store both raw and XML)
         self.messages.push(Message {
@@ -342,20 +364,20 @@ pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
         });
     }
 
-    fn build_prompt(prompt: &str, buffers: &[String], full_passage: &str) -> String {
+    fn build_prompt(prompt: &str, buffers: &[String], current_passage: &str) -> String {
         let buffer_names = [
-            "first", "second", "third", "fourth", "fifth",
-            "sixth", "seventh", "eighth", "ninth", "tenth",
+            "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth",
+            "tenth",
         ];
-        
+
         let mut result = String::new();
         let mut referenced_names: Vec<(&str, usize)> = Vec::new();
         let mut include_all = false;
-        
+
         if prompt.contains("<all>") {
             include_all = true;
         }
-        
+
         for (i, _) in buffers.iter().enumerate().take(10) {
             let id = format!("#{}", i);
             if prompt.contains(&id) {
@@ -365,10 +387,12 @@ pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
 
         if !referenced_names.is_empty() || include_all {
             result.push_str("<instructions>\n");
-            result.push_str("The user references text buffers using placeholders like <first>, <second>, etc. ");
+            result.push_str(
+                "The user references text buffers using placeholders like <first>, <second>, etc. ",
+            );
             result.push_str("Each referenced buffer content is provided below.\n");
             if include_all {
-                result.push_str("The special buffer <all> contains the entire passage.\n");
+                result.push_str("The special buffer <all> contains the current passage.\n");
             }
             result.push_str("</instructions>\n\n");
         }
@@ -393,7 +417,7 @@ pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
             }
             if include_all {
                 result.push_str("<all>\n");
-                result.push_str(full_passage);
+                result.push_str(current_passage);
                 result.push_str("\n</all>\n");
             }
             result.push_str("</referenced_buffers>\n");
@@ -488,10 +512,10 @@ pub fn build_copilot_panel(
     config: &Config,
     selected_text: Option<&str>,
     plaintext: &PlainText,
+    current_passage: &str,
     reload_error: Option<&String>,
     ui: &mut egui::Ui,
 ) -> (Option<String>, bool) {
-    let full_passage: String = plaintext.passages().iter().map(|p| p.content().as_str()).collect::<Vec<_>>().join("\n\n");
     let bg = Color32::from_rgb(30, 30, 35);
     let text_light = Color32::from_rgb(220, 220, 230);
     let text_gray = Color32::from_rgb(150, 150, 160);
@@ -519,7 +543,7 @@ pub fn build_copilot_panel(
             ui.visuals_mut().widgets.active.fg_stroke.color = text_light;
             ui.visuals_mut().widgets.active.bg_fill = Color32::from_rgb(60, 100, 180);
             ui.visuals_mut().window_fill = bg;
-            
+
             let ctx = ui.ctx().clone();
             if copilot_state.poll_stream(&ctx) {
                 ctx.request_repaint();
@@ -558,31 +582,30 @@ pub fn build_copilot_panel(
                         copilot_state.clear_history();
                     }
                 });
-                
+
                 if let Some(err) = reload_error {
-                    ui.label(
-                        RichText::new(err)
-                            .size(14.0)
-                            .color(button_danger),
-                    );
+                    ui.label(RichText::new(err).size(14.0).color(button_danger));
                 }
-                
+
                 ui.separator();
 
                 ui.collapsing(
                     RichText::new("System Prompt").color(text_light).strong(),
                     |ui| {
-                        if ui.add(
-                            TextEdit::multiline(&mut copilot_state.system_prompt)
-                                .desired_width(ui.available_width() - 4.0)
-                                .desired_rows(3)
-                                .font(FontSelection::FontId(FontId::new(
-                                    14.0,
-                                    FontFamily::Proportional,
-                                )))
-                                .text_color(text_light)
-                                .background_color(input_bg),
-                        ).changed() {
+                        if ui
+                            .add(
+                                TextEdit::multiline(&mut copilot_state.system_prompt)
+                                    .desired_width(ui.available_width() - 4.0)
+                                    .desired_rows(3)
+                                    .font(FontSelection::FontId(FontId::new(
+                                        14.0,
+                                        FontFamily::Proportional,
+                                    )))
+                                    .text_color(text_light)
+                                    .background_color(input_bg),
+                            )
+                            .changed()
+                        {
                             needs_save_ai = true;
                         }
                     },
@@ -611,8 +634,8 @@ pub fn build_copilot_panel(
                             }
                         }
                         let buffer_names = [
-                            "first", "second", "third", "fourth", "fifth",
-                            "sixth", "seventh", "eighth", "ninth", "tenth",
+                            "first", "second", "third", "fourth", "fifth", "sixth", "seventh",
+                            "eighth", "ninth", "tenth",
                         ];
                         let mut to_remove = None;
                         for (i, buf) in copilot_state.buffers.iter().enumerate() {
@@ -623,9 +646,15 @@ pub fn build_copilot_panel(
                             let summary = make_brief_summary(buf, 30);
                             ui.horizontal(|ui| {
                                 ui.label(
-                                    RichText::new(format!("#{} ({}): {} ({})", i, name, summary, buf.chars().count()))
-                                        .size(14.0)
-                                        .color(text_gray),
+                                    RichText::new(format!(
+                                        "#{} ({}): {} ({})",
+                                        i,
+                                        name,
+                                        summary,
+                                        buf.chars().count()
+                                    ))
+                                    .size(14.0)
+                                    .color(text_gray),
                                 );
                                 if ui
                                     .add(
@@ -660,10 +689,10 @@ pub fn build_copilot_panel(
                                 last_assistant_index = Some(msg_idx);
                             }
                         }
-                        
+
                         let mut prompts_to_add: Vec<(String, String)> = Vec::new();
                         let mut outputs_to_insert_from_history: Vec<String> = Vec::new();
-                        
+
                         for (msg_idx, msg) in copilot_state.messages.iter().enumerate() {
                             let (label, color) = match msg.role.as_str() {
                                 "user" => ("User", user_color),
@@ -691,12 +720,15 @@ pub fn build_copilot_panel(
                                         prompts_to_add.push((prompt_name, msg_display));
                                     }
                                 }
-                                if msg.role == "assistant" && last_assistant_index == Some(msg_idx) {
+                                if msg.role == "assistant" && last_assistant_index == Some(msg_idx)
+                                {
                                     let msg_content = msg.content.clone();
                                     if ui
                                         .add(
                                             egui::Button::new(
-                                                RichText::new("Insert").size(12.0).color(Color32::WHITE),
+                                                RichText::new("Insert")
+                                                    .size(12.0)
+                                                    .color(Color32::WHITE),
                                             )
                                             .fill(Color32::from_rgb(60, 100, 180)),
                                         )
@@ -724,9 +756,11 @@ pub fn build_copilot_panel(
                             );
                             ui.separator();
                         }
-                        
+
                         for (name, prompt) in prompts_to_add {
-                            copilot_state.favorite_prompts.push(FavoritePrompt { name, prompt });
+                            copilot_state
+                                .favorite_prompts
+                                .push(FavoritePrompt { name, prompt });
                             needs_save_ai = true;
                         }
                         if let Some(content) = outputs_to_insert_from_history.first() {
@@ -746,7 +780,9 @@ pub fn build_copilot_panel(
                                     if ui
                                         .add(
                                             egui::Button::new(
-                                                RichText::new("Insert").size(12.0).color(Color32::WHITE),
+                                                RichText::new("Insert")
+                                                    .size(12.0)
+                                                    .color(Color32::WHITE),
                                             )
                                             .fill(Color32::from_rgb(60, 100, 180)),
                                         )
@@ -772,9 +808,9 @@ pub fn build_copilot_panel(
 
                 ui.horizontal(|ui| {
                     MenuButton::from_button(
-                        egui::Button::new(RichText::new("Favs").color(text_light))
-                            .fill(input_bg)
-                    ).ui(ui, |ui| {
+                        egui::Button::new(RichText::new("Favs").color(text_light)).fill(input_bg),
+                    )
+                    .ui(ui, |ui| {
                         for fav in &copilot_state.favorite_prompts {
                             if egui::Button::new(RichText::new(&fav.name).color(text_light))
                                 .fill(bg)
@@ -786,9 +822,13 @@ pub fn build_copilot_panel(
                             }
                         }
                     });
-                    ui.label(RichText::new("#0-#9 buffers, <all> entire passage").size(12.0).color(text_gray));
+                    ui.label(
+                        RichText::new("#0-#9 buffers, <all> current passage")
+                            .size(12.0)
+                            .color(text_gray),
+                    );
                 });
-                
+
                 ui.add(
                     TextEdit::multiline(&mut copilot_state.user_input)
                         .desired_width(ui.available_width() - 4.0)
@@ -801,7 +841,7 @@ pub fn build_copilot_panel(
                         .text_color(text_light)
                         .background_color(input_bg),
                 );
-                
+
                 ui.horizontal(|ui| {
                     if copilot_state.waiting {
                         if ui
@@ -828,7 +868,7 @@ pub fn build_copilot_panel(
                                 .ctx()
                                 .input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.ctrl)
                         {
-                            copilot_state.send_message(config, &full_passage);
+                            copilot_state.send_message(config, current_passage);
                         }
                     }
                 });
