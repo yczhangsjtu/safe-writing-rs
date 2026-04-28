@@ -72,30 +72,35 @@ impl MyApp {
                         if copilot_visible {
                             ui.allocate_ui(egui::Vec2::new(copilot_width, ui.available_height()), |ui| {
                                 let selected_text = Some(editor_state.selected_text());
-                                let output_to_insert = copilot::build_copilot_panel(
+                                let reload_error = editor_state.copilot_reload_error();
+                                let (output_to_insert, needs_save_ai) = copilot::build_copilot_panel(
                                     &mut self.copilot,
                                     &self.config,
                                     selected_text,
                                     editor_state.plaintext(),
+                                    reload_error,
                                     ui,
                                 );
                                 if let Some(output) = output_to_insert {
                                     editor_state.set_text_to_insert(output);
                                 }
+                                if needs_save_ai {
+                                    self.copilot.save_to_plaintext(editor_state.plaintext_mut());
+                                    editor_state.mark_dirty();
+                                }
                             });
                         }
                     });
                     if editor_state.save_with_copilot() {
-                        if copilot_visible {
-                            self.copilot.save_to_plaintext(editor_state.plaintext_mut());
-                        }
                         Self::save(editor_state);
+                        if let Err(err) = self.copilot.reload_from_plaintext(editor_state.plaintext()) {
+                            editor_state.set_copilot_reload_error(Some(err));
+                        } else {
+                            editor_state.set_copilot_reload_error(None);
+                        }
                         editor_state.set_save_with_copilot(false);
                     }
                     if editor_state.save_and_lock_with_copilot() {
-                        if copilot_visible {
-                            self.copilot.save_to_plaintext(editor_state.plaintext_mut());
-                        }
                         Self::save_and_lock(&mut self.next_content, editor_state);
                         self.copilot.clear();
                         editor_state.set_save_and_lock_with_copilot(false);

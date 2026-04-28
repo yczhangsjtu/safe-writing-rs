@@ -33,6 +33,7 @@ pub struct EditorState {
     pub(super) selected_text: String,
     pub(super) save_with_copilot: bool,
     pub(super) save_and_lock_with_copilot: bool,
+    pub(super) copilot_reload_error: Option<String>,
 }
 
 impl EditorState {
@@ -267,5 +268,17 @@ impl EditorState {
 
     pub fn set_text_to_insert(&mut self, text: String) {
         self.text_to_insert = Some(text);
+    }
+
+    pub fn set_copilot_reload_error(&mut self, error: Option<String>) {
+        self.copilot_reload_error = error;
+    }
+
+    pub fn copilot_reload_error(&self) -> Option<&String> {
+        self.copilot_reload_error.as_ref()
+    }
+
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
     }
 }

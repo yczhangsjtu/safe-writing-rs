@@ -211,6 +211,26 @@ pub fn from_xml(xml: &str) -> Option<Self> {
         }
     }
 
+    pub fn reload_from_plaintext(&mut self, plaintext: &PlainText) -> Result<(), String> {
+        for passage in plaintext.passages() {
+            if passage.title() == AI_PASSAGE_NAME {
+                match Self::from_xml(passage.content()) {
+                    Some(state) => {
+                        self.system_prompt = state.system_prompt;
+                        self.favorite_prompts = state.favorite_prompts;
+                        self.buffers = state.buffers;
+                        return Ok(());
+                    }
+                    None => {
+                        return Err("Failed to parse .ai passage XML".to_string());
+                    }
+                }
+            }
+        }
+        self.clear();
+        Ok(())
+    }
+
 pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
         let ai_passage_index = plaintext.passages().iter().position(|p| p.title() == AI_PASSAGE_NAME);
         let xml = self.to_xml();
@@ -467,8 +487,9 @@ pub fn build_copilot_panel(
     config: &Config,
     selected_text: Option<&str>,
     plaintext: &PlainText,
+    reload_error: Option<&String>,
     ui: &mut egui::Ui,
-) -> Option<String> {
+) -> (Option<String>, bool) {
     let full_passage: String = plaintext.passages().iter().map(|p| p.content().as_str()).collect::<Vec<_>>().join("\n\n");
     let bg = Color32::from_rgb(245, 245, 250);
     let text_dark = Color32::from_rgb(30, 30, 40);
@@ -482,6 +503,7 @@ pub fn build_copilot_panel(
     let button_secondary_text = Color32::from_rgb(50, 50, 60);
 
     let mut output_to_insert = None;
+    let mut needs_save_ai = false;
 
     egui::Frame::new()
         .fill(bg)
@@ -525,22 +547,33 @@ pub fn build_copilot_panel(
                         copilot_state.clear_history();
                     }
                 });
+                
+                if let Some(err) = reload_error {
+                    ui.label(
+                        RichText::new(err)
+                            .size(14.0)
+                            .color(button_danger),
+                    );
+                }
+                
                 ui.separator();
 
                 ui.collapsing(
                     RichText::new("System Prompt").color(text_dark).strong(),
                     |ui| {
-ui.add(
-                        TextEdit::multiline(&mut copilot_state.system_prompt)
-                            .desired_width(ui.available_width() - 4.0)
-                            .desired_rows(3)
-                            .font(FontSelection::FontId(FontId::new(
-                                14.0,
-                                FontFamily::Proportional,
-                            )))
-                            .text_color(text_dark)
-                            .background_color(input_bg),
-                    );
+                        if ui.add(
+                            TextEdit::multiline(&mut copilot_state.system_prompt)
+                                .desired_width(ui.available_width() - 4.0)
+                                .desired_rows(3)
+                                .font(FontSelection::FontId(FontId::new(
+                                    14.0,
+                                    FontFamily::Proportional,
+                                )))
+                                .text_color(text_dark)
+                                .background_color(input_bg),
+                        ).changed() {
+                            needs_save_ai = true;
+                        }
                     },
                 );
 
@@ -563,6 +596,7 @@ ui.add(
                                     .clicked()
                             {
                                 copilot_state.add_buffer(text.to_string());
+                                needs_save_ai = true;
                             }
                         }
                         let buffer_names = [
@@ -597,6 +631,7 @@ ui.add(
                         }
                         if let Some(i) = to_remove {
                             copilot_state.remove_buffer(i);
+                            needs_save_ai = true;
                         }
                     },
                 );
@@ -681,6 +716,7 @@ ui.add(
                         
                         for (name, prompt) in prompts_to_add {
                             copilot_state.favorite_prompts.push(FavoritePrompt { name, prompt });
+                            needs_save_ai = true;
                         }
                         if let Some(content) = outputs_to_insert_from_history.first() {
                             output_to_insert = Some(content.clone());
@@ -784,5 +820,5 @@ ui.add(
                 });
             });
         });
-    output_to_insert
+    (output_to_insert, needs_save_ai)
 }
