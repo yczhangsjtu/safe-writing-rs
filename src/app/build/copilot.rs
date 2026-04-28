@@ -86,6 +86,33 @@ fn extract_favorite_prompts(xml: &str) -> Option<Vec<(String, String)>> {
     Some(result)
 }
 
+fn extract_buffers(xml: &str) -> Option<Vec<String>> {
+    let buffers_section = extract_tag(xml, "buffers")?;
+    let mut buffers = vec![String::new(); 10];
+    let mut remaining = buffers_section.as_str();
+    while let Some(buffer_start) = remaining.find("<buffer") {
+        let after_buffer_start = &remaining[buffer_start..];
+        if let Some(gt_pos) = after_buffer_start.find('>') {
+            let attr_part = &after_buffer_start[7..gt_pos];
+            if let Some(index_str) = attr_part.strip_prefix(" index=\"").and_then(|s| s.strip_suffix("\"")) {
+                if let Ok(index) = index_str.parse::<usize>() {
+                    let content_start = gt_pos + 1;
+                    if let Some(end_tag) = after_buffer_start.find("</buffer>") {
+                        let content = &after_buffer_start[content_start..end_tag];
+                        if index < 10 {
+                            buffers[index] = unescape_xml(content);
+                        }
+                        remaining = &after_buffer_start[end_tag + 9..];
+                        continue;
+                    }
+                }
+            }
+        }
+        break;
+    }
+    Some(buffers)
+}
+
 impl Default for CopilotState {
     fn default() -> Self {
         Self {
@@ -93,7 +120,7 @@ impl Default for CopilotState {
             system_prompt: "You are a helpful writing assistant.".to_string(),
             user_input: String::new(),
             output: String::new(),
-            buffers: Vec::new(),
+            buffers: vec![String::new(); 10],
             messages: Vec::new(),
             stream_receiver: None,
             abort_sender: None,
@@ -116,6 +143,13 @@ impl CopilotState {
             xml.push_str("    </prompt>\n");
         }
         xml.push_str("  </favorite_prompts>\n");
+        xml.push_str("  <buffers>\n");
+        for (i, buf) in self.buffers.iter().enumerate().take(10) {
+            if !buf.is_empty() {
+                xml.push_str(&format!("    <buffer index=\"{}\">{}</buffer>\n", i, escape_xml(buf)));
+            }
+        }
+        xml.push_str("  </buffers>\n");
         xml.push_str("</ai_settings>");
         xml
     }
@@ -123,12 +157,13 @@ impl CopilotState {
 pub fn from_xml(xml: &str) -> Option<Self> {
         let system_prompt = extract_tag(xml, "system_prompt")?;
         let favorite_prompts = extract_favorite_prompts(xml)?;
+        let buffers = extract_buffers(xml).unwrap_or_else(|| vec![String::new(); 10]);
         Some(Self {
             visible: false,
             system_prompt: unescape_xml(&system_prompt),
             user_input: String::new(),
             output: String::new(),
-            buffers: Vec::new(),
+            buffers,
             messages: Vec::new(),
             stream_receiver: None,
             abort_sender: None,
@@ -147,6 +182,7 @@ pub fn from_xml(xml: &str) -> Option<Self> {
                 if let Some(state) = Self::from_xml(passage.content()) {
                     self.system_prompt = state.system_prompt;
                     self.favorite_prompts = state.favorite_prompts;
+                    self.buffers = state.buffers;
                 }
                 found = true;
                 break;
@@ -164,6 +200,7 @@ pub fn from_xml(xml: &str) -> Option<Self> {
                 if let Some(state) = Self::from_xml(passage.content()) {
                     self.system_prompt = state.system_prompt;
                     self.favorite_prompts = state.favorite_prompts;
+                    self.buffers = state.buffers;
                 }
                 found = true;
                 break;
@@ -394,12 +431,17 @@ pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
     }
 
     pub fn add_buffer(&mut self, text: String) {
-        self.buffers.push(text);
+        for buf in &mut self.buffers {
+            if buf.is_empty() {
+                *buf = text;
+                return;
+            }
+        }
     }
 
     pub fn remove_buffer(&mut self, index: usize) {
         if index < self.buffers.len() {
-            self.buffers.remove(index);
+            self.buffers[index].clear();
         }
     }
 
@@ -416,7 +458,7 @@ pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
         self.system_prompt = Self::default().system_prompt;
         self.favorite_prompts.clear();
         self.user_input.clear();
-        self.buffers.clear();
+        self.buffers = vec![String::new(); 10];
     }
 }
 
@@ -529,6 +571,9 @@ ui.add(
                         ];
                         let mut to_remove = None;
                         for (i, buf) in copilot_state.buffers.iter().enumerate() {
+                            if buf.is_empty() {
+                                continue;
+                            }
                             let name = buffer_names.get(i).copied().unwrap_or("?");
                             let summary = make_brief_summary(buf, 30);
                             ui.horizontal(|ui| {
