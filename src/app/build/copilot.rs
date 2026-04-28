@@ -224,12 +224,25 @@ pub fn build_copilot_panel(
     selected_text: Option<&str>,
     ui: &mut egui::Ui,
 ) {
+    // Light theme color palette
+    let bg = Color32::from_rgb(245, 245, 250);
+    let text_dark = Color32::from_rgb(30, 30, 40);
+    let text_gray = Color32::from_rgb(80, 80, 90);
+    let user_color = Color32::from_rgb(0, 100, 40);
+    let assistant_color = Color32::from_rgb(0, 60, 150);
+    let input_bg = Color32::WHITE;
+    let button_primary = Color32::from_rgb(0, 120, 60);
+    let button_danger = Color32::from_rgb(200, 40, 40);
+    let button_secondary = Color32::from_rgb(220, 220, 230);
+    let button_secondary_text = Color32::from_rgb(50, 50, 60);
+
     egui::Frame::new()
-        .fill(Color32::from_rgb(30, 30, 40))
+        .fill(bg)
         .inner_margin(8.0)
         .show(ui, |ui| {
             ui.set_min_width(COPILOT_PANEL_WIDTH);
             ui.set_max_width(COPILOT_PANEL_WIDTH);
+            ui.visuals_mut().override_text_color = Some(text_dark);
 
             // Poll stream every frame
             copilot_state.poll_stream();
@@ -240,12 +253,18 @@ pub fn build_copilot_panel(
                     ui.label(
                         RichText::new("AI Copilot")
                             .size(16.0)
-                            .color(Color32::LIGHT_BLUE),
+                            .color(assistant_color)
+                            .strong(),
                     );
                     if ui
-                        .add(egui::Button::new(
-                            RichText::new("Clear").size(14.0).color(Color32::WHITE),
-                        ))
+                        .add(
+                            egui::Button::new(
+                                RichText::new("Clear")
+                                    .size(14.0)
+                                    .color(button_secondary_text),
+                            )
+                            .fill(button_secondary),
+                        )
                         .clicked()
                     {
                         copilot_state.clear_history();
@@ -254,59 +273,71 @@ pub fn build_copilot_panel(
                 ui.separator();
 
                 // System prompt
-                ui.collapsing("System Prompt", |ui| {
-                    ui.add(
-                        TextEdit::multiline(&mut copilot_state.system_prompt)
-                            .desired_width(COPILOT_PANEL_WIDTH - 20.0)
-                            .desired_rows(3)
-                            .font(FontSelection::FontId(FontId::new(
-                                14.0,
-                                FontFamily::Proportional,
-                            )))
-                            .text_color(Color32::WHITE),
-                    );
-                });
+                ui.collapsing(
+                    RichText::new("System Prompt").color(text_dark).strong(),
+                    |ui| {
+                        ui.add(
+                            TextEdit::multiline(&mut copilot_state.system_prompt)
+                                .desired_width(COPILOT_PANEL_WIDTH - 20.0)
+                                .desired_rows(3)
+                                .font(FontSelection::FontId(FontId::new(
+                                    14.0,
+                                    FontFamily::Proportional,
+                                )))
+                                .text_color(text_dark)
+                                .background_color(input_bg),
+                        );
+                    },
+                );
 
                 // Buffers
-                ui.collapsing(format!("Buffers ({})", copilot_state.buffers.len()), |ui| {
-                    if let Some(text) = selected_text {
-                        if !text.is_empty()
-                            && ui
-                                .add(
-                                    egui::Button::new(
-                                        RichText::new("Add Selection to Buffer")
-                                            .size(14.0)
-                                            .color(Color32::WHITE),
+                ui.collapsing(
+                    RichText::new(format!("Buffers ({})", copilot_state.buffers.len()))
+                        .color(text_dark)
+                        .strong(),
+                    |ui| {
+                        if let Some(text) = selected_text {
+                            if !text.is_empty()
+                                && ui
+                                    .add(
+                                        egui::Button::new(
+                                            RichText::new("Add Selection to Buffer")
+                                                .size(14.0)
+                                                .color(Color32::WHITE),
+                                        )
+                                        .fill(Color32::from_rgb(60, 100, 180)),
                                     )
-                                    .fill(Color32::DARK_BLUE),
-                                )
-                                .clicked()
-                        {
-                            copilot_state.add_buffer(text.to_string());
-                        }
-                    }
-                    let mut to_remove = None;
-                    for (i, buf) in copilot_state.buffers.iter().enumerate() {
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                RichText::new(format!("#{}: {} chars", i, buf.chars().count()))
-                                    .size(14.0)
-                                    .color(Color32::LIGHT_GRAY),
-                            );
-                            if ui
-                                .add(egui::Button::new(
-                                    RichText::new("×").size(14.0).color(Color32::RED),
-                                ))
-                                .clicked()
+                                    .clicked()
                             {
-                                to_remove = Some(i);
+                                copilot_state.add_buffer(text.to_string());
                             }
-                        });
-                    }
-                    if let Some(i) = to_remove {
-                        copilot_state.remove_buffer(i);
-                    }
-                });
+                        }
+                        let mut to_remove = None;
+                        for (i, buf) in copilot_state.buffers.iter().enumerate() {
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    RichText::new(format!("#{}: {} chars", i, buf.chars().count()))
+                                        .size(14.0)
+                                        .color(text_gray),
+                                );
+                                if ui
+                                    .add(
+                                        egui::Button::new(
+                                            RichText::new("×").size(14.0).color(button_danger),
+                                        )
+                                        .fill(Color32::from_rgb(255, 220, 220)),
+                                    )
+                                    .clicked()
+                                {
+                                    to_remove = Some(i);
+                                }
+                            });
+                        }
+                        if let Some(i) = to_remove {
+                            copilot_state.remove_buffer(i);
+                        }
+                    },
+                );
 
                 ui.separator();
 
@@ -319,9 +350,9 @@ pub fn build_copilot_panel(
                         // Show conversation history
                         for msg in &copilot_state.messages {
                             let (label, color) = match msg.role.as_str() {
-                                "user" => ("User", Color32::LIGHT_GREEN),
-                                "assistant" => ("Assistant", Color32::LIGHT_BLUE),
-                                _ => ("Unknown", Color32::GRAY),
+                                "user" => ("User", user_color),
+                                "assistant" => ("Assistant", assistant_color),
+                                _ => ("Unknown", text_gray),
                             };
                             ui.label(
                                 RichText::new(format!("{}:", label))
@@ -341,7 +372,8 @@ pub fn build_copilot_panel(
                                         14.0,
                                         FontFamily::Proportional,
                                     )))
-                                    .text_color(Color32::WHITE)
+                                    .text_color(text_dark)
+                                    .background_color(input_bg)
                                     .interactive(false),
                             );
                             ui.separator();
@@ -352,7 +384,7 @@ pub fn build_copilot_panel(
                             ui.label(
                                 RichText::new("Assistant:")
                                     .size(14.0)
-                                    .color(Color32::LIGHT_BLUE)
+                                    .color(assistant_color)
                                     .strong(),
                             );
                             ui.add(
@@ -362,7 +394,8 @@ pub fn build_copilot_panel(
                                         14.0,
                                         FontFamily::Proportional,
                                     )))
-                                    .text_color(Color32::WHITE)
+                                    .text_color(text_dark)
+                                    .background_color(input_bg)
                                     .interactive(false),
                             );
                         }
@@ -378,7 +411,8 @@ pub fn build_copilot_panel(
                                 FontFamily::Proportional,
                             )))
                             .hint_text("Type prompt, use #0 #1...")
-                            .text_color(Color32::WHITE),
+                            .text_color(text_dark)
+                            .background_color(input_bg),
                     );
                     if copilot_state.waiting {
                         if ui
@@ -386,7 +420,7 @@ pub fn build_copilot_panel(
                                 egui::Button::new(
                                     RichText::new("Stop").size(14.0).color(Color32::WHITE),
                                 )
-                                .fill(Color32::RED),
+                                .fill(button_danger),
                             )
                             .clicked()
                         {
@@ -398,7 +432,7 @@ pub fn build_copilot_panel(
                                 egui::Button::new(
                                     RichText::new("Send").size(14.0).color(Color32::WHITE),
                                 )
-                                .fill(Color32::DARK_GREEN),
+                                .fill(button_primary),
                             )
                             .clicked()
                             || ui
