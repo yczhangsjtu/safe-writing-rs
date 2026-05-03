@@ -153,7 +153,7 @@ impl MyApp {
             .data_dir()
             .starts_with(my_home().unwrap().unwrap().to_str().unwrap())
         {
-            let folder_icon = egui_material_icons::icons::ICON_FOLDER;
+            let folder_icon = egui_material_icons::icons::ICON_FOLDER.codepoint;
             return format!(
                 "{} $HOME{}",
                 folder_icon,
@@ -170,13 +170,16 @@ impl MyApp {
 }
 
 impl eframe::App for MyApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        ctx.set_theme(Theme::Light);
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        ui.ctx().set_theme(Theme::Light);
         if let Some(content) = self.next_content.take() {
             self.content = content;
         }
         egui::CentralPanel::default()
             .frame(egui::Frame::default().fill(Color32::BLACK))
-            .show(ctx, |ui| self.main_layout(ctx, ui));
+            .show_inside(ui, |ui| {
+                let ctx = ui.ctx().clone();
+                self.main_layout(&ctx, ui);
+            });
     }
 }

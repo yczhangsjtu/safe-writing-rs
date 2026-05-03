@@ -18,7 +18,7 @@ impl MyApp {
     fn build_create_new_file_button(&mut self, ui: &mut egui::Ui) {
         if ui
             .add(Self::make_file_list_top_button(
-                egui_material_icons::icons::ICON_ADD,
+                egui_material_icons::icons::ICON_ADD.into(),
                 self.is_dirty(),
             ))
             .clicked()
@@ -169,7 +169,7 @@ impl MyApp {
     fn build_refresh_button(&mut self, ui: &mut egui::Ui) {
         if ui
             .add(Self::make_file_list_top_button(
-                egui_material_icons::icons::ICON_REFRESH,
+                egui_material_icons::icons::ICON_REFRESH.into(),
                 self.is_dirty(),
             ))
             .clicked()

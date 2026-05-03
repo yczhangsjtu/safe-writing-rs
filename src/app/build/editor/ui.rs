@@ -239,7 +239,7 @@ impl MyApp {
         ui.with_layout(egui::Layout::top_down_justified(egui::Align::Max), |ui| {
             let screen_size = ui.ctx().input(|input| input.content_rect());
             let editor_area = TextEdit::multiline(text)
-                .frame(false)
+                .frame(egui::Frame::NONE)
                 .desired_width(f32::INFINITY)
                 .desired_rows(1.max(((screen_size.height() - 20f32) / (font_size * 1.4)) as usize))
                 // .desired_rows(50)

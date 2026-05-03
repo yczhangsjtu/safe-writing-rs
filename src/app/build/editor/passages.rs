@@ -223,7 +223,7 @@ impl MyApp {
         if ui
             .add(
                 Self::make_control_button(
-                    egui_material_icons::icons::ICON_ADD,
+                    egui_material_icons::icons::ICON_ADD.into(),
                     ButtonStyle::Normal,
                     false,
                 )
@@ -241,7 +241,7 @@ impl MyApp {
         if ui
             .add(
                 Self::make_control_button(
-                    egui_material_icons::icons::ICON_SAVE,
+                    egui_material_icons::icons::ICON_SAVE.into(),
                     ButtonStyle::Normal,
                     !editor_state.dirty,
                 )
@@ -282,9 +282,9 @@ impl MyApp {
         if ui
             .add(Self::make_passage_list_top_button(
                 if up {
-                    egui_material_icons::icons::ICON_MOVE_UP
+                    egui_material_icons::icons::ICON_MOVE_UP.into()
                 } else {
-                    egui_material_icons::icons::ICON_MOVE_DOWN
+                    egui_material_icons::icons::ICON_MOVE_DOWN.into()
                 },
                 ButtonStyle::Normal,
                 false,

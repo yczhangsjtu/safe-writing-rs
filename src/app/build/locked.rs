@@ -197,9 +197,9 @@ impl MyApp {
                     RichText::from(format!(
                         "Change Password {}",
                         if encrypted_file_state.change_password_show {
-                            egui_material_icons::icons::ICON_ARROW_UPWARD
+                            egui_material_icons::icons::ICON_ARROW_UPWARD.codepoint
                         } else {
-                            egui_material_icons::icons::ICON_ARROW_DOWNWARD
+                            egui_material_icons::icons::ICON_ARROW_DOWNWARD.codepoint
                         }
                     ))
                     .size(12.0)
