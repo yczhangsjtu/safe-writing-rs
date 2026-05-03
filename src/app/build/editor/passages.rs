@@ -74,16 +74,21 @@ impl MyApp {
         ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
                 Self::build_add_button(editor_state, ui);
-                Self::build_save_button(editor_state, copilot_visible, ui);
+                Self::build_save_button(editor_state, ui);
                 Self::build_move_button(editor_state, editor_state.selected_index(), true, ui);
                 Self::build_move_button(editor_state, editor_state.selected_index(), false, ui);
-                Self::build_passage_list_menu_buttons(editor_state, copilot_visible, ui, next_content);
+                Self::build_passage_list_menu_buttons(
+                    editor_state,
+                    copilot_visible,
+                    ui,
+                    next_content,
+                );
             });
             if ui
                 .ctx()
                 .input(|i| i.key_pressed(Key::S) && i.modifiers.command)
             {
-                editor_state.set_save_with_copilot(copilot_visible);
+                editor_state.set_save_with_copilot(true);
             }
             if ui
                 .ctx()
@@ -232,7 +237,7 @@ impl MyApp {
         }
     }
 
-    fn build_save_button(editor_state: &mut EditorState, copilot_visible: bool, ui: &mut egui::Ui) {
+    fn build_save_button(editor_state: &mut EditorState, ui: &mut egui::Ui) {
         if ui
             .add(
                 Self::make_control_button(
@@ -245,7 +250,7 @@ impl MyApp {
             .clicked()
             && editor_state.dirty
         {
-            editor_state.set_save_with_copilot(copilot_visible);
+            editor_state.set_save_with_copilot(true);
         }
     }
 
