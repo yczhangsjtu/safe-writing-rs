@@ -676,6 +676,7 @@ pub fn build_copilot_panel(
 
                         let mut prompts_to_add: Vec<(String, String)> = Vec::new();
                         let mut outputs_to_insert_from_history: Vec<String> = Vec::new();
+                        let mut message_to_delete: Option<usize> = None;
 
                         for (msg_idx, msg) in copilot_state.messages.iter().enumerate() {
                             let (label, color) = match msg.role.as_str() {
@@ -703,6 +704,15 @@ pub fn build_copilot_panel(
                                     if btn.clicked() {
                                         prompts_to_add.push((prompt_name, msg_display));
                                     }
+                                }
+                                let delete_btn = ui.add(
+                                    egui::Button::new(
+                                        RichText::new("Delete").size(12.0).color(Color32::WHITE),
+                                    )
+                                    .fill(button_danger),
+                                );
+                                if delete_btn.clicked() {
+                                    message_to_delete = Some(msg_idx);
                                 }
                                 if msg.role == "assistant" && last_assistant_index == Some(msg_idx)
                                 {
@@ -749,6 +759,11 @@ pub fn build_copilot_panel(
                         }
                         if let Some(content) = outputs_to_insert_from_history.first() {
                             output_to_insert = Some(content.clone());
+                        }
+                        if let Some(msg_idx) = message_to_delete {
+                            if msg_idx < copilot_state.messages.len() {
+                                copilot_state.messages.remove(msg_idx);
+                            }
                         }
 
                         if copilot_state.waiting || !copilot_state.output.is_empty() {
