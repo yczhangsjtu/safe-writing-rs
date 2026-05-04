@@ -93,6 +93,9 @@
 
       if (passwordDialogMode === 'new') {
         await api.createFile(pendingFilename, password);
+        // Refresh file list after creating new file
+        const fileList = await api.listFiles();
+        files.set(fileList);
         const decryptResult = await api.decryptFile(pendingFilename, '', password);
         currentFile.set(pendingFilename);
         passages.set(decryptResult.passages);
