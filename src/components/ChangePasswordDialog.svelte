@@ -88,83 +88,103 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.4);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1000;
+    backdrop-filter: blur(4px);
   }
 
   .dialog {
-    background: var(--bg-primary);
-    border-radius: 12px;
-    padding: 24px;
-    min-width: 300px;
-    max-width: 400px;
+    background: var(--bg-modal);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-xl);
+    min-width: 280px;
+    max-width: 360px;
+    box-shadow: var(--shadow-lg);
+    animation: slideIn 0.2s ease;
   }
 
   .dialog h2 {
-    margin-bottom: 16px;
+    margin-bottom: var(--spacing-lg);
     text-align: center;
     color: var(--text-primary);
+    font-size: var(--font-size-lg);
+    font-weight: 500;
   }
 
   .error {
-    margin-bottom: 12px;
-    padding: 8px;
-    background: rgba(231, 76, 60, 0.1);
-    border-radius: 4px;
+    margin-bottom: var(--spacing-md);
+    padding: var(--spacing-sm);
+    background: rgba(220, 38, 38, 0.1);
+    border-radius: var(--radius-sm);
     text-align: center;
     color: var(--danger-color);
+    font-size: var(--font-size-xs);
   }
 
   .form {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--spacing-md);
   }
 
   label {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--spacing-xs);
   }
 
   label span {
-    font-size: 14px;
-    color: var(--text-secondary);
+    font-size: var(--font-size-xs);
+    color: var(--text-faint);
   }
 
   input {
-    padding: 10px 12px;
-    border: 1px solid var(--border-color);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1px solid var(--border-color-faint);
     background: var(--bg-input);
     color: var(--text-primary);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+  }
+
+  input:focus {
+    outline: none;
+    border-color: var(--accent-color);
   }
 
   .actions {
     display: flex;
-    gap: 8px;
-    margin-top: 16px;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-lg);
   }
 
   .actions button {
     flex: 1;
-    padding: 10px;
+    padding: var(--spacing-sm);
     border: none;
-    background: var(--bg-button);
-    color: var(--text-primary);
-    border-radius: 4px;
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
     cursor: pointer;
+    font-size: var(--font-size-xs);
+    transition: all 0.15s ease;
+  }
+
+  .actions button:hover {
+    background: var(--bg-hover-active);
+    color: var(--text-primary);
   }
 
   .btn-primary {
     background: var(--accent-color);
-    color: white;
+    color: var(--text-inverse);
   }
 
-  .actions button:hover {
-    opacity: 0.9;
+  .btn-primary:hover {
+    background: var(--accent-color-hover);
+    color: var(--text-inverse);
   }
 </style>

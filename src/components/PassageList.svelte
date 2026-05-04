@@ -109,30 +109,32 @@
 
 <div class="passage-list">
   <div class="passage-header">
-    <button class="btn-sm" title="Add Passage" onclick={handleAdd}>+</button>
-    <button class="btn-sm" title="Save" onclick={onSave} disabled={!isDirtyProp}>
-      💾
+    <button class="btn-icon" title="Add" onclick={handleAdd}>
+      <span class="icon">+</span>
     </button>
-    <button class="btn-sm" title="Move Up" onclick={handleMoveUp} disabled={currentIndex === 0}>
-      ↑
+    <button class="btn-icon" title="Save" onclick={onSave} disabled={!isDirtyProp}>
+      <span class="icon">{#if isDirtyProp}💾{:else}○{/if}</span>
     </button>
-    <button class="btn-sm" title="Move Down" onclick={handleMoveDown} disabled={currentIndex >= passagesProp.length - 1}>
-      ↓
+    <button class="btn-icon" title="Up" onclick={handleMoveUp} disabled={currentIndex === 0}>
+      <span class="icon">↑</span>
+    </button>
+    <button class="btn-icon" title="Down" onclick={handleMoveDown} disabled={currentIndex >= passagesProp.length - 1}>
+      <span class="icon">↓</span>
     </button>
     <div class="more-wrapper">
-      <button class="btn-sm" title="More" onclick={toggleMoreMenu}>
-        {#if showMoreMenu}✕{:else}⋯{/if}
+      <button class="btn-icon" title="More" onclick={toggleMoreMenu}>
+        <span class="icon">{#if showMoreMenu}✕{:else}⋮{/if}</span>
       </button>
       {#if showMoreMenu}
         <div class="more-menu">
           <button class="menu-item" onclick={() => { onToggleEdit(); showMoreMenu = false; }}>
-            {#if editMode}👁 Preview{:else}✏ Edit{/if}
+            {#if editMode}Preview{:else}Edit{/if}
           </button>
           <button class="menu-item" onclick={() => { handleRename(); }}>
-            📝 Rename
+            Rename
           </button>
-          <button class="menu-item warning" onclick={() => { handleDeleteClick(currentIndex); }}>
-            🗑 Delete
+          <button class="menu-item danger" onclick={() => { handleDeleteClick(currentIndex); }}>
+            Delete
           </button>
         </div>
       {/if}
@@ -140,11 +142,11 @@
   </div>
 
   {#if showNewPassage}
-    <div class="new-passage-input">
+    <div class="input-row">
       <input
         type="text"
         bind:value={newPassageTitle}
-        placeholder="Passage title"
+        placeholder="Title..."
         onkeydown={(e) => e.key === 'Enter' && handleNewPassageSubmit()}
         onblur={() => showNewPassage = false}
       />
@@ -152,11 +154,11 @@
   {/if}
 
   {#if editingTitle}
-    <div class="new-passage-input">
+    <div class="input-row">
       <input
         type="text"
         bind:value={editingTitleValue}
-        placeholder="New title"
+        placeholder="New title..."
         onkeydown={(e) => e.key === 'Enter' && handleRenameSubmit()}
         onblur={() => editingTitle = false}
       />
@@ -164,76 +166,82 @@
   {/if}
 
   {#if confirmDelete}
-    <div class="confirm-dialog">
-      <p>Delete this passage?</p>
-      <p class="passage-name">{passagesProp[pendingDeleteIndex]?.title}</p>
-      <div class="confirm-actions">
-        <button class="btn-danger" onclick={handleDeleteConfirm}>Delete</button>
-        <button onclick={() => confirmDelete = false}>Cancel</button>
+    <div class="confirm-overlay">
+      <div class="confirm-dialog">
+        <p class="confirm-title">Delete passage?</p>
+        <p class="confirm-name">{passagesProp[pendingDeleteIndex]?.title}</p>
+        <div class="confirm-actions">
+          <button class="btn-danger" onclick={handleDeleteConfirm}>Delete</button>
+          <button onclick={() => confirmDelete = false}>Cancel</button>
+        </div>
       </div>
     </div>
   {/if}
 
   <div class="passages">
     {#each passagesProp as passage, i}
-      <div class="passage-item" class:selected={i === currentIndex}>
-        <button
-          class="passage-title"
-          onclick={() => handleSelect(i)}
-        >
-          {passage.title}
-        </button>
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <div
+        class="passage-item"
+        class:selected={i === currentIndex}
+        onclick={() => handleSelect(i)}
+      >
+        <span class="passage-title">{passage.title}</span>
       </div>
     {/each}
 
     {#if passagesProp.length === 0}
-      <button onclick={handleAdd}>Create first passage</button>
+      <div class="empty-state">
+        <button class="btn-link" onclick={handleAdd}>Create first passage</button>
+      </div>
     {/if}
   </div>
 </div>
 
 <style>
   .passage-list {
-    width: 180px;
+    width: var(--passage-list-width);
     background: var(--bg-secondary);
-    border-right: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color-faint);
     display: flex;
     flex-direction: column;
   }
 
   .passage-header {
     display: flex;
-    gap: 4px;
-    padding: 8px;
-    border-bottom: 1px solid var(--border-color);
-    flex-wrap: wrap;
-    overflow: visible;
+    gap: 2px;
+    padding: var(--spacing-md);
+    padding-bottom: var(--spacing-sm);
     position: relative;
   }
 
-  .btn-sm {
-    width: 28px;
-    height: 28px;
+  .btn-icon {
+    width: 24px;
+    height: 24px;
     border: none;
-    background: var(--bg-button);
-    color: var(--text-primary);
-    border-radius: 4px;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
     cursor: pointer;
-    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
   }
 
-  .btn-sm:hover:not(:disabled) {
-    background: var(--bg-button-hover);
+  .icon {
+    font-size: 11px;
+    line-height: 1;
   }
 
-  .btn-sm:disabled {
-    opacity: 0.5;
+  .btn-icon:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .btn-icon:disabled {
+    opacity: 0.4;
     cursor: not-allowed;
-  }
-
-  .btn-danger {
-    background: var(--danger-color);
-    color: white;
   }
 
   .more-wrapper {
@@ -243,120 +251,185 @@
 
   .more-menu {
     position: absolute;
-    top: 32px;
+    top: 28px;
     left: 0;
     z-index: 1000;
-    background: var(--bg-secondary);
+    background: var(--bg-modal);
     border: 1px solid var(--border-color);
-    border-radius: 4px;
-    padding: 4px;
+    border-radius: var(--radius-md);
+    padding: var(--spacing-xs);
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    min-width: 120px;
+    gap: 1px;
+    min-width: 100px;
     box-shadow: var(--shadow-md);
   }
 
   .menu-item {
     width: 100%;
-    padding: 8px 12px;
+    padding: 6px 10px;
     border: none;
-    background: var(--bg-button);
-    color: var(--text-primary);
+    background: transparent;
+    color: var(--text-secondary);
     text-align: left;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
-    font-size: 14px;
+    font-size: var(--font-size-xs);
+    transition: all 0.15s ease;
   }
 
   .menu-item:hover {
-    background: var(--bg-button-hover);
+    background: var(--bg-hover);
+    color: var(--text-primary);
   }
 
-  .menu-item.warning {
+  .menu-item.danger {
     color: var(--danger-color);
   }
 
-  .new-passage-input, .confirm-dialog {
-    padding: 8px;
-    border-bottom: 1px solid var(--border-color);
+  .menu-item.danger:hover {
+    background: rgba(248, 71, 71, 0.1);
   }
 
-  .new-passage-input input {
+  .input-row {
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-bottom: 1px solid var(--border-color-faint);
+  }
+
+  .input-row input {
     width: 100%;
-    padding: 6px;
-    border: 1px solid var(--border-color);
+    padding: 4px 8px;
+    border: none;
     background: var(--bg-input);
     color: var(--text-primary);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+  }
+
+  .input-row input:focus {
+    outline: none;
+    box-shadow: inset 0 0 0 1px var(--accent-color);
+  }
+
+  .confirm-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    backdrop-filter: blur(2px);
   }
 
   .confirm-dialog {
-    background: rgba(231, 76, 60, 0.1);
+    background: var(--bg-modal);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
+    max-width: 140px;
+    text-align: center;
   }
 
-  .confirm-dialog p {
-    font-size: 14px;
+  .confirm-title {
+    font-size: var(--font-size-sm);
     color: var(--text-primary);
-    margin-bottom: 4px;
+    margin-bottom: var(--spacing-sm);
   }
 
-  .passage-name {
-    font-weight: bold;
+  .confirm-name {
+    font-size: var(--font-size-xs);
     color: var(--danger-color);
+    margin-bottom: var(--spacing-md);
+    word-break: break-word;
   }
 
   .confirm-actions {
     display: flex;
-    gap: 8px;
-    margin-top: 8px;
+    gap: var(--spacing-sm);
   }
 
   .confirm-actions button {
     flex: 1;
-    padding: 8px;
+    padding: 6px 8px;
     border: none;
-    background: var(--bg-button);
-    color: var(--text-primary);
-    border-radius: 4px;
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
     cursor: pointer;
+    font-size: var(--font-size-xs);
+    transition: all 0.15s ease;
+  }
+
+  .btn-danger {
+    background: var(--danger-color);
+    color: var(--text-inverse);
+  }
+
+  .confirm-actions button:hover {
+    background: var(--bg-hover-active);
+    color: var(--text-primary);
+  }
+
+  .btn-danger:hover {
+    opacity: 0.9;
+    color: var(--text-inverse);
   }
 
   .passages {
     flex: 1;
     overflow-y: auto;
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    padding: var(--spacing-sm);
   }
 
   .passage-item {
     display: flex;
     align-items: center;
-    gap: 4px;
-    border-radius: 4px;
-    background: var(--bg-input);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    user-select: none;
+  }
+
+  .passage-item:hover {
+    background: var(--bg-hover);
   }
 
   .passage-item.selected {
-    background: var(--accent-color);
+    background: var(--bg-hover-active);
   }
 
   .passage-title {
-    flex: 1;
-    padding: 6px 8px;
-    border: none;
-    background: transparent;
-    color: var(--text-primary);
-    text-align: left;
-    cursor: pointer;
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .passage-item.selected .passage-title {
-    color: white;
+    color: var(--text-primary);
+  }
+
+  .empty-state {
+    padding: var(--spacing-lg);
+    text-align: center;
+  }
+
+  .btn-link {
+    background: transparent;
+    border: none;
+    color: var(--text-accent);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+    padding: 4px;
+    border-radius: var(--radius-sm);
+
+    &:hover {
+      background: var(--bg-hover);
+    }
   }
 </style>

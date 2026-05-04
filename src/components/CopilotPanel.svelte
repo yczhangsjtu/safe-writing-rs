@@ -140,200 +140,242 @@
 
 <style>
   .copilot-panel {
-    width: 350px;
-    background: var(--bg-secondary);
-    border-left: 1px solid var(--border-color);
+    width: var(--copilot-width);
+    background: var(--bg-sidebar);
+    border-left: 1px solid var(--border-color-faint);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
   }
 
   .copilot-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px;
-    border-bottom: 1px solid var(--border-color);
+    padding: var(--spacing-md);
+    border-bottom: 1px solid var(--border-color-faint);
+    height: 40px;
   }
 
   .copilot-header h3 {
-    font-size: 14px;
-    color: var(--accent-color);
+    font-size: var(--font-size-xs);
+    color: var(--text-faint);
+    font-weight: 500;
   }
 
   .header-buttons {
     display: flex;
-    gap: 4px;
+    gap: 2px;
   }
 
   .copilot-header button {
-    padding: 6px 12px;
+    padding: 4px 8px;
     border: none;
-    background: var(--bg-button);
-    color: var(--text-primary);
-    border-radius: 4px;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
     cursor: pointer;
-    font-size: 12px;
+    font-size: var(--font-size-xs);
+    transition: all 0.15s ease;
+  }
+
+  .copilot-header button:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
   }
 
   .settings-section {
-    padding: 12px;
-    border-bottom: 1px solid var(--border-color);
+    padding: var(--spacing-md);
+    border-bottom: 1px solid var(--border-color-faint);
   }
 
   .settings-section label {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    margin-bottom: 8px;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-sm);
   }
 
   .settings-section label span {
-    font-size: 12px;
-    color: var(--text-secondary);
+    font-size: var(--font-size-xs);
+    color: var(--text-faint);
   }
 
   .settings-section textarea {
     width: 100%;
-    padding: 8px;
-    border: 1px solid var(--border-color);
+    padding: var(--spacing-sm);
+    border: 1px solid var(--border-color-faint);
     background: var(--bg-input);
     color: var(--text-primary);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     resize: none;
+    font-size: var(--font-size-xs);
   }
 
   .btn-reset {
     width: 100%;
-    padding: 8px;
+    padding: var(--spacing-sm);
     border: none;
-    background: var(--bg-button);
-    color: var(--text-primary);
-    border-radius: 4px;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
     cursor: pointer;
-    font-size: 12px;
+    font-size: var(--font-size-xs);
+    transition: all 0.15s ease;
+  }
+
+  .btn-reset:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
   }
 
   .copilot-content {
     flex: 1;
     overflow-y: auto;
-    padding: 12px;
+    padding: var(--spacing-md);
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--spacing-md);
   }
 
   .messages {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--spacing-sm);
   }
 
   .message {
-    padding: 8px;
-    border-radius: 4px;
-    background: var(--bg-input);
+    padding: var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    background: var(--bg-hover);
   }
 
   .message.user {
-    background: rgba(74, 144, 217, 0.1);
+    background: rgba(124, 58, 237, 0.1);
   }
 
   .message.assistant {
-    background: rgba(46, 204, 113, 0.1);
+    background: rgba(22, 163, 74, 0.1);
   }
 
   .message strong {
     display: block;
-    margin-bottom: 4px;
-    font-size: 12px;
-    color: var(--text-secondary);
+    margin-bottom: 2px;
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
   }
 
   .message p {
-    font-size: 14px;
+    font-size: var(--font-size-xs);
     white-space: pre-wrap;
     color: var(--text-primary);
+    line-height: 1.5;
   }
 
   .btn-insert {
-    margin-top: 8px;
-    padding: 6px 12px;
+    margin-top: var(--spacing-sm);
+    padding: 4px 8px;
     border: none;
     background: var(--accent-color);
-    color: white;
-    border-radius: 4px;
+    color: var(--text-inverse);
+    border-radius: var(--radius-sm);
     cursor: pointer;
+    font-size: var(--font-size-xs);
+    transition: all 0.15s ease;
+  }
+
+  .btn-insert:hover {
+    opacity: 0.9;
   }
 
   .buffers {
-    border-top: 1px solid var(--border-color);
-    padding-top: 12px;
+    border-top: 1px solid var(--border-color-faint);
+    padding-top: var(--spacing-md);
   }
 
   .buffers h4 {
-    font-size: 12px;
-    color: var(--text-muted);
-    margin-bottom: 8px;
+    font-size: var(--font-size-xs);
+    color: var(--text-faint);
+    margin-bottom: var(--spacing-sm);
+    font-weight: 500;
   }
 
   .buffers button {
-    padding: 6px 12px;
+    padding: 4px 8px;
     border: none;
-    background: var(--bg-button);
-    color: var(--text-primary);
-    border-radius: 4px;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
     cursor: pointer;
-    font-size: 12px;
+    font-size: var(--font-size-xs);
+    transition: all 0.15s ease;
+  }
+
+  .buffers button:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
   }
 
   .buffer-item {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px;
-    background: var(--bg-input);
-    border-radius: 4px;
-    margin-top: 4px;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: var(--bg-hover);
+    border-radius: var(--radius-sm);
+    margin-top: 2px;
   }
 
   .buffer-item span {
     flex: 1;
-    font-size: 12px;
-    color: var(--text-primary);
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .buffer-item button {
-    padding: 2px 6px;
-    background: var(--danger-color);
-    color: white;
+    padding: 2px 4px;
+    background: transparent;
+    color: var(--danger-color);
   }
 
   .input-area {
-    border-top: 1px solid var(--border-color);
-    padding-top: 12px;
+    border-top: 1px solid var(--border-color-faint);
+    padding: var(--spacing-md);
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--spacing-sm);
   }
 
   .input-area textarea {
     width: 100%;
-    padding: 8px;
-    border: 1px solid var(--border-color);
+    padding: var(--spacing-sm);
+    border: 1px solid var(--border-color-faint);
     background: var(--bg-input);
     color: var(--text-primary);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     resize: none;
+    font-size: var(--font-size-xs);
+  }
+
+  .input-area textarea:focus {
+    outline: none;
+    border-color: var(--accent-color);
   }
 
   .input-area button {
-    padding: 8px;
+    padding: var(--spacing-sm);
     border: none;
     background: var(--accent-color);
-    color: white;
-    border-radius: 4px;
+    color: var(--text-inverse);
+    border-radius: var(--radius-sm);
     cursor: pointer;
+    font-size: var(--font-size-xs);
+    transition: all 0.15s ease;
+  }
+
+  .input-area button:hover:not(:disabled) {
+    opacity: 0.9;
   }
 
   .input-area button:disabled {

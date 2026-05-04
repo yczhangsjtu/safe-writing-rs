@@ -56,17 +56,17 @@
 <div class="sidebar">
   <div class="sidebar-header">
     <button class="btn-icon" title="New File" onclick={handleNewFile} disabled={isDirtyProp}>
-      +
+      <span class="icon">+</span>
     </button>
     <button class="btn-icon" title="Refresh" onclick={handleRefresh} disabled={isDirtyProp}>
-      ↻
+      <span class="icon">↻</span>
     </button>
     <button class="btn-icon" title="AI Copilot" onclick={toggleCopilot}>
-      {#if $copilotVisible}AI✓{:else}AI{/if}
+      <span class="icon">{#if $copilotVisible}✓{:else}AI{/if}</span>
     </button>
     {#if currentFile}
       <button class="btn-icon" title="Change Password" onclick={onChangePassword}>
-        🔑
+        <span class="icon">🔑</span>
       </button>
     {/if}
   </div>
@@ -76,7 +76,7 @@
       <input
         type="text"
         bind:value={newFilename}
-        placeholder="filename"
+        placeholder="New file name..."
         onkeydown={(e) => e.key === 'Enter' && handleNewFileSubmit()}
         onblur={() => showNewFileInput = false}
       />
@@ -85,109 +85,135 @@
 
   <div class="file-list">
     {#each filesProp as filename}
-      <button
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <div
         class="file-item"
         class:selected={filename === currentFile}
-        disabled={isDirtyProp || filename === currentFile}
-        onclick={() => onFileSelect(filename)}
+        onclick={() => !isDirtyProp && filename !== currentFile && onFileSelect(filename)}
       >
-        {filename}
-      </button>
+        <span class="file-icon">📄</span>
+        <span class="file-name">{filename}</span>
+      </div>
     {/each}
 
     {#if filesProp.length === 0}
-      <p class="empty-text">No files</p>
+      <div class="empty-state">
+        <span class="text-muted">No files</span>
+      </div>
     {/if}
   </div>
 </div>
 
 <style>
   .sidebar {
-    width: 200px;
+    width: var(--sidebar-width);
     background: var(--bg-sidebar);
-    border-right: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color-faint);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
   }
 
   .sidebar-header {
     display: flex;
-    gap: 4px;
-    padding: 8px;
-    border-bottom: 1px solid var(--border-color);
+    gap: 2px;
+    padding: var(--spacing-md);
+    padding-bottom: var(--spacing-sm);
   }
 
   .btn-icon {
-    width: 32px;
-    height: 32px;
+    width: 26px;
+    height: 26px;
     border: none;
-    background: var(--bg-button);
-    color: var(--text-primary);
-    border-radius: 4px;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
     cursor: pointer;
-    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+  }
+
+  .icon {
+    font-size: 12px;
+    line-height: 1;
   }
 
   .btn-icon:hover:not(:disabled) {
-    background: var(--bg-button-hover);
+    background: var(--bg-hover);
+    color: var(--text-primary);
   }
 
   .btn-icon:disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: not-allowed;
   }
 
   .new-file-input {
-    padding: 8px;
-    border-bottom: 1px solid var(--border-color);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-bottom: 1px solid var(--border-color-faint);
   }
 
   .new-file-input input {
     width: 100%;
-    padding: 8px;
-    border: 1px solid var(--border-color);
+    padding: 4px 8px;
+    border: none;
     background: var(--bg-input);
     color: var(--text-primary);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+  }
+
+  .new-file-input input:focus {
+    outline: none;
+    box-shadow: inset 0 0 0 1px var(--accent-color);
   }
 
   .file-list {
     flex: 1;
     overflow-y: auto;
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    padding: var(--spacing-sm);
   }
 
   .file-item {
-    width: 100%;
-    padding: 8px 12px;
-    border: none;
-    background: transparent;
-    color: var(--text-primary);
-    text-align: left;
-    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
+    transition: background-color 0.15s ease;
+    user-select: none;
   }
 
-  .file-item:hover:not(:disabled) {
-    background: var(--bg-button-hover);
+  .file-item:hover {
+    background: var(--bg-hover);
   }
 
   .file-item.selected {
-    background: var(--accent-color);
-    color: white;
+    background: var(--bg-hover-active);
+    color: var(--text-primary);
   }
 
-  .file-item:disabled {
-    opacity: 0.5;
+  .file-icon {
+    font-size: 12px;
+    opacity: 0.6;
   }
 
-  .empty-text {
-    color: var(--text-muted);
+  .file-name {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .file-item.selected .file-name {
+    color: var(--text-primary);
+  }
+
+  .empty-state {
+    padding: var(--spacing-lg);
     text-align: center;
-    font-size: 14px;
   }
 </style>

@@ -168,18 +168,20 @@
 
 <div class="app-container">
   {#if !initialized}
-    <div class="loading-screen" style="background: #1a1a2e; color: #e8e8e8;">
+    <div class="loading-screen">
       {#if initError}
-        <p class="error" style="color: #e74c3c;">Error: {initError}</p>
+        <p class="error-text">{initError}</p>
       {:else}
-        <p>Loading...</p>
+        <p class="loading-text">Loading...</p>
       {/if}
     </div>
   {:else}
     <header class="app-header">
       <div class="header-left">
-        <h1>Safe Writing</h1>
-        <span class="data-dir">{ $config.data_dir }</span>
+        <span class="app-title">Safe Writing</span>
+        {#if $config.data_dir}
+          <span class="data-dir">{ $config.data_dir }</span>
+        {/if}
       </div>
       <div class="header-right">
         <ThemeToggle currentTheme={$theme} onThemeChange={handleThemeChange} />
@@ -272,38 +274,46 @@
     background: var(--bg-primary);
   }
 
-  .loading-screen .error {
+  .loading-text {
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+  }
+
+  .error-text {
     color: var(--danger-color);
+    font-size: var(--font-size-sm);
   }
 
   .app-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 16px;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border-color);
+    padding: var(--spacing-md) var(--spacing-lg);
+    background: var(--bg-sidebar);
+    border-bottom: 1px solid var(--border-color-faint);
+    height: 40px;
   }
 
   .header-left {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--spacing-md);
   }
 
-  .header-left h1 {
-    font-size: 18px;
-    font-weight: 600;
+  .app-title {
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
   }
 
   .data-dir {
-    font-size: 12px;
-    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+    color: var(--text-faint);
   }
 
   .header-right {
     display: flex;
-    gap: 8px;
+    gap: var(--spacing-sm);
   }
 
   .app-main {
@@ -319,6 +329,7 @@
     justify-content: center;
     background: var(--bg-editor);
     color: var(--text-muted);
+    font-size: var(--font-size-sm);
   }
 
   .loading-overlay {
@@ -327,20 +338,21 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.4);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1000;
+    backdrop-filter: blur(2px);
   }
 
   .spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid var(--border-color);
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--border-color);
     border-top-color: var(--accent-color);
     border-radius: 50%;
-    animation: spin 1s linear infinite;
+    animation: spin 0.8s linear infinite;
   }
 
   @keyframes spin {
@@ -349,13 +361,16 @@
 
   .error-toast, .success-toast {
     position: fixed;
-    bottom: 16px;
-    right: 16px;
-    padding: 12px 16px;
-    background: var(--bg-secondary);
-    border-radius: 8px;
+    bottom: var(--spacing-lg);
+    right: var(--spacing-lg);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--bg-modal);
+    border-radius: var(--radius-md);
     cursor: pointer;
     z-index: 1000;
+    font-size: var(--font-size-xs);
+    box-shadow: var(--shadow-md);
+    animation: slideIn 0.2s ease;
   }
 
   .error-toast {
