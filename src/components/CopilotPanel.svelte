@@ -3,6 +3,7 @@
   import { listen } from '@tauri-apps/api/event';
   import * as api from '../lib/tauri';
   import Resizable from './Resizable.svelte';
+  import { onMount } from 'svelte';
 
   let {
     width,
@@ -21,6 +22,23 @@
   let collapsedSystem = $state(false);
   let collapsedBuffers = $state(false);
   let collapsedConversation = $state(false);
+  let showFavoriteDropdown = $state(false);
+
+  function closeDropdownOnClick(e: MouseEvent) {
+    if (showFavoriteDropdown) {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.favorite-prompts-bar')) {
+        showFavoriteDropdown = false;
+      }
+    }
+  }
+
+  onMount(() => {
+    window.addEventListener('click', closeDropdownOnClick);
+    return () => {
+      window.removeEventListener('click', closeDropdownOnClick);
+    };
+  });
 
   function makeBriefSummary(text: string, maxLen: number): string {
     if (text.length <= maxLen) return text;
@@ -160,6 +178,36 @@
     waiting = false;
   }
 
+  function selectFavoritePrompt(prompt: string) {
+    userInput = prompt;
+    showFavoriteDropdown = false;
+  }
+
+  function isFavoritePrompt(content: string): boolean {
+    return $copilotSettings.favorite_prompts.some(f => f.prompt === content);
+  }
+
+  async function toggleFavoritePrompt(index: number) {
+    const msg = $copilotSettings.messages[index];
+    if (msg.role !== 'user') return;
+
+    const content = msg.content;
+    const isFavorite = isFavoritePrompt(content);
+
+    copilotSettings.update(s => {
+      if (isFavorite) {
+        // Remove from favorites
+        s.favorite_prompts = s.favorite_prompts.filter(f => f.prompt !== content);
+      } else {
+        // Add to favorites with a brief name
+        const name = content.slice(0, 30) + (content.length > 30 ? '...' : '');
+        s.favorite_prompts = [...s.favorite_prompts, { name, prompt: content }];
+      }
+      return s;
+    });
+    await saveSettings();
+  }
+
   function handleDeleteMessage(index: number) {
     copilotSettings.update(s => {
       s.messages = s.messages.filter((_, i) => i !== index);
@@ -247,6 +295,16 @@
             <div class="message-header">
               <strong>{msg.role === 'user' ? 'You' : 'AI'}</strong>
               <div class="message-actions">
+                {#if msg.role === 'user'}
+                  <button
+                    class="btn-tiny favorite"
+                    class:active={isFavoritePrompt(msg.content)}
+                    onclick={() => toggleFavoritePrompt(i)}
+                    title={isFavoritePrompt(msg.content) ? 'Remove from favorites' : 'Add to favorites'}
+                  >
+                    <span class="material-icons icon-tiny">{isFavoritePrompt(msg.content) ? 'star' : 'star_border'}</span>
+                  </button>
+                {/if}
                 {#if msg.role === 'assistant'}
                   <button class="btn-tiny accent" onclick={() => handleInsertFromHistory(i)}>Insert</button>
                 {/if}
@@ -273,6 +331,25 @@
 
     {#if !collapsedConversation}
       <div class="input-area">
+        {#if $copilotSettings.favorite_prompts && $copilotSettings.favorite_prompts.length > 0}
+          <div class="favorite-prompts-bar">
+            <button class="btn-favorites" onclick={() => showFavoriteDropdown = !showFavoriteDropdown}>
+              <span class="material-icons icon-small">star</span>
+              Favorites
+            </button>
+            {#if showFavoriteDropdown}
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div class="favorite-dropdown" onclick={(e) => e.stopPropagation()}>
+                {#each $copilotSettings.favorite_prompts as fav}
+                  <button class="favorite-item" onclick={() => selectFavoritePrompt(fav.prompt)}>
+                    {fav.name}
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/if}
         <textarea
           bind:value={userInput}
           placeholder="Ask AI... (Ctrl+Enter)"
@@ -512,6 +589,25 @@
     color: var(--text-inverse);
   }
 
+  .btn-tiny.favorite {
+    background: transparent;
+    color: var(--text-muted);
+    padding: 2px 4px;
+  }
+
+  .btn-tiny.favorite:hover {
+    color: var(--warning-color);
+  }
+
+  .btn-tiny.favorite.active {
+    color: var(--warning-color);
+  }
+
+  .icon-tiny {
+    font-size: 14px;
+    line-height: 1;
+  }
+
   .message-content {
     font-size: var(--font-size-sm);
     color: var(--text-primary);
@@ -564,5 +660,68 @@
 
   .btn-send.danger:hover {
     opacity: 0.9;
+  }
+
+  .favorite-prompts-bar {
+    display: flex;
+    align-items: center;
+    position: relative;
+  }
+
+  .btn-favorites {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+    transition: all 0.15s ease;
+  }
+
+  .btn-favorites:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .icon-small {
+    font-size: 14px;
+  }
+
+  .favorite-dropdown {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 4px;
+    background: var(--bg-modal);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 4px;
+    min-width: 150px;
+    max-width: 250px;
+    box-shadow: var(--shadow-md);
+    z-index: 100;
+  }
+
+  .favorite-item {
+    display: block;
+    width: 100%;
+    padding: 6px 10px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    text-align: left;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+    transition: all 0.15s ease;
+  }
+
+  .favorite-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
   }
 </style>
