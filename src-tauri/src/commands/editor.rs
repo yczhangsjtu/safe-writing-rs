@@ -132,12 +132,41 @@ pub fn move_passage(
     match current_session.as_mut() {
         Some(session) => {
             let num = session.plaintext.num_passages();
-            if from < num && to < num {
-                session.plaintext.swap(from, to);
+            // Allow to == num to mean "insert at the end"
+            if from < num && to <= num && from != to {
+                // Remove from original position
+                let passage = session.plaintext.remove_passage(from);
+
+                // Calculate insert position
+                let insert_index = if to == num {
+                    // Insert at the end
+                    num - 1
+                } else if from < to {
+                    to - 1  // After removal, items between shifted down by 1
+                } else {
+                    to
+                };
+
+                // Insert at new position
+                session.plaintext.content.insert(insert_index, passage);
                 session.dirty = true;
+
+                // Update current_passage_index to track the moved passage
+                if session.current_passage_index == from {
+                    session.current_passage_index = insert_index;
+                } else if from < session.current_passage_index && session.current_passage_index <= to.min(num - 1) {
+                    // Current passage was between from and to, shift it
+                    session.current_passage_index -= 1;
+                } else if to <= session.current_passage_index && session.current_passage_index < from {
+                    // Current passage was between to and from, shift it
+                    session.current_passage_index += 1;
+                }
+
                 drop(current_session);
                 emit_state_change(&app, &state);
                 Ok(())
+            } else if from == to || (to == num && from == num - 1) {
+                Ok(()) // No movement needed
             } else {
                 Err("Passage index out of bounds".to_string())
             }

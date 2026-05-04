@@ -27,6 +27,8 @@
   let showMoreMenu = $state(false);
   let confirmDelete = $state(false);
   let pendingDeleteIndex = $state(-1);
+  let draggedIndex = $state<number | null>(null);
+  let dragOverIndex = $state<number | null>(null);
 
   async function handleSelect(index: number) {
     await api.setCurrentPassage(index);
@@ -39,18 +41,6 @@
   async function handleNewPassageSubmit(title: string) {
     showNewPassageDialog = false;
     await api.addPassage(title);
-  }
-
-  async function handleMoveUp() {
-    if (currentIndex > 0) {
-      await api.movePassage(currentIndex, currentIndex - 1);
-    }
-  }
-
-  async function handleMoveDown() {
-    if (currentIndex < passagesProp.length - 1) {
-      await api.movePassage(currentIndex, currentIndex + 1);
-    }
   }
 
   function handleRename() {
@@ -78,6 +68,51 @@
   function toggleMoreMenu() {
     showMoreMenu = !showMoreMenu;
   }
+
+  // Drag and drop handlers
+  function handleDragStart(e: DragEvent, index: number) {
+    draggedIndex = index;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', index.toString());
+    }
+  }
+
+  function handleDragOver(e: DragEvent, index: number) {
+    e.preventDefault();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'move';
+    }
+    dragOverIndex = index;
+  }
+
+  function handleDragLeave() {
+    dragOverIndex = null;
+  }
+
+  async function handleDrop(e: DragEvent, targetIndex: number) {
+    e.preventDefault();
+    if (draggedIndex !== null && draggedIndex !== targetIndex) {
+      await api.movePassage(draggedIndex, targetIndex);
+    }
+    draggedIndex = null;
+    dragOverIndex = null;
+  }
+
+  async function handleDropBottom(e: DragEvent) {
+    e.preventDefault();
+    if (draggedIndex !== null && passagesProp.length > 0) {
+      // Move to the end: pass to = passagesProp.length (insert after last)
+      await api.movePassage(draggedIndex, passagesProp.length);
+    }
+    draggedIndex = null;
+    dragOverIndex = null;
+  }
+
+  function handleDragEnd() {
+    draggedIndex = null;
+    dragOverIndex = null;
+  }
 </script>
 
 <div class="passage-list">
@@ -87,12 +122,6 @@
     </button>
     <button class="btn-icon" title="Save" onclick={onSave} disabled={!isDirtyProp}>
       <span class="icon">{#if isDirtyProp}💾{:else}○{/if}</span>
-    </button>
-    <button class="btn-icon" title="Move Up" onclick={handleMoveUp} disabled={currentIndex === 0}>
-      <span class="icon">↑</span>
-    </button>
-    <button class="btn-icon" title="Move Down" onclick={handleMoveDown} disabled={currentIndex >= passagesProp.length - 1}>
-      <span class="icon">↓</span>
     </button>
     <div class="more-wrapper">
       <button class="btn-icon" title="More" onclick={toggleMoreMenu}>
@@ -136,11 +165,31 @@
       <div
         class="passage-item"
         class:selected={i === currentIndex}
+        class:dragging={draggedIndex === i}
+        class:drag-over={dragOverIndex === i}
+        draggable="true"
         onclick={() => handleSelect(i)}
+        ondragstart={(e) => handleDragStart(e, i)}
+        ondragover={(e) => handleDragOver(e, i)}
+        ondragleave={handleDragLeave}
+        ondrop={(e) => handleDrop(e, i)}
+        ondragend={handleDragEnd}
       >
         <span class="passage-title">{passage.title}</span>
       </div>
     {/each}
+
+    {#if passagesProp.length > 0}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="drop-zone"
+        class:drag-over-bottom={dragOverIndex === -1}
+        ondragover={(e) => { e.preventDefault(); dragOverIndex = -1; }}
+        ondragleave={handleDragLeave}
+        ondrop={(e) => handleDropBottom(e)}
+      ></div>
+    {/if}
 
     {#if passagesProp.length === 0}
       <div class="empty-state">
@@ -244,7 +293,7 @@
     text-align: left;
     border-radius: var(--radius-sm);
     cursor: pointer;
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     transition: all 0.15s ease;
   }
 
@@ -290,7 +339,7 @@
   }
 
   .confirm-name {
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     color: var(--danger-color);
     margin-bottom: var(--spacing-md);
     word-break: break-word;
@@ -309,7 +358,7 @@
     color: var(--text-secondary);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     transition: all 0.15s ease;
   }
 
@@ -352,6 +401,28 @@
     background: var(--bg-hover-active);
   }
 
+  .passage-item.dragging {
+    opacity: 0.5;
+    background: var(--accent-color);
+  }
+
+  .passage-item.drag-over {
+    border-top: 2px solid var(--accent-color);
+  }
+
+  .drop-zone {
+    height: 24px;
+    margin-top: 2px;
+    border-radius: var(--radius-sm);
+    transition: all 0.15s ease;
+  }
+
+  .drop-zone.drag-over-bottom {
+    background: var(--accent-color);
+    opacity: 0.3;
+    border: 2px solid var(--accent-color);
+  }
+
   .passage-title {
     font-size: var(--font-size-sm);
     color: var(--text-secondary);
@@ -375,7 +446,7 @@
     border: none;
     color: var(--text-accent);
     cursor: pointer;
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     padding: 4px;
     border-radius: var(--radius-sm);
 
