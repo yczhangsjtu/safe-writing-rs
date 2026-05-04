@@ -173,7 +173,7 @@
   }
 
   .icon {
-    font-size: 16px;
+    font-size: 18px;
     line-height: 1;
   }
 
@@ -214,7 +214,7 @@
   }
 
   .file-icon {
-    font-size: 14px;
+    font-size: 16px;
     opacity: 0.6;
   }
 

@@ -353,19 +353,19 @@
   }
 
   .collapse-icon {
-    font-size: 10px;
+    font-size: 12px;
     color: var(--text-muted);
   }
 
   .section-header h4 {
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     font-weight: 500;
     color: var(--text-secondary);
     margin: 0;
   }
 
   .hint {
-    font-size: 10px;
+    font-size: 12px;
     color: var(--text-faint);
   }
 
@@ -377,7 +377,7 @@
     color: var(--text-primary);
     border-radius: var(--radius-sm);
     resize: none;
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
   }
 
   .system-input:focus {
@@ -392,7 +392,7 @@
     color: var(--text-muted);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     transition: all 0.15s ease;
   }
 
@@ -422,17 +422,17 @@
     background: transparent;
     color: var(--danger-color);
     cursor: pointer;
-    font-size: 12px;
+    font-size: 14px;
     line-height: 1;
   }
 
   .buffer-info {
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     color: var(--text-secondary);
   }
 
   .empty-hint {
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     color: var(--text-faint);
   }
 
@@ -470,7 +470,7 @@
   }
 
   .message-header strong {
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     color: var(--text-muted);
   }
 
@@ -486,7 +486,7 @@
     color: var(--text-secondary);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .btn-tiny.accent {
@@ -500,7 +500,7 @@
   }
 
   .message-content {
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     color: var(--text-primary);
     white-space: pre-wrap;
     line-height: 1.4;
@@ -521,7 +521,7 @@
     color: var(--text-primary);
     border-radius: var(--radius-sm);
     resize: none;
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
   }
 
   .input-area textarea:focus {
@@ -536,7 +536,7 @@
     color: var(--text-primary);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     transition: all 0.15s ease;
   }
 

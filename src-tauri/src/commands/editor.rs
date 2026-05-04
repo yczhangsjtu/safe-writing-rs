@@ -78,7 +78,13 @@ pub fn add_passage(
     let mut current_session = state.current_session.lock().map_err(|e| e.to_string())?;
     match current_session.as_mut() {
         Some(session) => {
-            let index = session.current_passage_index + 1;
+            // If there are no passages, insert at index 0
+            // Otherwise, insert after current passage
+            let index = if session.plaintext.num_passages() == 0 {
+                0
+            } else {
+                session.current_passage_index + 1
+            };
             session.plaintext.insert_new_passage(index, title);
             session.dirty = true;
             drop(current_session);

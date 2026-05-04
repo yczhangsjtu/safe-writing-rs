@@ -39,10 +39,11 @@
   --warning-color: #f59e0b;
   --danger-color: #dc2626;
 
-  --font-size-base: 16px;
-  --font-size-lg: 18px;
-  --font-size-sm: 14px;
-  --font-size-xs: 12px;
+  --font-size-base: 18px;
+  --font-size-lg: 20px;
+  --font-size-sm: 16px;
+  --font-size-xs: 14px;
+  --font-size-md: 18px;
 
   --sidebar-width: 200px;
   --passage-list-width: 160px;

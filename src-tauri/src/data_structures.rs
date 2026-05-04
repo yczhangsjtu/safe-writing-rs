@@ -168,8 +168,14 @@ impl PlainText {
     }
 
     pub fn insert_new_passage(&mut self, index: usize, title: String) {
+        // Clamp index to valid range (0 to len)
+        let insert_index = if index > self.content.len() {
+            self.content.len()
+        } else {
+            index
+        };
         self.content.insert(
-            index,
+            insert_index,
             Passage {
                 id: self.next_id,
                 title,
