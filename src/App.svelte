@@ -1,0 +1,320 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { theme, files, currentFile, passages, currentPassageIndex, config, isLoading, error, success, copilotVisible, isDirty } from './lib/stores';
+  import * as api from './lib/tauri';
+  import Sidebar from './components/Sidebar.svelte';
+  import Editor from './components/Editor.svelte';
+  import PasswordDialog from './components/PasswordDialog.svelte';
+  import CopilotPanel from './components/CopilotPanel.svelte';
+  import ThemeToggle from './components/ThemeToggle.svelte';
+  import { get } from 'svelte/store';
+
+  let showPasswordDialog = false;
+  let passwordDialogMode: 'new' | 'decrypt' = 'decrypt';
+  let pendingFilename = '';
+  let pendingCiphertext = '';
+  let initialized = false;
+  let initError = '';
+
+  onMount(async () => {
+    console.log('App mounted, initializing...');
+    try {
+      console.log('Fetching config...');
+      const cfg = await api.getConfig();
+      console.log('Config received:', cfg);
+      config.set(cfg);
+      theme.set(cfg.theme as 'light' | 'dark');
+      document.documentElement.setAttribute('data-theme', cfg.theme);
+
+      console.log('Fetching files...');
+      const fileList = await api.listFiles();
+      console.log('Files received:', fileList);
+      files.set(fileList);
+      initialized = true;
+      console.log('Initialization complete');
+    } catch (e: any) {
+      initError = e?.message || String(e);
+      console.error('Init error:', e);
+    }
+  });
+
+  async function handleFileSelect(filename: string) {
+    if (get(isDirty)) {
+      error.set('Please save or discard changes before switching files');
+      return;
+    }
+
+    try {
+      isLoading.set(true);
+      const result = await api.openFile(filename);
+
+      if (result.is_new) {
+        passwordDialogMode = 'new';
+        pendingFilename = filename;
+        showPasswordDialog = true;
+      } else if (result.ciphertext) {
+        passwordDialogMode = 'decrypt';
+        pendingFilename = filename;
+        pendingCiphertext = result.ciphertext;
+        showPasswordDialog = true;
+      }
+    } catch (e: any) {
+      error.set(`Failed to open file: ${e?.message || e}`);
+    } finally {
+      isLoading.set(false);
+    }
+  }
+
+  async function handlePasswordSubmit(password: string) {
+    try {
+      isLoading.set(true);
+      showPasswordDialog = false;
+
+      if (passwordDialogMode === 'new') {
+        await api.createFile(pendingFilename, password);
+        const decryptResult = await api.decryptFile(pendingFilename, '', password);
+        currentFile.set(pendingFilename);
+        passages.set(decryptResult.passages);
+        currentPassageIndex.set(0);
+        isDirty.set(false);
+      } else {
+        const decryptResult = await api.decryptFile(pendingFilename, pendingCiphertext, password);
+        currentFile.set(pendingFilename);
+        passages.set(decryptResult.passages);
+        currentPassageIndex.set(0);
+        isDirty.set(false);
+      }
+
+      success.set('File opened successfully');
+      setTimeout(() => success.set(null), 3000);
+    } catch (e: any) {
+      error.set(`Failed: ${e?.message || e}`);
+    } finally {
+      isLoading.set(false);
+    }
+  }
+
+  async function handleSave() {
+    try {
+      isLoading.set(true);
+      await api.encryptAndSave();
+      isDirty.set(false);
+      success.set('Saved successfully');
+      setTimeout(() => success.set(null), 3000);
+    } catch (e: any) {
+      error.set(`Failed to save: ${e?.message || e}`);
+    } finally {
+      isLoading.set(false);
+    }
+  }
+
+  async function handleLock() {
+    if (get(isDirty)) {
+      await handleSave();
+    }
+    currentFile.set(null);
+    passages.set([]);
+    currentPassageIndex.set(0);
+  }
+
+  function handleThemeChange(newTheme: 'light' | 'dark') {
+    theme.set(newTheme);
+    document.documentElement.setAttribute('data-theme', newTheme);
+    api.updateConfig({ theme: newTheme });
+  }
+</script>
+
+<div class="app-container">
+  {#if !initialized}
+    <div class="loading-screen" style="background: #1a1a2e; color: #e8e8e8;">
+      {#if initError}
+        <p class="error" style="color: #e74c3c;">Error: {initError}</p>
+      {:else}
+        <p>Loading...</p>
+      {/if}
+    </div>
+  {:else}
+    <header class="app-header">
+      <div class="header-left">
+        <h1>Safe Writing</h1>
+        <span class="data-dir">{ $config.data_dir }</span>
+      </div>
+      <div class="header-right">
+        <ThemeToggle currentTheme={$theme} onThemeChange={handleThemeChange} />
+      </div>
+    </header>
+
+    <main class="app-main">
+      <Sidebar
+        filesProp={$files}
+        currentFile={$currentFile}
+        onFileSelect={handleFileSelect}
+        isDirtyProp={$isDirty}
+      />
+
+      {#if $currentFile}
+        <Editor
+          passagesProp={$passages}
+          currentIndex={$currentPassageIndex}
+          isDirtyProp={$isDirty}
+          onSave={handleSave}
+          onLock={handleLock}
+        />
+      {:else}
+        <div class="empty-state">
+          <p>Select a file to begin</p>
+        </div>
+      {/if}
+
+      {#if $copilotVisible && $currentFile}
+        <CopilotPanel />
+      {/if}
+    </main>
+
+    {#if showPasswordDialog}
+      <PasswordDialog
+        mode={passwordDialogMode}
+        filename={pendingFilename}
+        onSubmit={handlePasswordSubmit}
+        onCancel={() => showPasswordDialog = false}
+      />
+    {/if}
+
+    {#if $isLoading}
+      <div class="loading-overlay">
+        <div class="spinner"></div>
+      </div>
+    {/if}
+
+    {#if $error}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="error-toast" onclick={() => error.set(null)}>
+        {$error}
+      </div>
+    {/if}
+
+    {#if $success}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="success-toast" onclick={() => success.set(null)}>
+        {$success}
+      </div>
+    {/if}
+  {/if}
+</div>
+
+<style>
+  .app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+  }
+
+  .loading-screen {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-primary);
+  }
+
+  .loading-screen .error {
+    color: var(--danger-color);
+  }
+
+  .app-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .header-left h1 {
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .data-dir {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .header-right {
+    display: flex;
+    gap: 8px;
+  }
+
+  .app-main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .empty-state {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-editor);
+    color: var(--text-muted);
+  }
+
+  .loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border-color);
+    border-top-color: var(--accent-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .error-toast, .success-toast {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    cursor: pointer;
+    z-index: 1000;
+  }
+
+  .error-toast {
+    border: 1px solid var(--danger-color);
+    color: var(--danger-color);
+  }
+
+  .success-toast {
+    border: 1px solid var(--success-color);
+    color: var(--success-color);
+  }
+</style>

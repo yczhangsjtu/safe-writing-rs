@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Error {
     FailedToOpenFile(String),
     Base64DecodeFail,
@@ -23,3 +23,20 @@ impl<'de> Deserialize<'de> for Error {
         Ok(Error::DecryptionFail)
     }
 }
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::FailedToOpenFile(s) => write!(f, "Failed to open file: {}", s),
+            Error::Base64DecodeFail => write!(f, "Base64 decode failed"),
+            Error::DecryptionFail => write!(f, "Decryption failed"),
+            Error::MacFail(_) => write!(f, "MAC verification failed"),
+            Error::InvalidUTF8 => write!(f, "Invalid UTF-8"),
+            Error::InvalidPlaintextFormat => write!(f, "Invalid plaintext format"),
+            Error::FailedToParseJson(s) => write!(f, "Failed to parse JSON: {}", s),
+            Error::InvalidImageFormat => write!(f, "Invalid image format"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}

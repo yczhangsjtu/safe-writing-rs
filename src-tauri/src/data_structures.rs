@@ -1,5 +1,5 @@
 use crate::{
-    encode::{base64_decode, base64_decode_to_bytes, base64_encode},
+    encode::{base64_decode, base64_encode},
     error::Error,
 };
 
@@ -15,6 +15,14 @@ pub struct Passage {
 impl Passage {
     pub fn new(id: usize, title: String, content: String) -> Self {
         Self { id, title, content }
+    }
+
+    pub fn title(&self) -> &String {
+        &self.title
+    }
+
+    pub fn content(&self) -> &String {
+        &self.content
     }
 
     pub fn encode(&self) -> String {
@@ -49,12 +57,24 @@ impl PlainText {
         Self::new(0, content, vec![])
     }
 
+    pub fn from_passages_images(content: Vec<Passage>, images: Vec<Vec<u8>>) -> Self {
+        Self::new(0, content, images)
+    }
+
     pub fn num_passages(&self) -> usize {
         self.content.len()
     }
 
+    pub fn num_images(&self) -> usize {
+        self.images.len()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.content.is_empty()
+    }
+
+    pub fn get_first_passage_text(&self) -> Option<String> {
+        self.content.get(0).map(|p| p.content.clone())
     }
 
     pub fn title_of_passage(&self, index: usize) -> Option<String> {
@@ -103,6 +123,7 @@ impl PlainText {
 
     pub fn append_plaintext(&mut self, plaintext: &PlainText) {
         self.content.extend(plaintext.content.clone());
+        self.images.extend(plaintext.images.clone());
     }
 
     pub fn bounded_index(&self, index: usize) -> usize {
@@ -152,7 +173,7 @@ impl PlainText {
             Passage {
                 id: self.next_id,
                 title,
-                content: String::new(),
+                content: "".to_string(),
             },
         );
         self.next_id += 1;
@@ -160,5 +181,119 @@ impl PlainText {
 
     pub fn swap(&mut self, a: usize, b: usize) {
         self.content.swap(a, b);
+    }
+
+    pub fn encrypt(&self, password: &str) -> String {
+        crate::cipher::encrypt(password, self)
+    }
+
+    pub fn decrypt(password: &str, ciphertext: &str) -> Result<Self, Error> {
+        let ciphertext = ciphertext.split("\n").collect::<Vec<_>>();
+        if ciphertext.len() < 3 {
+            return Err(Error::DecryptionFail);
+        }
+        crate::cipher::decrypt(password, ciphertext[0], ciphertext[1], ciphertext[2])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_passage_encode_decode() {
+        let passage = Passage::new(0, "Test Title".to_string(), "Test Content".to_string());
+        let encoded = passage.encode();
+        assert!(encoded.contains("-"));
+    }
+
+    #[test]
+    fn test_plaintext_empty() {
+        let empty = PlainText::empty();
+        assert!(empty.is_empty());
+        assert_eq!(empty.num_passages(), 0);
+        assert_eq!(empty.num_images(), 0);
+    }
+
+    #[test]
+    fn test_plaintext_from_passages() {
+        let passages = vec![
+            Passage::new(0, "Title 1".to_string(), "Content 1".to_string()),
+            Passage::new(1, "Title 2".to_string(), "Content 2".to_string()),
+        ];
+        let plaintext = PlainText::from_passages(passages);
+        assert_eq!(plaintext.num_passages(), 2);
+        assert_eq!(plaintext.title_of_passage(0), Some("Title 1".to_string()));
+        assert_eq!(plaintext.content_of_passage(1), Some(&"Content 2".to_string()));
+    }
+
+    #[test]
+    fn test_plaintext_insert_passage() {
+        let mut plaintext = PlainText::empty();
+        plaintext.insert_new_passage(0, "New Title".to_string());
+        assert_eq!(plaintext.num_passages(), 1);
+        assert_eq!(plaintext.title_of_passage(0), Some("New Title".to_string()));
+        assert_eq!(plaintext.content_of_passage(0), Some(&"".to_string()));
+    }
+
+    #[test]
+    fn test_plaintext_swap() {
+        let mut plaintext = PlainText::from_passages(vec![
+            Passage::new(0, "A".to_string(), "Content A".to_string()),
+            Passage::new(1, "B".to_string(), "Content B".to_string()),
+        ]);
+        plaintext.swap(0, 1);
+        assert_eq!(plaintext.title_of_passage(0), Some("B".to_string()));
+        assert_eq!(plaintext.title_of_passage(1), Some("A".to_string()));
+    }
+
+    #[test]
+    fn test_plaintext_remove() {
+        let mut plaintext = PlainText::from_passages(vec![
+            Passage::new(0, "A".to_string(), "Content A".to_string()),
+            Passage::new(1, "B".to_string(), "Content B".to_string()),
+        ]);
+        let removed = plaintext.remove_passage(0);
+        assert_eq!(removed.title, "A");
+        assert_eq!(plaintext.num_passages(), 1);
+        assert_eq!(plaintext.title_of_passage(0), Some("B".to_string()));
+    }
+
+    #[test]
+    fn test_plaintext_encode_empty() {
+        let empty = PlainText::empty();
+        let encoded = empty.encode();
+        let decoded = String::from_utf8(encoded).unwrap();
+        assert!(decoded.contains(":FontSize=24"));
+    }
+
+    #[test]
+    fn test_plaintext_set_content() {
+        let mut plaintext = PlainText::from_passages(vec![
+            Passage::new(0, "Title".to_string(), "Old Content".to_string()),
+        ]);
+        plaintext.set_content(0, "New Content".to_string());
+        assert_eq!(plaintext.content_of_passage(0), Some(&"New Content".to_string()));
+    }
+
+    #[test]
+    fn test_plaintext_set_title() {
+        let mut plaintext = PlainText::from_passages(vec![
+            Passage::new(0, "Old Title".to_string(), "Content".to_string()),
+        ]);
+        plaintext.set_title(0, "New Title".to_string());
+        assert_eq!(plaintext.title_of_passage(0), Some("New Title".to_string()));
+    }
+
+    #[test]
+    fn test_plaintext_append() {
+        let mut plaintext1 = PlainText::from_passages(vec![
+            Passage::new(0, "A".to_string(), "Content A".to_string()),
+        ]);
+        let plaintext2 = PlainText::from_passages(vec![
+            Passage::new(1, "B".to_string(), "Content B".to_string()),
+        ]);
+        plaintext1.append_plaintext(&plaintext2);
+        assert_eq!(plaintext1.num_passages(), 2);
     }
 }
