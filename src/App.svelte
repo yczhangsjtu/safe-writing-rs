@@ -30,7 +30,7 @@
 
       // Load files list
       const fileList = await api.listFiles();
-      files.set(fileList);
+      files.set(fileList.sort());
       initialized = true;
       console.log('Initialization complete');
     } catch (e: any) {
@@ -116,7 +116,7 @@
         await api.createFile(pendingFilename, password);
         // Refresh file list
         const fileList = await api.listFiles();
-        files.set(fileList);
+        files.set(fileList.sort());
         // Decrypt (will trigger state-changed event)
         await api.decryptFile(pendingFilename, '', password);
       } else {
@@ -179,7 +179,7 @@
         config.set(newConfig);
         // Refresh file list for new directory
         const fileList = await api.listFiles();
-        files.set(fileList);
+        files.set(fileList.sort());
         success.set('Settings saved successfully');
         setTimeout(() => success.set(null), 3000);
       } catch (e: any) {
