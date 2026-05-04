@@ -108,13 +108,22 @@
     const textarea = e.target as HTMLTextAreaElement;
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    if (start !== end) {
-      const selected = editorContent.slice(start, end);
-      emit('editor-selection', selected);
-    } else {
-      emit('editor-selection', '');
-    }
+    const cursorPos = start;
+    const selected = start !== end ? editorContent.slice(start, end) : '';
+    emit('editor-selection', { selected, cursorPos });
     updateCurrentLine();
+  }
+
+  function handleClick(e: Event) {
+    handleSelectionChange(e);
+  }
+
+  function handleKeyUp(e: KeyboardEvent) {
+    updateCurrentLine();
+    // Update cursor position on arrow keys and other navigation
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Home' || e.key === 'End') {
+      handleSelectionChange(e);
+    }
   }
 
   async function handleKeydown(e: KeyboardEvent) {
@@ -207,8 +216,8 @@
               bind:this={textareaElement}
               oninput={handleContentChange}
               onselect={handleSelectionChange}
-              onclick={updateCurrentLine}
-              onkeyup={updateCurrentLine}
+              onclick={handleClick}
+              onkeyup={handleKeyUp}
               placeholder="Start writing..."
               style="font-size: {$config.font_size}px; font-family: 'LXGW WenKai', sans-serif;"
             ></textarea>

@@ -19,6 +19,14 @@
   let output = $state('');
   let waiting = $state(false);
   let selectedText = $state('');
+  let cursorPosition = $state(Infinity); // Default to end of content
+
+  // Reset cursor position to end when passage changes (user hasn't clicked yet)
+  $effect(() => {
+    // Track passage index changes
+    $currentPassageIndex;
+    cursorPosition = Infinity;
+  });
   let collapsedSystem = $state(false);
   let collapsedBuffers = $state(false);
   let collapsedConversation = $state(false);
@@ -46,10 +54,11 @@
     return text.slice(0, half) + '...' + text.slice(text.length - half);
   }
 
-  // Listen for selected text changes from Editor
+  // Listen for selected text and cursor position changes from Editor
   $effect(() => {
-    const unlisten = listen<string>('editor-selection', (event) => {
-      selectedText = event.payload;
+    const unlisten = listen<{ selected: string; cursorPos: number }>('editor-selection', (event) => {
+      selectedText = event.payload.selected;
+      cursorPosition = event.payload.cursorPos;
     });
     return async () => {
       (await unlisten)();
@@ -126,7 +135,11 @@
   async function handleInsert() {
     if (!output) return;
     const currentContent = $passages[$currentPassageIndex]?.content || '';
-    const newContent = currentContent + '\n\n' + output;
+    // Insert at cursor position, or at end if position is Infinity
+    const insertPos = cursorPosition === Infinity ? currentContent.length : cursorPosition;
+    const beforeCursor = currentContent.slice(0, insertPos);
+    const afterCursor = currentContent.slice(insertPos);
+    const newContent = beforeCursor + '\n' + output + '\n' + afterCursor;
     await api.updatePassageContent($currentPassageIndex, newContent);
     output = '';
   }
@@ -135,7 +148,11 @@
     const msg = $copilotSettings.messages[index];
     if (!msg || msg.role !== 'assistant') return;
     const currentContent = $passages[$currentPassageIndex]?.content || '';
-    const newContent = currentContent + '\n\n' + msg.content;
+    // Insert at cursor position, or at end if position is Infinity
+    const insertPos = cursorPosition === Infinity ? currentContent.length : cursorPosition;
+    const beforeCursor = currentContent.slice(0, insertPos);
+    const afterCursor = currentContent.slice(insertPos);
+    const newContent = beforeCursor + '\n' + msg.content + '\n' + afterCursor;
     await api.updatePassageContent($currentPassageIndex, newContent);
   }
 
