@@ -20,6 +20,7 @@
 
   let editMode = $state(true);
   let editorContent = $state('');
+  let editorTitle = $state('');
   let images = $state<Map<string, { data: string; index: number }>>(new Map());
   let imagesLoaded = $state(false);
   let showMetadataIndex = $state<number | null>(null);
@@ -31,6 +32,7 @@
   $effect(() => {
     if (passagesProp && passagesProp.length > 0 && currentIndex < passagesProp.length) {
       editorContent = passagesProp[currentIndex]?.content || '';
+      editorTitle = passagesProp[currentIndex]?.title || '';
     }
   });
 
@@ -87,6 +89,12 @@
   async function handleContentChange() {
     if (currentIndex < passagesProp.length) {
       await api.updatePassageContent(currentIndex, editorContent);
+    }
+  }
+
+  async function handleTitleChange() {
+    if (currentIndex < passagesProp.length && editorTitle.trim()) {
+      await api.updatePassageTitle(currentIndex, editorTitle.trim());
     }
   }
 
@@ -176,6 +184,13 @@
     {#if passagesProp && passagesProp.length > 0 && currentIndex < passagesProp.length}
       {#if editMode}
         <div class="editor-content">
+          <input
+            type="text"
+            class="title-input"
+            bind:value={editorTitle}
+            oninput={handleTitleChange}
+            placeholder="Untitled"
+          />
           <div class="textarea-wrapper">
             <div class="line-highlight" style="top: {currentLineTop}px;"></div>
             <textarea
@@ -192,6 +207,7 @@
         </div>
       {:else}
         <div class="editor-content">
+          <h1 class="title-display">{editorTitle || 'Untitled'}</h1>
           <div class="preview-content" style="font-size: {$config.font_size}px;">
           {#each renderPreviewContent(editorContent) as part}
             {#if part.type === 'text'}
@@ -261,6 +277,39 @@
     max-width: 800px;
     margin: 0 auto;
     width: 100%;
+  }
+
+  .title-input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 28px;
+    font-weight: 600;
+    font-family: 'LXGW WenKai', sans-serif;
+    padding: 0 0 var(--spacing-lg) 0;
+    margin-bottom: var(--spacing-lg);
+    outline: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.15s ease;
+  }
+
+  .title-input:focus {
+    border-bottom-color: var(--border-color);
+  }
+
+  .title-input::placeholder {
+    color: var(--text-faint);
+  }
+
+  .title-display {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-lg);
+    border-bottom: 1px solid var(--border-color-faint);
+    font-family: 'LXGW WenKai', sans-serif;
   }
 
   .textarea-wrapper {

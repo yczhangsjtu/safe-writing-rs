@@ -1,7 +1,6 @@
 <script lang="ts">
   import { passages, currentPassageIndex } from '../lib/stores';
   import * as api from '../lib/tauri';
-  import NameDialog from './NameDialog.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
 
   let {
@@ -22,8 +21,6 @@
     onToggleEdit: () => void;
   } = $props();
 
-  let showNewPassageDialog = $state(false);
-  let showRenameDialog = $state(false);
   let confirmDelete = $state(false);
   let pendingDeleteIndex = $state(-1);
   let draggedIndex = $state<number | null>(null);
@@ -32,32 +29,25 @@
 
   const editPreviewTitle = $derived(editMode ? "Preview" : "Edit");
 
+  function generateTimestampTitle(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  }
+
   async function handleSelect(index: number) {
     await api.setCurrentPassage(index);
     showItemMenu = null;
   }
 
-  function handleAdd() {
-    showNewPassageDialog = true;
-  }
-
-  async function handleNewPassageSubmit(title: string) {
-    showNewPassageDialog = false;
+  async function handleAdd() {
+    const title = generateTimestampTitle();
     await api.addPassage(title);
-  }
-
-  function handleRename(index: number) {
-    pendingDeleteIndex = index;
-    showRenameDialog = true;
-    showItemMenu = null;
-  }
-
-  async function handleRenameSubmit(newTitle: string) {
-    showRenameDialog = false;
-    if (pendingDeleteIndex >= 0) {
-      await api.updatePassageTitle(pendingDeleteIndex, newTitle);
-    }
-    pendingDeleteIndex = -1;
   }
 
   function handleDeleteClick(index: number) {
@@ -179,7 +169,6 @@
         >⋮</button>
         {#if showItemMenu === i}
           <div class="item-menu">
-            <button class="menu-item" onclick={() => handleRename(i)}>Rename</button>
             <button class="menu-item danger" onclick={() => handleDeleteClick(i)}>Delete</button>
           </div>
         {/if}
@@ -205,24 +194,6 @@
     {/if}
   </div>
 </div>
-
-{#if showNewPassageDialog}
-  <NameDialog
-    title="Create New Passage"
-    placeholder="Enter passage title..."
-    onSubmit={handleNewPassageSubmit}
-    onCancel={() => showNewPassageDialog = false}
-  />
-{/if}
-
-{#if showRenameDialog}
-  <NameDialog
-    title="Rename Passage"
-    placeholder="Enter new title..."
-    onSubmit={handleRenameSubmit}
-    onCancel={() => { showRenameDialog = false; pendingDeleteIndex = -1; }}
-  />
-{/if}
 
 <style>
   .passage-list {
