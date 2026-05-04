@@ -1,9 +1,5 @@
-use std::io::BufRead;
-use std::sync::mpsc::{channel, Receiver, Sender};
-
-use crate::config::Config;
-use crate::data_structures::PlainText;
 use crate::state::AppState;
+use tauri::Emitter;
 
 pub const AI_PASSAGE_NAME: &str = ".ai";
 
@@ -163,7 +159,7 @@ impl CopilotSettings {
         })
     }
 
-    pub fn load_from_plaintext(plaintext: &PlainText) -> Self {
+    pub fn load_from_plaintext(plaintext: &crate::data_structures::PlainText) -> Self {
         for passage in plaintext.passages() {
             if passage.title == AI_PASSAGE_NAME {
                 if let Some(settings) = Self::from_xml(&passage.content) {
@@ -174,7 +170,7 @@ impl CopilotSettings {
         Self::default()
     }
 
-    pub fn save_to_plaintext(&self, plaintext: &mut PlainText) {
+    pub fn save_to_plaintext(&self, plaintext: &mut crate::data_structures::PlainText) {
         let xml = self.to_xml();
         let ai_passage_index = plaintext
             .passages()
@@ -238,26 +234,15 @@ impl CopilotSettings {
     }
 }
 
-pub struct StreamState {
-    pub receiver: Option<Receiver<String>>,
-    pub abort_sender: Option<Sender<()>>,
-    pub waiting: bool,
-    pub output: String,
-}
-
-impl Default for StreamState {
-    fn default() -> Self {
-        Self {
-            receiver: None,
-            abort_sender: None,
-            waiting: false,
-            output: String::new(),
-        }
-    }
+#[derive(serde::Serialize)]
+pub struct StreamEvent {
+    pub event_type: String,
+    pub content: String,
 }
 
 #[tauri::command]
-pub fn send_message(
+pub async fn send_message(
+    app: tauri::AppHandle,
     prompt: String,
     current_passage: String,
     buffers: Vec<String>,
@@ -265,9 +250,23 @@ pub fn send_message(
     messages: Vec<Message>,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
-    let config = state.config.lock().map_err(|e| e.to_string())?;
+    // Get config and release the lock immediately
+    let url = {
+        let config = state.config.lock().map_err(|e| e.to_string())?;
+        format!("{}/v1/chat/completions", config.llamacpp_url)
+    };
 
     let xml_content = CopilotSettings::build_prompt(&prompt, &buffers, &current_passage);
+
+    // Add user message
+    let user_message = Message {
+        role: "user".to_string(),
+        content: xml_content.clone(),
+        display: prompt.clone(),
+    };
+
+    // Emit user message to frontend
+    app.emit("copilot-user-message", &user_message).map_err(|e| e.to_string())?;
 
     let buffer_instructions = "\n\n<buffer_instructions>\nThe user may reference text buffers using placeholders like <first>, <second>, etc. When such placeholders appear, the actual buffer content will be provided in a <referenced_buffers> section within the user's message.\n</buffer_instructions>";
 
@@ -276,17 +275,14 @@ pub fn send_message(
         "content": format!("{}{}", system_prompt, buffer_instructions),
     })];
 
-    for msg in &messages {
+    // Include existing messages
+    let all_messages: Vec<Message> = messages.into_iter().chain(std::iter::once(user_message)).collect();
+    for msg in &all_messages {
         api_messages.push(serde_json::json!({
             "role": msg.role,
             "content": msg.content,
         }));
     }
-
-    api_messages.push(serde_json::json!({
-        "role": "user",
-        "content": xml_content,
-    }));
 
     let body = serde_json::json!({
         "model": "local",
@@ -294,7 +290,59 @@ pub fn send_message(
         "stream": true,
     });
 
-    let url = format!("{}/v1/chat/completions", config.llamacpp_url);
+    // Send request
+    let client = reqwest::Client::new();
+    let response = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .body(body.to_string())
+        .send()
+        .await
+        .map_err(|e| format!("Failed to connect to LLM server: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body_text = response.text().await.unwrap_or_default();
+        return Err(format!("LLM server error ({}): {}", status, body_text));
+    }
+
+    // Stream response
+    use futures_util::StreamExt;
+    let mut stream = response.bytes_stream();
+    let mut full_response = String::new();
+
+    app.emit("copilot-start", "").map_err(|e| e.to_string())?;
+
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("Stream error: {}", e))?;
+        let text = String::from_utf8_lossy(&chunk);
+
+        for line in text.lines() {
+            if line.is_empty() || !line.starts_with("data: ") {
+                continue;
+            }
+
+            let data = &line[6..];
+            if data == "[DONE]" {
+                break;
+            }
+
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                if let Some(content) = json["choices"][0]["delta"]["content"].as_str() {
+                    full_response.push_str(content);
+                    app.emit("copilot-chunk", content).map_err(|e| e.to_string())?;
+                }
+            }
+        }
+    }
+
+    // Emit final assistant message
+    let assistant_message = Message {
+        role: "assistant".to_string(),
+        content: full_response.clone(),
+        display: full_response,
+    };
+    app.emit("copilot-done", &assistant_message).map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -339,6 +387,7 @@ pub fn clear_copilot() -> Result<CopilotSettings, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::data_structures::PlainText;
 
     #[test]
     fn test_copilot_settings_default() {

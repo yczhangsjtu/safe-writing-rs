@@ -112,5 +112,11 @@ export async function sendMessage(
   systemPrompt: string,
   messages: CopilotMessage[]
 ): Promise<void> {
-  return invoke('send_message', { prompt, currentPassage, buffers, systemPrompt, messages });
+  return invoke('send_message', {
+    prompt,
+    currentPassage,
+    buffers,
+    systemPrompt,
+    messages
+  });
 }

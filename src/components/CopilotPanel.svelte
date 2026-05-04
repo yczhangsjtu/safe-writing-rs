@@ -1,5 +1,6 @@
 <script lang="ts">
   import { copilotSettings, passages, currentPassageIndex } from '../lib/stores';
+  import { listen } from '@tauri-apps/api/event';
   import * as api from '../lib/tauri';
 
   let userInput = $state('');
@@ -12,27 +13,32 @@
   }
 
   async function handleSend() {
-    if (!userInput.trim()) return;
+    if (!userInput.trim() || waiting) return;
 
+    const prompt = userInput.trim();
+    userInput = '';
     waiting = true;
     output = '';
 
     try {
       await api.sendMessage(
-        userInput,
+        prompt,
         getCurrentPassageContent(),
         $copilotSettings.buffers,
         $copilotSettings.system_prompt,
         $copilotSettings.messages
       );
-
-      output = 'Response from AI...';
     } catch (e: any) {
       output = `Error: ${e?.message || e}`;
+      waiting = false;
     }
+  }
 
-    waiting = false;
-    userInput = '';
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.ctrlKey && e.key === 'Enter') {
+      e.preventDefault();
+      handleSend();
+    }
   }
 
   function handleInsert() {
@@ -65,7 +71,36 @@
     api.saveCopilotSettings($copilotSettings);
     showSettings = false;
   }
+
+  // Listen for streaming events from backend
+  $effect(() => {
+    const unlistenUserMessage = listen<{role: string; content: string; display: string}>('copilot-user-message', (event) => {
+      $copilotSettings.messages.push(event.payload);
+    });
+
+    const unlistenStart = listen('copilot-start', () => {
+      output = '';
+    });
+
+    const unlistenChunk = listen<string>('copilot-chunk', (event) => {
+      output += event.payload;
+    });
+
+    const unlistenDone = listen<{role: string; content: string; display: string}>('copilot-done', (event) => {
+      $copilotSettings.messages.push(event.payload);
+      waiting = false;
+    });
+
+    return async () => {
+      (await unlistenUserMessage)();
+      (await unlistenStart)();
+      (await unlistenChunk)();
+      (await unlistenDone)();
+    };
+  });
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <div class="copilot-panel">
   <div class="copilot-header">
@@ -128,7 +163,7 @@
     <div class="input-area">
       <textarea
         bind:value={userInput}
-        placeholder="Ask AI..."
+        placeholder="Ask AI... (Ctrl+Enter to send)"
         rows="3"
       ></textarea>
       <button onclick={handleSend} disabled={waiting}>
