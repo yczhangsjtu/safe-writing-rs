@@ -10,6 +10,7 @@
     isDirtyProp,
     editMode,
     onSave,
+    onLock,
     onToggleEdit
   }: {
     passagesProp: any[];
@@ -17,6 +18,7 @@
     isDirtyProp: boolean;
     editMode: boolean;
     onSave: () => void;
+    onLock: () => void;
     onToggleEdit: () => void;
   } = $props();
 
@@ -125,9 +127,15 @@
     <button class="btn-icon" title="Add Passage" onclick={handleAdd}>
       <span class="icon">+</span>
     </button>
-    <button class="btn-icon" title="Save" onclick={onSave} disabled={!isDirtyProp}>
-      <span class="icon">{#if isDirtyProp}💾{:else}○{/if}</span>
-    </button>
+    {#if isDirtyProp}
+      <button class="btn-icon" title="Save" onclick={onSave}>
+        <span class="icon">💾</span>
+      </button>
+    {:else}
+      <button class="btn-icon" title="Lock" onclick={onLock}>
+        <span class="icon">🔒</span>
+      </button>
+    {/if}
     <button class="btn-icon" title={editPreviewTitle} onclick={onToggleEdit}>
       <span class="icon">{#if editMode}👁{:else}✎{/if}</span>
     </button>

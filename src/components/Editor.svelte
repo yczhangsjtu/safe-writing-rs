@@ -14,7 +14,7 @@
     passagesProp: any[];
     currentIndex: number;
     isDirtyProp: boolean;
-    onSave: () => void;
+    onSave: () => Promise<void>;
     onLock: () => void;
   } = $props();
 
@@ -84,13 +84,16 @@
     }
   }
 
-  function handleKeydown(e: KeyboardEvent) {
+  async function handleKeydown(e: KeyboardEvent) {
     if (e.ctrlKey && e.key === 's') {
       e.preventDefault();
-      onSave();
+      await onSave();
     }
     if (e.ctrlKey && e.key === 'l') {
       e.preventDefault();
+      if (isDirtyProp) {
+        await onSave();
+      }
       onLock();
     }
   }
@@ -145,6 +148,7 @@
     currentIndex={currentIndex}
     isDirtyProp={isDirtyProp}
     onSave={onSave}
+    onLock={onLock}
     onToggleEdit={toggleEditMode}
     editMode={editMode}
   />
