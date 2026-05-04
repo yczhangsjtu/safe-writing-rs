@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { theme, files, currentFile, passages, currentPassageIndex, config, isLoading, error, success, copilotVisible, isDirty } from './lib/stores';
+  import { theme, files, currentFile, passages, currentPassageIndex, config, isLoading, error, success, copilotVisible, isDirty, copilotSettings } from './lib/stores';
   import * as api from './lib/tauri';
   import Sidebar from './components/Sidebar.svelte';
   import Editor from './components/Editor.svelte';
@@ -101,12 +101,32 @@
         passages.set(decryptResult.passages);
         currentPassageIndex.set(0);
         isDirty.set(false);
+        // Initialize copilot with default settings for new file
+        copilotSettings.set({
+          system_prompt: 'You are a helpful writing assistant.',
+          buffers: Array(10).fill(''),
+          favorite_prompts: [],
+          messages: []
+        });
       } else {
         const decryptResult = await api.decryptFile(pendingFilename, pendingCiphertext, password);
         currentFile.set(pendingFilename);
         passages.set(decryptResult.passages);
         currentPassageIndex.set(0);
         isDirty.set(false);
+        // Load copilot settings from .ai passage
+        try {
+          const aiSettings = await api.loadCopilotSettings();
+          copilotSettings.set(aiSettings);
+        } catch (e) {
+          // If no .ai passage exists, use default settings
+          copilotSettings.set({
+            system_prompt: 'You are a helpful writing assistant.',
+            buffers: Array(10).fill(''),
+            favorite_prompts: [],
+            messages: []
+          });
+        }
       }
 
       success.set('File opened successfully');
@@ -139,6 +159,13 @@
     currentFile.set(null);
     passages.set([]);
     currentPassageIndex.set(0);
+    // Clear copilot settings when locking
+    copilotSettings.set({
+      system_prompt: 'You are a helpful writing assistant.',
+      buffers: Array(10).fill(''),
+      favorite_prompts: [],
+      messages: []
+    });
   }
 
   function handleThemeChange(newTheme: 'light' | 'dark') {

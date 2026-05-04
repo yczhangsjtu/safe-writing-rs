@@ -67,6 +67,13 @@
   async function handleContentChange() {
     if (currentIndex < passagesProp.length) {
       await api.updatePassageContent(currentIndex, editorContent);
+      // Update the passages store to reflect the change
+      passages.update(p => {
+        if (p[currentIndex]) {
+          p[currentIndex].content = editorContent;
+        }
+        return p;
+      });
       isDirty.set(true);
     }
   }

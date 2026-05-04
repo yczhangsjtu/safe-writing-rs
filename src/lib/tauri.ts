@@ -105,6 +105,10 @@ export async function clearCopilot(): Promise<CopilotSettings> {
   return invoke('clear_copilot');
 }
 
+export async function abortGeneration(): Promise<void> {
+  return invoke('abort_generation');
+}
+
 export async function sendMessage(
   prompt: string,
   currentPassage: string,

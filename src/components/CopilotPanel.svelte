@@ -2,12 +2,106 @@
   import { copilotSettings, passages, currentPassageIndex, isDirty } from '../lib/stores';
   import { listen } from '@tauri-apps/api/event';
   import * as api from '../lib/tauri';
+  import { get } from 'svelte/store';
 
   let userInput = $state('');
   let output = $state('');
   let waiting = $state(false);
   let showSettings = $state(false);
   let selectedText = $state('');
+  let newFavName = $state('');
+  let newFavPrompt = $state('');
+
+  const bufferNames = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
+
+  function makeBriefSummary(text: string, maxLen: number): string {
+    if (text.length <= maxLen) return text;
+    const half = maxLen / 2;
+    return text.slice(0, half) + '...' + text.slice(text.length - half);
+  }
+
+  // Auto-save when system_prompt, buffers, or favorite_prompts change
+  let lastSavedSettings = $state({
+    system_prompt: $copilotSettings.system_prompt,
+    buffers: [...$copilotSettings.buffers],
+    favorite_prompts: [...$copilotSettings.favorite_prompts]
+  });
+
+  $effect(() => {
+    const currentSettings = {
+      system_prompt: $copilotSettings.system_prompt,
+      buffers: [...$copilotSettings.buffers],
+      favorite_prompts: [...$copilotSettings.favorite_prompts]
+    };
+
+    // Check if any persistent settings changed (excluding messages)
+    const systemChanged = currentSettings.system_prompt !== lastSavedSettings.system_prompt;
+    const buffersChanged = JSON.stringify(currentSettings.buffers) !== JSON.stringify(lastSavedSettings.buffers);
+    const favsChanged = JSON.stringify(currentSettings.favorite_prompts) !== JSON.stringify(lastSavedSettings.favorite_prompts);
+
+    if (systemChanged || buffersChanged || favsChanged) {
+      lastSavedSettings = currentSettings;
+      // Save to .ai passage (debounce with setTimeout)
+      setTimeout(async () => {
+        try {
+          await api.saveCopilotSettings($copilotSettings);
+          isDirty.set(true);
+        } catch (e) {
+          console.error('Failed to save copilot settings:', e);
+        }
+      }, 500);
+    }
+  });
+
+  // Track last .ai passage content to detect external edits
+  let lastAiContent = $state('');
+
+  // Initialize lastAiContent when passages are loaded
+  $effect(() => {
+    if ($passages.length > 0 && lastAiContent === '') {
+      const aiPassage = $passages.find(p => p.title === '.ai');
+      if (aiPassage) {
+        lastAiContent = aiPassage.content;
+      }
+    }
+    // Reset when passages are cleared (file closed)
+    if ($passages.length === 0) {
+      lastAiContent = '';
+      lastSavedSettings = {
+        system_prompt: 'You are a helpful writing assistant.',
+        buffers: Array(10).fill(''),
+        favorite_prompts: []
+      };
+    }
+  });
+
+  // Sync from .ai passage when it's edited externally (in the editor)
+  $effect(() => {
+    const currentPassages = $passages;
+    const aiPassage = currentPassages.find(p => p.title === '.ai');
+
+    if (aiPassage && aiPassage.content !== lastAiContent) {
+      // .ai passage was edited in the editor, sync to copilot settings
+      lastAiContent = aiPassage.content;
+      // Only reload if we're not currently editing in copilot panel (to avoid conflict)
+      if (!showSettings) {
+        setTimeout(async () => {
+          try {
+            const aiSettings = await api.loadCopilotSettings();
+            // Update lastSavedSettings to prevent auto-save triggering
+            lastSavedSettings = {
+              system_prompt: aiSettings.system_prompt,
+              buffers: [...aiSettings.buffers],
+              favorite_prompts: [...aiSettings.favorite_prompts]
+            };
+            copilotSettings.set(aiSettings);
+          } catch (e) {
+            // Failed to parse .ai passage, ignore
+          }
+        }, 100);
+      }
+    }
+  });
 
   // Listen for selected text changes from Editor
   $effect(() => {
@@ -99,12 +193,45 @@
     output = '';
   }
 
+  async function handleInsertFromHistory(index: number) {
+    const msg = $copilotSettings.messages[index];
+    if (!msg || msg.role !== 'assistant') return;
+    const currentContent = $passages[$currentPassageIndex]?.content || '';
+    const newContent = currentContent + '\n\n' + msg.content;
+    await api.updatePassageContent($currentPassageIndex, newContent);
+    passages.update(p => {
+      p[$currentPassageIndex].content = newContent;
+      return p;
+    });
+    isDirty.set(true);
+  }
+
   async function handleClearHistory() {
     copilotSettings.update(s => {
       s.messages = [];
       return s;
     });
     await api.saveCopilotSettings($copilotSettings);
+  }
+
+  async function handleRefresh() {
+    try {
+      const aiSettings = await api.loadCopilotSettings();
+      // Update lastSavedSettings to prevent auto-save triggering
+      lastSavedSettings = {
+        system_prompt: aiSettings.system_prompt,
+        buffers: [...aiSettings.buffers],
+        favorite_prompts: [...aiSettings.favorite_prompts]
+      };
+      // Update lastAiContent to prevent re-sync
+      const aiPassage = $passages.find(p => p.title === '.ai');
+      if (aiPassage) {
+        lastAiContent = aiPassage.content;
+      }
+      copilotSettings.set(aiSettings);
+    } catch (e) {
+      // If no .ai passage exists, keep current settings
+    }
   }
 
   function handleAddBuffer() {
@@ -127,15 +254,69 @@
     });
   }
 
+  async function handleStopGeneration() {
+    await api.abortGeneration();
+    waiting = false;
+  }
+
+  function handleDeleteMessage(index: number) {
+    copilotSettings.update(s => {
+      s.messages = s.messages.filter((_, i) => i !== index);
+      return s;
+    });
+  }
+
+  function handleAddMessageToFavorites(index: number) {
+    const msg = $copilotSettings.messages[index];
+    if (!msg || msg.role !== 'user') return;
+    const name = makeBriefSummary(msg.display, 20);
+    copilotSettings.update(s => {
+      s.favorite_prompts = [...s.favorite_prompts, { name, prompt: msg.display }];
+      return s;
+    });
+  }
+
   async function handleResetSettings() {
-    copilotSettings.set({
+    const defaultSettings = {
       system_prompt: 'You are a helpful writing assistant.',
       buffers: Array(10).fill(''),
       favorite_prompts: [],
       messages: []
-    });
+    };
+    // Update lastSavedSettings to prevent auto-save triggering
+    lastSavedSettings = {
+      system_prompt: defaultSettings.system_prompt,
+      buffers: [...defaultSettings.buffers],
+      favorite_prompts: [...defaultSettings.favorite_prompts]
+    };
+    copilotSettings.set(defaultSettings);
     await api.saveCopilotSettings($copilotSettings);
     showSettings = false;
+  }
+
+  function handleSelectFavoritePrompt(prompt: string) {
+    userInput = prompt;
+  }
+
+  function handleAddFavoritePrompt() {
+    if (!newFavName.trim() || !newFavPrompt.trim()) return;
+
+    copilotSettings.update(s => {
+      s.favorite_prompts = [...s.favorite_prompts, {
+        name: newFavName.trim(),
+        prompt: newFavPrompt.trim()
+      }];
+      return s;
+    });
+    newFavName = '';
+    newFavPrompt = '';
+  }
+
+  function handleRemoveFavoritePrompt(index: number) {
+    copilotSettings.update(s => {
+      s.favorite_prompts = s.favorite_prompts.filter((_, i) => i !== index);
+      return s;
+    });
   }
 </script>
 
@@ -145,6 +326,7 @@
   <div class="copilot-header">
     <h3>AI Copilot</h3>
     <div class="header-buttons">
+      <button title="Refresh from .ai" onclick={handleRefresh}>↻</button>
       <button onclick={() => showSettings = !showSettings}>
         {#if showSettings}✕{:else}⚙{/if}
       </button>
@@ -162,54 +344,110 @@
           placeholder="You are a helpful writing assistant."
         ></textarea>
       </label>
+
+      {#if $copilotSettings.favorite_prompts.length > 0}
+        <div class="favorite-prompts-settings">
+          <span class="label-text">Favorite Prompts</span>
+          <div class="favorite-list">
+            {#each $copilotSettings.favorite_prompts as fav, i}
+              <div class="favorite-item-settings">
+                <span class="fav-name">{fav.name}</span>
+                <button class="btn-remove-fav" onclick={() => handleRemoveFavoritePrompt(i)}>×</button>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
+
+      <div class="add-favorite-row">
+        <input
+          type="text"
+          bind:value={newFavName}
+          placeholder="Name..."
+          class="fav-name-input"
+        />
+        <input
+          type="text"
+          bind:value={newFavPrompt}
+          placeholder="Prompt..."
+          class="fav-prompt-input"
+        />
+        <button class="btn-add-fav" onclick={handleAddFavoritePrompt}>+</button>
+      </div>
+
       <button class="btn-reset" onclick={handleResetSettings}>Reset to Default</button>
     </div>
   {/if}
 
   <div class="copilot-content">
     <div class="messages">
-      {#each $copilotSettings.messages as msg}
+      {#each $copilotSettings.messages as msg, i}
         <div class="message" class:user={msg.role === 'user'} class:assistant={msg.role === 'assistant'}>
-          <strong>{msg.role === 'user' ? 'You' : 'AI'}:</strong>
-          <p>{msg.display}</p>
+          <div class="message-header">
+            <strong>{msg.role === 'user' ? 'You' : 'AI'}:</strong>
+            <div class="message-actions">
+              {#if msg.role === 'user'}
+                <button class="btn-add-fav-msg" title="Add to favorites" onclick={() => handleAddMessageToFavorites(i)}>+</button>
+              {/if}
+              {#if msg.role === 'assistant' && i === $copilotSettings.messages.length - 1 && $copilotSettings.messages.filter(m => m.role === 'assistant').length > 0}
+                <button class="btn-insert-small" onclick={() => handleInsertFromHistory(i)}>Insert</button>
+              {/if}
+              <button class="btn-delete-msg" onclick={() => handleDeleteMessage(i)}>Delete</button>
+            </div>
+          </div>
+          <p>{msg.role === 'user' ? msg.display : msg.content}</p>
         </div>
       {/each}
 
       {#if waiting || output}
         <div class="message assistant">
-          <strong>AI:</strong>
+          <div class="message-header">
+            <strong>AI:</strong>
+            {#if !waiting && output}
+              <button class="btn-insert-small" onclick={handleInsert}>Insert</button>
+            {/if}
+          </div>
           <p>{output}</p>
-          {#if !waiting && output}
-            <button class="btn-insert" onclick={handleInsert}>Insert</button>
-          {/if}
         </div>
       {/if}
     </div>
 
     <div class="buffers">
-      <h4>Buffers</h4>
+      <h4>Buffers <span class="buffer-hint">(#0-#9, &lt;all&gt; for current passage)</span></h4>
       <button onclick={handleAddBuffer}>
         {#if selectedText}Add Selection{:else}Add Current{/if}
       </button>
       {#each $copilotSettings.buffers as buf, i}
         {#if buf}
           <div class="buffer-item">
-            <span>#{i}: {buf.slice(0, 30)}...</span>
-            <button onclick={() => handleRemoveBuffer(i)}>×</button>
+            <button class="btn-remove-buf" onclick={() => handleRemoveBuffer(i)}>×</button>
+            <span class="buffer-info">#{i} ({bufferNames[i]}): {makeBriefSummary(buf, 30)} ({buf.length} chars)</span>
           </div>
         {/if}
       {/each}
     </div>
 
     <div class="input-area">
+      {#if $copilotSettings.favorite_prompts.length > 0}
+        <div class="favorite-prompts-quick">
+          {#each $copilotSettings.favorite_prompts as fav}
+            <button class="btn-fav-quick" onclick={() => handleSelectFavoritePrompt(fav.prompt)}>
+              {fav.name}
+            </button>
+          {/each}
+        </div>
+      {/if}
+
       <textarea
         bind:value={userInput}
         placeholder="Ask AI... (Ctrl+Enter to send)"
         rows="3"
       ></textarea>
-      <button onclick={handleSend} disabled={waiting}>
-        {#if waiting}Waiting...{:else}Send{/if}
-      </button>
+      {#if waiting}
+        <button class="btn-stop" onclick={handleStopGeneration}>Stop</button>
+      {:else}
+        <button onclick={handleSend}>Send</button>
+      {/if}
     </div>
   </div>
 </div>
@@ -334,8 +572,6 @@
   }
 
   .message strong {
-    display: block;
-    margin-bottom: 2px;
     font-size: var(--font-size-sm);
     color: var(--text-muted);
   }
@@ -345,22 +581,6 @@
     white-space: pre-wrap;
     color: var(--text-primary);
     line-height: 1.5;
-  }
-
-  .btn-insert {
-    margin-top: var(--spacing-sm);
-    padding: 4px 8px;
-    border: none;
-    background: var(--accent-color);
-    color: var(--text-inverse);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    font-size: var(--font-size-xs);
-    transition: all 0.15s ease;
-  }
-
-  .btn-insert:hover {
-    opacity: 0.9;
   }
 
   .buffers {
@@ -457,5 +677,189 @@
   .input-area button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .favorite-prompts-quick {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .btn-fav-quick {
+    padding: 4px 8px;
+    border: 1px solid var(--border-color-faint);
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+    transition: all 0.15s ease;
+  }
+
+  .btn-fav-quick:hover {
+    background: var(--accent-color);
+    color: var(--text-inverse);
+    border-color: var(--accent-color);
+  }
+
+  .favorite-prompts-settings {
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .label-text {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    display: block;
+    margin-bottom: var(--spacing-xs);
+  }
+
+  .favorite-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .favorite-item-settings {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: 4px 8px;
+    background: var(--bg-hover);
+    border-radius: var(--radius-sm);
+  }
+
+  .fav-name {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    flex: 1;
+  }
+
+  .btn-remove-fav {
+    padding: 2px 4px;
+    border: none;
+    background: transparent;
+    color: var(--danger-color);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+  }
+
+  .add-favorite-row {
+    display: flex;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .fav-name-input {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid var(--border-color-faint);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+  }
+
+  .fav-prompt-input {
+    flex: 2;
+    padding: 4px 8px;
+    border: 1px solid var(--border-color-faint);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+  }
+
+  .btn-add-fav {
+    padding: 4px 8px;
+    border: none;
+    background: var(--accent-color);
+    color: var(--text-inverse);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+  }
+
+  .message-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+  }
+
+  .message-header strong {
+    margin-bottom: 0;
+  }
+
+  .message-actions {
+    display: flex;
+    gap: 2px;
+  }
+
+  .btn-add-fav-msg {
+    padding: 2px 4px;
+    border: none;
+    background: var(--success-color);
+    color: var(--text-inverse);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+  }
+
+  .btn-delete-msg {
+    padding: 2px 4px;
+    border: none;
+    background: var(--danger-color);
+    color: var(--text-inverse);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+  }
+
+  .btn-insert-small {
+    padding: 2px 6px;
+    border: none;
+    background: var(--accent-color);
+    color: var(--text-inverse);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+  }
+
+  .buffer-hint {
+    font-size: var(--font-size-xs);
+    color: var(--text-faint);
+    margin-left: var(--spacing-sm);
+  }
+
+  .btn-remove-buf {
+    padding: 2px 4px;
+    border: none;
+    background: transparent;
+    color: var(--danger-color);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+  }
+
+  .buffer-info {
+    flex: 1;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+  }
+
+  .btn-stop {
+    padding: var(--spacing-sm);
+    border: none;
+    background: var(--danger-color);
+    color: var(--text-inverse);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+    transition: all 0.15s ease;
+  }
+
+  .btn-stop:hover {
+    opacity: 0.9;
   }
 </style>
