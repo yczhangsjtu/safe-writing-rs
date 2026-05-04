@@ -86,10 +86,10 @@
 <div class="sidebar">
   <div class="sidebar-header">
     <button class="btn-icon" title="New File" onclick={handleNewFile}>
-      <span class="icon">+</span>
+      <span class="material-icons icon">add</span>
     </button>
     <button class="btn-icon" title="Refresh" onclick={handleRefresh} disabled={isDirtyProp}>
-      <span class="icon">↻</span>
+      <span class="material-icons icon">refresh</span>
     </button>
   </div>
 
@@ -101,7 +101,7 @@
         class:selected={filename === currentFile}
         onclick={() => handleFileClick(filename)}
       >
-        <span class="file-icon">📄</span>
+        <span class="material-icons file-icon">description</span>
         <span class="file-name">{filename}</span>
       </div>
     {/each}
@@ -115,7 +115,7 @@
 
   <div class="sidebar-footer">
     <button class="btn-icon" title="Settings" onclick={onOpenSettings}>
-      <span class="icon">⚙</span>
+      <span class="material-icons icon">settings</span>
     </button>
     <ThemeToggle currentTheme={$theme} onThemeChange={handleThemeChange} />
   </div>
@@ -216,6 +216,20 @@
   .file-icon {
     font-size: 16px;
     opacity: 0.6;
+  }
+
+  .material-icons {
+    font-family: 'Material Icons';
+    font-weight: normal;
+    font-style: normal;
+    display: inline-block;
+    line-height: 1;
+    text-transform: none;
+    letter-spacing: normal;
+    word-wrap: normal;
+    white-space: nowrap;
+    direction: ltr;
+    -webkit-font-smoothing: antialiased;
   }
 
   .file-name {

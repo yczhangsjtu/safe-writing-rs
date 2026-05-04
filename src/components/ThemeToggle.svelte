@@ -13,7 +13,7 @@
   title="Toggle theme"
   onclick={() => onThemeChange(currentTheme === 'dark' ? 'light' : 'dark')}
 >
-  <span class="icon">{#if currentTheme === 'dark'}☀{:else}🌙{/if}</span>
+  <span class="material-icons icon">{#if currentTheme === 'dark'}light_mode{:else}dark_mode{/if}</span>
 </button>
 
 <style>
@@ -29,6 +29,20 @@
     align-items: center;
     justify-content: center;
     transition: all 0.15s ease;
+  }
+
+  .material-icons {
+    font-family: 'Material Icons';
+    font-weight: normal;
+    font-style: normal;
+    display: inline-block;
+    line-height: 1;
+    text-transform: none;
+    letter-spacing: normal;
+    word-wrap: normal;
+    white-space: nowrap;
+    direction: ltr;
+    -webkit-font-smoothing: antialiased;
   }
 
   .icon {

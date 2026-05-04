@@ -216,7 +216,7 @@
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <button class="floating-ai-btn" class:active={$copilotVisible} title="AI Copilot" onclick={toggleCopilot}>
-            <span class="icon">✦</span>
+            <span class="material-icons icon">auto_awesome</span>
           </button>
           <Editor
             passagesProp={$passages}
@@ -355,6 +355,20 @@
   .icon {
     font-size: 16px;
     line-height: 1;
+  }
+
+  .material-icons {
+    font-family: 'Material Icons';
+    font-weight: normal;
+    font-style: normal;
+    display: inline-block;
+    line-height: 1;
+    text-transform: none;
+    letter-spacing: normal;
+    word-wrap: normal;
+    white-space: nowrap;
+    direction: ltr;
+    -webkit-font-smoothing: antialiased;
   }
 
   .empty-state {

@@ -188,7 +188,8 @@
                 </div>
               {:else}
                 <div class="image-placeholder">
-                  <span>📷 Image: {part.digest?.slice(0, 16)}...</span>
+                  <span class="material-icons">image</span>
+                  <span>Image: {part.digest?.slice(0, 16)}...</span>
                   <span class="loading-text">Loading...</span>
                 </div>
               {/if}
@@ -327,5 +328,20 @@
     justify-content: center;
     color: var(--text-muted);
     font-size: var(--font-size-sm);
+  }
+
+  .material-icons {
+    font-family: 'Material Icons';
+    font-weight: normal;
+    font-style: normal;
+    display: inline-block;
+    line-height: 1;
+    text-transform: none;
+    letter-spacing: normal;
+    word-wrap: normal;
+    white-space: nowrap;
+    direction: ltr;
+    -webkit-font-smoothing: antialiased;
+    margin-right: var(--spacing-xs);
   }
 </style>

@@ -125,19 +125,19 @@
 <div class="passage-list">
   <div class="passage-header">
     <button class="btn-icon" title="Add Passage" onclick={handleAdd}>
-      <span class="icon">+</span>
+      <span class="material-icons icon">add</span>
     </button>
     {#if isDirtyProp}
       <button class="btn-icon" title="Save" onclick={onSave}>
-        <span class="icon">💾</span>
+        <span class="material-icons icon">save</span>
       </button>
     {:else}
       <button class="btn-icon" title="Lock" onclick={onLock}>
-        <span class="icon">🔒</span>
+        <span class="material-icons icon">lock</span>
       </button>
     {/if}
     <button class="btn-icon" title={editPreviewTitle} onclick={onToggleEdit}>
-      <span class="icon">{#if editMode}👁{:else}✎{/if}</span>
+      <span class="material-icons icon">{#if editMode}visibility{:else}edit{/if}</span>
     </button>
   </div>
 
@@ -257,6 +257,20 @@
   .icon {
     font-size: 18px;
     line-height: 1;
+  }
+
+  .material-icons {
+    font-family: 'Material Icons';
+    font-weight: normal;
+    font-style: normal;
+    display: inline-block;
+    line-height: 1;
+    text-transform: none;
+    letter-spacing: normal;
+    word-wrap: normal;
+    white-space: nowrap;
+    direction: ltr;
+    -webkit-font-smoothing: antialiased;
   }
 
   .btn-icon:hover:not(:disabled) {
