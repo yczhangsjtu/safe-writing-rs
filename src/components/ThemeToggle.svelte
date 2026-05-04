@@ -1,7 +1,11 @@
 <script lang="ts">
-  export let currentTheme: 'light' | 'dark';
-
-  export function onThemeChange(theme: 'light' | 'dark') {}
+  let {
+    currentTheme,
+    onThemeChange
+  }: {
+    currentTheme: 'light' | 'dark';
+    onThemeChange: (theme: 'light' | 'dark') => void;
+  } = $props();
 </script>
 
 <button class="theme-toggle" title="Toggle theme" onclick={() => onThemeChange(currentTheme === 'dark' ? 'light' : 'dark')}>

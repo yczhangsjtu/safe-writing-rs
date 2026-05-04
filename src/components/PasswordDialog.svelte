@@ -1,13 +1,19 @@
 <script lang="ts">
-  let password = '';
-  let confirmPassword = '';
-  let errorMsg = '';
+  let {
+    mode,
+    filename,
+    onSubmit,
+    onCancel
+  }: {
+    mode: 'new' | 'decrypt';
+    filename: string;
+    onSubmit: (password: string) => void;
+    onCancel: () => void;
+  } = $props();
 
-  export let mode: 'new' | 'decrypt';
-  export let filename: string;
-
-  export let onSubmit: (password: string) => void;
-  export let onCancel: () => void;
+  let password = $state('');
+  let confirmPassword = $state('');
+  let errorMsg = $state('');
 
   function handleSubmit() {
     errorMsg = '';

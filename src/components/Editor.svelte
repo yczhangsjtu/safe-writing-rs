@@ -3,21 +3,28 @@
   import * as api from '../lib/tauri';
   import PassageList from './PassageList.svelte';
 
-  export let passagesProp: any[];
-  export let currentIndex: number;
-  export let isDirtyProp: boolean;
+  let {
+    passagesProp,
+    currentIndex,
+    isDirtyProp,
+    onSave,
+    onLock
+  }: {
+    passagesProp: any[];
+    currentIndex: number;
+    isDirtyProp: boolean;
+    onSave: () => void;
+    onLock: () => void;
+  } = $props();
 
-  export function onSave() {}
-  export function onLock() {}
+  let editMode = $state(true);
+  let editorContent = $state('');
 
-  let editMode = true;
-  let editorContent = '';
-
-  $: {
+  $effect(() => {
     if (passagesProp && passagesProp.length > 0 && currentIndex < passagesProp.length) {
       editorContent = passagesProp[currentIndex]?.content || '';
     }
-  }
+  });
 
   async function handleContentChange() {
     if (currentIndex < passagesProp.length) {
@@ -58,7 +65,7 @@
     {#if passagesProp && passagesProp.length > 0 && currentIndex < passagesProp.length}
       {#if editMode}
         <textarea
-          value={editorContent}
+          bind:value={editorContent}
           oninput={handleContentChange}
           placeholder="Start writing..."
         ></textarea>

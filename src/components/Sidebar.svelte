@@ -2,14 +2,20 @@
   import { files, copilotVisible } from '../lib/stores';
   import * as api from '../lib/tauri';
 
-  let newFilename = '';
-  let showNewFileInput = false;
+  let {
+    filesProp,
+    currentFile,
+    isDirtyProp,
+    onFileSelect
+  }: {
+    filesProp: string[];
+    currentFile: string | null;
+    isDirtyProp: boolean;
+    onFileSelect: (filename: string) => void;
+  } = $props();
 
-  export let filesProp: string[];
-  export let currentFile: string | null;
-  export let isDirtyProp: boolean;
-
-  export function onFileSelect(filename: string) {}
+  let newFilename = $state('');
+  let showNewFileInput = $state(false);
 
   async function handleRefresh() {
     if (isDirtyProp) return;
@@ -62,7 +68,7 @@
     <div class="new-file-input">
       <input
         type="text"
-        value={newFilename}
+        bind:value={newFilename}
         placeholder="filename"
         onkeydown={(e) => e.key === 'Enter' && handleNewFileSubmit()}
         onblur={() => showNewFileInput = false}

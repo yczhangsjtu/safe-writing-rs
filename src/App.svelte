@@ -9,12 +9,12 @@
   import ThemeToggle from './components/ThemeToggle.svelte';
   import { get } from 'svelte/store';
 
-  let showPasswordDialog = false;
-  let passwordDialogMode: 'new' | 'decrypt' = 'decrypt';
-  let pendingFilename = '';
-  let pendingCiphertext = '';
-  let initialized = false;
-  let initError = '';
+  let showPasswordDialog = $state(false);
+  let passwordDialogMode: 'new' | 'decrypt' = $state('decrypt');
+  let pendingFilename = $state('');
+  let pendingCiphertext = $state('');
+  let initialized = $state(false);
+  let initError = $state('');
 
   onMount(async () => {
     console.log('App mounted, initializing...');

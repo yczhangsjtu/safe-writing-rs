@@ -2,16 +2,24 @@
   import { passages, currentPassageIndex, isDirty } from '../lib/stores';
   import * as api from '../lib/tauri';
 
-  export let passagesProp: any[];
-  export let currentIndex: number;
-  export let isDirtyProp: boolean;
-  export let editMode: boolean;
+  let {
+    passagesProp,
+    currentIndex,
+    isDirtyProp,
+    editMode,
+    onSave,
+    onToggleEdit
+  }: {
+    passagesProp: any[];
+    currentIndex: number;
+    isDirtyProp: boolean;
+    editMode: boolean;
+    onSave: () => void;
+    onToggleEdit: () => void;
+  } = $props();
 
-  export function onSave() {}
-  export function onToggleEdit() {}
-
-  let newPassageTitle = '';
-  let showNewPassage = false;
+  let newPassageTitle = $state('');
+  let showNewPassage = $state(false);
 
   async function handleSelect(index: number) {
     await api.setCurrentPassage(index);
@@ -89,7 +97,7 @@
     <div class="new-passage-input">
       <input
         type="text"
-        value={newPassageTitle}
+        bind:value={newPassageTitle}
         placeholder="Passage title"
         onkeydown={(e) => e.key === 'Enter' && handleNewPassageSubmit()}
         onblur={() => showNewPassage = false}

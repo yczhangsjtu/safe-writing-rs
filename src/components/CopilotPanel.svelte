@@ -2,9 +2,9 @@
   import { copilotSettings, passages, currentPassageIndex } from '../lib/stores';
   import * as api from '../lib/tauri';
 
-  let userInput = '';
-  let output = '';
-  let waiting = false;
+  let userInput = $state('');
+  let output = $state('');
+  let waiting = $state(false);
 
   function getCurrentPassageContent() {
     return $passages[$currentPassageIndex]?.content || '';
@@ -98,7 +98,7 @@
 
     <div class="input-area">
       <textarea
-        value={userInput}
+        bind:value={userInput}
         placeholder="Ask AI..."
         rows="3"
       ></textarea>
