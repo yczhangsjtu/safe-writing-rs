@@ -6,7 +6,6 @@
   import Sidebar from './components/Sidebar.svelte';
   import Editor from './components/Editor.svelte';
   import PasswordDialog from './components/PasswordDialog.svelte';
-  import ChangePasswordDialog from './components/ChangePasswordDialog.svelte';
   import CopilotPanel from './components/CopilotPanel.svelte';
   import ThemeToggle from './components/ThemeToggle.svelte';
   import SettingsDialog from './components/SettingsDialog.svelte';
@@ -17,7 +16,6 @@
   let pendingCiphertext = $state('');
   let initialized = $state(false);
   let initError = $state('');
-  let showChangePasswordDialog = $state(false);
   let showSettingsDialog = $state(false);
   let lastCurrentFile = $state<string | null>(null);
 
@@ -109,7 +107,7 @@
     }
   }
 
-  async function handlePasswordSubmit(password: string) {
+  async function handlePasswordSubmit(password: string, newPassword?: string) {
     try {
       isLoading.set(true);
       showPasswordDialog = false;
@@ -123,9 +121,16 @@
         await api.decryptFile(pendingFilename, '', password);
       } else {
         await api.decryptFile(pendingFilename, pendingCiphertext, password);
+
+        // If newPassword provided, change password
+        if (newPassword) {
+          await api.changePassword(password, newPassword);
+          success.set('Password changed and file opened');
+        } else {
+          success.set('File opened successfully');
+        }
       }
 
-      success.set('File opened successfully');
       setTimeout(() => success.set(null), 3000);
     } catch (e: any) {
       error.set(`Failed: ${e?.message || e}`);
@@ -155,24 +160,6 @@
     theme.set(newTheme);
     document.documentElement.setAttribute('data-theme', newTheme);
     api.updateConfig({ theme: newTheme });
-  }
-
-  function handleChangePassword() {
-    showChangePasswordDialog = true;
-  }
-
-  async function handlePasswordChange(oldPassword: string, newPassword: string) {
-    try {
-      isLoading.set(true);
-      showChangePasswordDialog = false;
-      await api.changePassword(oldPassword, newPassword);
-      success.set('Password changed successfully');
-      setTimeout(() => success.set(null), 3000);
-    } catch (e: any) {
-      error.set(`Failed to change password: ${e?.message || e}`);
-    } finally {
-      isLoading.set(false);
-    }
   }
 
   function toggleCopilot() {
@@ -256,14 +243,6 @@
         filename={pendingFilename}
         onSubmit={handlePasswordSubmit}
         onCancel={() => showPasswordDialog = false}
-        onChangePassword={() => { showPasswordDialog = false; showChangePasswordDialog = true; }}
-      />
-    {/if}
-
-    {#if showChangePasswordDialog}
-      <ChangePasswordDialog
-        onSubmit={handlePasswordChange}
-        onCancel={() => showChangePasswordDialog = false}
       />
     {/if}
 

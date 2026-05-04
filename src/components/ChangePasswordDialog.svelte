@@ -1,13 +1,14 @@
 <script lang="ts">
   let {
+    oldPassword = '',
     onSubmit,
     onCancel
   }: {
+    oldPassword?: string;
     onSubmit: (oldPassword: string, newPassword: string) => void;
     onCancel: () => void;
   } = $props();
 
-  let oldPassword = $state('');
   let newPassword = $state('');
   let confirmPassword = $state('');
   let errorMsg = $state('');
@@ -15,7 +16,7 @@
   function handleSubmit() {
     errorMsg = '';
 
-    if (!oldPassword) {
+    if (!oldPassword && passwordInput) {
       errorMsg = 'Old password required';
       return;
     }
@@ -30,8 +31,11 @@
       return;
     }
 
-    onSubmit(oldPassword, newPassword);
+    onSubmit(oldPassword || passwordInput, newPassword);
   }
+
+  // For when oldPassword is not provided (e.g., changing password after file is already open)
+  let passwordInput = $state('');
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter') {
@@ -58,10 +62,12 @@
     {/if}
 
     <div class="form">
-      <label>
-        <span>Old Password</span>
-        <input type="password" bind:value={oldPassword} placeholder="Enter old password" />
-      </label>
+      {#if !oldPassword}
+        <label>
+          <span>Old Password</span>
+          <input type="password" bind:value={passwordInput} placeholder="Enter old password" />
+        </label>
+      {/if}
 
       <label>
         <span>New Password</span>

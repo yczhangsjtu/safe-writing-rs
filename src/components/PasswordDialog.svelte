@@ -3,19 +3,20 @@
     mode,
     filename,
     onSubmit,
-    onCancel,
-    onChangePassword
+    onCancel
   }: {
     mode: 'new' | 'decrypt';
     filename: string;
-    onSubmit: (password: string) => void;
+    onSubmit: (password: string, newPassword?: string) => void;
     onCancel: () => void;
-    onChangePassword?: () => void;
   } = $props();
 
   let password = $state('');
   let confirmPassword = $state('');
+  let newPassword = $state('');
+  let confirmNewPassword = $state('');
   let errorMsg = $state('');
+  let showChangePassword = $state(false);
 
   function handleSubmit() {
     errorMsg = '';
@@ -30,9 +31,20 @@
         errorMsg = 'Passwords do not match';
         return;
       }
+      onSubmit(password);
+    } else if (showChangePassword) {
+      if (!newPassword) {
+        errorMsg = 'New password required';
+        return;
+      }
+      if (newPassword !== confirmNewPassword) {
+        errorMsg = 'New passwords do not match';
+        return;
+      }
+      onSubmit(password, newPassword);
+    } else {
+      onSubmit(password);
     }
-
-    onSubmit(password);
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -79,15 +91,26 @@
         </label>
       {/if}
 
+      {#if mode === 'decrypt' && showChangePassword}
+        <label>
+          <span>New Password</span>
+          <input type="password" bind:value={newPassword} placeholder="Enter new password" />
+        </label>
+        <label>
+          <span>Confirm New Password</span>
+          <input type="password" bind:value={confirmNewPassword} placeholder="Confirm new password" />
+        </label>
+      {/if}
+
       <div class="actions">
         <button class="btn-primary" onclick={handleSubmit}>
-          {#if mode === 'new'}Create{:else}Unlock{/if}
+          {#if mode === 'new'}Create{:else if showChangePassword}Change{:else}Unlock{/if}
         </button>
         <button onclick={onCancel}>Cancel</button>
       </div>
 
-      {#if mode === 'decrypt' && onChangePassword}
-        <button class="btn-change-password" onclick={onChangePassword}>
+      {#if mode === 'decrypt' && !showChangePassword}
+        <button class="btn-change-password" onclick={() => showChangePassword = true}>
           Change Password
         </button>
       {/if}
