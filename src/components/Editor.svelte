@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { passages, currentPassageIndex, isDirty } from '../lib/stores';
+  import { passages, currentPassageIndex, isDirty, config } from '../lib/stores';
   import * as api from '../lib/tauri';
   import PassageList from './PassageList.svelte';
 
@@ -19,12 +19,49 @@
 
   let editMode = $state(true);
   let editorContent = $state('');
+  let images = $state<Map<string, { data: string; index: number }>>(new Map());
+  let imagesLoaded = $state(false);
+  let showMetadataIndex = $state<number | null>(null);
+  let metadataText = $state<string>('');
 
   $effect(() => {
     if (passagesProp && passagesProp.length > 0 && currentIndex < passagesProp.length) {
       editorContent = passagesProp[currentIndex]?.content || '';
     }
   });
+
+  async function loadImages() {
+    if (!editMode && !imagesLoaded) {
+      try {
+        const imageList = await api.getImages();
+        const newImages = new Map<string, { data: string; index: number }>();
+        for (const img of imageList) {
+          newImages.set(img.digest, { data: img.data || '', index: img.index });
+        }
+        images = newImages;
+        imagesLoaded = true;
+      } catch (e) {
+        console.error('Failed to load images:', e);
+      }
+    }
+  }
+
+  async function handleImageClick(digest: string) {
+    const imgInfo = images.get(digest);
+    if (!imgInfo) return;
+
+    if (showMetadataIndex === imgInfo.index) {
+      showMetadataIndex = null;
+      metadataText = '';
+    } else {
+      showMetadataIndex = imgInfo.index;
+      try {
+        metadataText = await api.getImageMetadata(imgInfo.index);
+      } catch (e) {
+        metadataText = 'No metadata available';
+      }
+    }
+  }
 
   async function handleContentChange() {
     if (currentIndex < passagesProp.length) {
@@ -46,6 +83,47 @@
 
   function toggleEditMode() {
     editMode = !editMode;
+    if (!editMode) {
+      imagesLoaded = false;
+      showMetadataIndex = null;
+      metadataText = '';
+      loadImages();
+    }
+  }
+
+  // Parse content and render with images
+  function renderPreviewContent(content: string): { type: 'text' | 'image'; content: string; digest?: string }[] {
+    const parts: { type: 'text' | 'image'; content: string; digest?: string }[] = [];
+    const imagePattern = /^image!\(([a-fA-F0-9]{64})\)$/;
+
+    const lines = content.split('\n');
+    let textBuffer = '';
+
+    for (const line of lines) {
+      const match = line.match(imagePattern);
+      if (match) {
+        // Flush text buffer first
+        if (textBuffer) {
+          parts.push({ type: 'text', content: textBuffer });
+          textBuffer = '';
+        }
+        // Add image placeholder
+        parts.push({ type: 'image', content: line, digest: match[1] });
+      } else {
+        if (textBuffer) {
+          textBuffer += '\n' + line;
+        } else {
+          textBuffer = line;
+        }
+      }
+    }
+
+    // Flush remaining text
+    if (textBuffer) {
+      parts.push({ type: 'text', content: textBuffer });
+    }
+
+    return parts;
   }
 </script>
 
@@ -68,10 +146,39 @@
           bind:value={editorContent}
           oninput={handleContentChange}
           placeholder="Start writing..."
+          style="font-size: {$config.font_size}px; font-family: 'LXGW WenKai', sans-serif;"
         ></textarea>
       {:else}
-        <div class="preview-content">
-          {editorContent}
+        <div class="preview-content" style="font-size: {$config.font_size}px;">
+          {#each renderPreviewContent(editorContent) as part}
+            {#if part.type === 'text'}
+              <pre class="text-block">{part.content}</pre>
+            {:else if part.type === 'image'}
+              {#if images.get(part.digest || '')}
+                <div class="image-container">
+                  <!-- svelte-ignore a11y_click_events_have_key_events -->
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <!-- svelte-ignore a11y_missing_attribute -->
+                  <img
+                    src="data:image/png;base64,{images.get(part.digest || '')?.data}"
+                    class="embedded-image"
+                    onclick={() => handleImageClick(part.digest || '')}
+                  />
+                  {#if showMetadataIndex === images.get(part.digest || '')?.index}
+                    <div class="metadata-panel">
+                      <pre class="metadata-text">{metadataText}</pre>
+                    </div>
+                  {/if}
+                  <span class="image-digest">Click image for metadata: {part.digest?.slice(0, 16)}...</span>
+                </div>
+              {:else}
+                <div class="image-placeholder">
+                  <span>📷 Image: {part.digest?.slice(0, 16)}...</span>
+                  <span class="loading-text">Loading...</span>
+                </div>
+              {/if}
+            {/if}
+          {/each}
         </div>
       {/if}
     {:else}
@@ -106,7 +213,6 @@
     border: none;
     background: transparent;
     color: var(--text-primary);
-    font-size: 16px;
     line-height: 1.6;
     padding: 0;
   }
@@ -118,11 +224,77 @@
   .preview-content {
     flex: 1;
     overflow-y: auto;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    font-size: 16px;
     line-height: 1.6;
     color: var(--text-primary);
+  }
+
+  .text-block {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin: 0;
+    font-family: 'LXGW WenKai', sans-serif;
+  }
+
+  .image-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 16px 0;
+    padding: 8px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+  }
+
+  .embedded-image {
+    max-width: 100%;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+
+  .embedded-image:hover {
+    opacity: 0.8;
+  }
+
+  .metadata-panel {
+    width: 100%;
+    margin-top: 8px;
+    padding: 8px;
+    background: var(--bg-input);
+    border-radius: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .metadata-text {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .image-digest {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  .image-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    margin: 16px 0;
+    color: var(--text-muted);
+  }
+
+  .loading-text {
+    font-size: 12px;
+    margin-top: 8px;
   }
 
   .empty-editor {

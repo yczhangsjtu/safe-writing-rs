@@ -1,3 +1,11 @@
+@font-face {
+  font-family: 'LXGW WenKai';
+  src: url('../assets/LXGWWenKaiGB-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   /* Light theme (default) */
   --bg-primary: #ffffff;

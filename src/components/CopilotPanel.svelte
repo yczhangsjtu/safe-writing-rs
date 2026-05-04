@@ -5,6 +5,7 @@
   let userInput = $state('');
   let output = $state('');
   let waiting = $state(false);
+  let showSettings = $state(false);
 
   function getCurrentPassageContent() {
     return $passages[$currentPassageIndex]?.content || '';
@@ -55,13 +56,41 @@
   function handleRemoveBuffer(index: number) {
     $copilotSettings.buffers[index] = '';
   }
+
+  function handleResetSettings() {
+    $copilotSettings.system_prompt = 'You are a helpful writing assistant.';
+    $copilotSettings.buffers = Array(10).fill('');
+    $copilotSettings.favorite_prompts = [];
+    $copilotSettings.messages = [];
+    api.saveCopilotSettings($copilotSettings);
+    showSettings = false;
+  }
 </script>
 
 <div class="copilot-panel">
   <div class="copilot-header">
     <h3>AI Copilot</h3>
-    <button onclick={handleClearHistory}>Clear</button>
+    <div class="header-buttons">
+      <button onclick={() => showSettings = !showSettings}>
+        {#if showSettings}✕{:else}⚙{/if}
+      </button>
+      <button onclick={handleClearHistory}>Clear</button>
+    </div>
   </div>
+
+  {#if showSettings}
+    <div class="settings-section">
+      <label>
+        <span>System Prompt</span>
+        <textarea
+          bind:value={$copilotSettings.system_prompt}
+          rows="4"
+          placeholder="You are a helpful writing assistant."
+        ></textarea>
+      </label>
+      <button class="btn-reset" onclick={handleResetSettings}>Reset to Default</button>
+    </div>
+  {/if}
 
   <div class="copilot-content">
     <div class="messages">
@@ -132,8 +161,51 @@
     color: var(--accent-color);
   }
 
+  .header-buttons {
+    display: flex;
+    gap: 4px;
+  }
+
   .copilot-header button {
     padding: 6px 12px;
+    border: none;
+    background: var(--bg-button);
+    color: var(--text-primary);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  .settings-section {
+    padding: 12px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .settings-section label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+
+  .settings-section label span {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .settings-section textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border-radius: 4px;
+    resize: none;
+  }
+
+  .btn-reset {
+    width: 100%;
+    padding: 8px;
     border: none;
     background: var(--bg-button);
     color: var(--text-primary);

@@ -20,6 +20,11 @@
 
   let newPassageTitle = $state('');
   let showNewPassage = $state(false);
+  let showMoreMenu = $state(false);
+  let editingTitle = $state(false);
+  let editingTitleValue = $state('');
+  let confirmDelete = $state(false);
+  let pendingDeleteIndex = $state(-1);
 
   async function handleSelect(index: number) {
     await api.setCurrentPassage(index);
@@ -48,8 +53,8 @@
       await api.movePassage(currentIndex, currentIndex - 1);
       currentPassageIndex.set(currentIndex - 1);
       const updatedPassages = await api.getPassages();
-    passages.set(updatedPassages);
-    isDirty.set(true);
+      passages.set(updatedPassages);
+      isDirty.set(true);
     }
   }
 
@@ -58,27 +63,53 @@
       await api.movePassage(currentIndex, currentIndex + 1);
       currentPassageIndex.set(currentIndex + 1);
       const updatedPassages = await api.getPassages();
-    passages.set(updatedPassages);
-    isDirty.set(true);
+      passages.set(updatedPassages);
+      isDirty.set(true);
     }
   }
 
-  async function handleDelete(index: number) {
-    if (confirm('Delete this passage?')) {
-      await api.removePassage(index);
+  function handleRename() {
+    editingTitleValue = passagesProp[currentIndex]?.title || '';
+    editingTitle = true;
+    showMoreMenu = false;
+  }
+
+  async function handleRenameSubmit() {
+    if (editingTitleValue.trim()) {
+      await api.updatePassageTitle(currentIndex, editingTitleValue.trim());
       const updatedPassages = await api.getPassages();
+      passages.set(updatedPassages);
+      isDirty.set(true);
+    }
+    editingTitle = false;
+  }
+
+  function handleDeleteClick(index: number) {
+    pendingDeleteIndex = index;
+    confirmDelete = true;
+    showMoreMenu = false;
+  }
+
+  async function handleDeleteConfirm() {
+    await api.removePassage(pendingDeleteIndex);
+    const updatedPassages = await api.getPassages();
     passages.set(updatedPassages);
     isDirty.set(true);
-      if (currentIndex >= updatedPassages.length) {
-        currentPassageIndex.set(Math.max(0, updatedPassages.length - 1));
-      }
+    if (currentIndex >= updatedPassages.length) {
+      currentPassageIndex.set(Math.max(0, updatedPassages.length - 1));
     }
+    confirmDelete = false;
+    pendingDeleteIndex = -1;
+  }
+
+  function toggleMoreMenu() {
+    showMoreMenu = !showMoreMenu;
   }
 </script>
 
 <div class="passage-list">
   <div class="passage-header">
-    <button class="btn-sm" title="Add" onclick={handleAdd}>+</button>
+    <button class="btn-sm" title="Add Passage" onclick={handleAdd}>+</button>
     <button class="btn-sm" title="Save" onclick={onSave} disabled={!isDirtyProp}>
       💾
     </button>
@@ -88,9 +119,24 @@
     <button class="btn-sm" title="Move Down" onclick={handleMoveDown} disabled={currentIndex >= passagesProp.length - 1}>
       ↓
     </button>
-    <button class="btn-sm" title="Toggle Preview" onclick={onToggleEdit}>
-      {#if editMode}👁{:else}✏{/if}
-    </button>
+    <div class="more-wrapper">
+      <button class="btn-sm" title="More" onclick={toggleMoreMenu}>
+        {#if showMoreMenu}✕{:else}⋯{/if}
+      </button>
+      {#if showMoreMenu}
+        <div class="more-menu">
+          <button class="menu-item" onclick={() => { onToggleEdit(); showMoreMenu = false; }}>
+            {#if editMode}👁 Preview{:else}✏ Edit{/if}
+          </button>
+          <button class="menu-item" onclick={() => { handleRename(); }}>
+            📝 Rename
+          </button>
+          <button class="menu-item warning" onclick={() => { handleDeleteClick(currentIndex); }}>
+            🗑 Delete
+          </button>
+        </div>
+      {/if}
+    </div>
   </div>
 
   {#if showNewPassage}
@@ -105,6 +151,29 @@
     </div>
   {/if}
 
+  {#if editingTitle}
+    <div class="new-passage-input">
+      <input
+        type="text"
+        bind:value={editingTitleValue}
+        placeholder="New title"
+        onkeydown={(e) => e.key === 'Enter' && handleRenameSubmit()}
+        onblur={() => editingTitle = false}
+      />
+    </div>
+  {/if}
+
+  {#if confirmDelete}
+    <div class="confirm-dialog">
+      <p>Delete this passage?</p>
+      <p class="passage-name">{passagesProp[pendingDeleteIndex]?.title}</p>
+      <div class="confirm-actions">
+        <button class="btn-danger" onclick={handleDeleteConfirm}>Delete</button>
+        <button onclick={() => confirmDelete = false}>Cancel</button>
+      </div>
+    </div>
+  {/if}
+
   <div class="passages">
     {#each passagesProp as passage, i}
       <div class="passage-item" class:selected={i === currentIndex}>
@@ -113,9 +182,6 @@
           onclick={() => handleSelect(i)}
         >
           {passage.title}
-        </button>
-        <button class="btn-sm btn-danger" onclick={() => handleDelete(i)}>
-          ×
         </button>
       </div>
     {/each}
@@ -169,7 +235,47 @@
     color: white;
   }
 
-  .new-passage-input {
+  .more-wrapper {
+    position: relative;
+  }
+
+  .more-menu {
+    position: absolute;
+    top: 32px;
+    left: 0;
+    z-index: 100;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 120px;
+    box-shadow: var(--shadow-md);
+  }
+
+  .menu-item {
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: var(--bg-button);
+    color: var(--text-primary);
+    text-align: left;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+
+  .menu-item:hover {
+    background: var(--bg-button-hover);
+  }
+
+  .menu-item.warning {
+    color: var(--danger-color);
+  }
+
+  .new-passage-input, .confirm-dialog {
     padding: 8px;
     border-bottom: 1px solid var(--border-color);
   }
@@ -181,6 +287,37 @@
     background: var(--bg-input);
     color: var(--text-primary);
     border-radius: 4px;
+  }
+
+  .confirm-dialog {
+    background: rgba(231, 76, 60, 0.1);
+  }
+
+  .confirm-dialog p {
+    font-size: 14px;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+
+  .passage-name {
+    font-weight: bold;
+    color: var(--danger-color);
+  }
+
+  .confirm-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .confirm-actions button {
+    flex: 1;
+    padding: 8px;
+    border: none;
+    background: var(--bg-button);
+    color: var(--text-primary);
+    border-radius: 4px;
+    cursor: pointer;
   }
 
   .passages {

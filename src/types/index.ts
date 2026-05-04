@@ -31,6 +31,7 @@ export interface DecryptResult {
 export interface ImageInfo {
   digest: string;
   index: number;
+  data?: string; // base64 encoded image data
 }
 
 export interface CopilotMessage {

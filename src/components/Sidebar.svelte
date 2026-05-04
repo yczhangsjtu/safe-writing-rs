@@ -6,12 +6,14 @@
     filesProp,
     currentFile,
     isDirtyProp,
-    onFileSelect
+    onFileSelect,
+    onChangePassword
   }: {
     filesProp: string[];
     currentFile: string | null;
     isDirtyProp: boolean;
     onFileSelect: (filename: string) => void;
+    onChangePassword: () => void;
   } = $props();
 
   let newFilename = $state('');
@@ -62,6 +64,11 @@
     <button class="btn-icon" title="AI Copilot" onclick={toggleCopilot}>
       {#if $copilotVisible}AI✓{:else}AI{/if}
     </button>
+    {#if currentFile}
+      <button class="btn-icon" title="Change Password" onclick={onChangePassword}>
+        🔑
+      </button>
+    {/if}
   </div>
 
   {#if showNewFileInput}

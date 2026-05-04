@@ -7,6 +7,7 @@ use sha2::Digest;
 pub struct ImageInfo {
     pub digest: String,
     pub index: usize,
+    pub data: String, // base64 encoded image data
 }
 
 #[tauri::command]
@@ -156,12 +157,36 @@ pub fn get_images(state: tauri::State<'_, AppState>) -> Result<Vec<ImageInfo>, S
             let images: Vec<ImageInfo> = session
                 .image_digests
                 .iter()
-                .map(|(digest, index)| ImageInfo {
-                    digest: digest.clone(),
-                    index: *index,
+                .map(|(digest, index)| {
+                    let image_data = session.plaintext.images().get(*index);
+                    let base64_data = image_data
+                        .map(|data| base64::Engine::encode(&base64::engine::general_purpose::STANDARD, data))
+                        .unwrap_or_default();
+                    ImageInfo {
+                        digest: digest.clone(),
+                        index: *index,
+                        data: base64_data,
+                    }
                 })
                 .collect();
             Ok(images)
+        }
+        None => Err("No file is currently open".to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn get_image_metadata(index: usize, state: tauri::State<'_, AppState>) -> Result<String, String> {
+    let current_session = state.current_session.lock().map_err(|e| e.to_string())?;
+    match current_session.as_ref() {
+        Some(session) => {
+            if index < session.plaintext.num_images() {
+                let image_data = &session.plaintext.images()[index];
+                let metadata = crate::png::read_png_metadata(image_data);
+                Ok(metadata.unwrap_or_else(|| "No PNG metadata found".to_string()))
+            } else {
+                Err(format!("Image index {} out of bounds", index))
+            }
         }
         None => Err("No file is currently open".to_string()),
     }

@@ -5,6 +5,7 @@
   import Sidebar from './components/Sidebar.svelte';
   import Editor from './components/Editor.svelte';
   import PasswordDialog from './components/PasswordDialog.svelte';
+  import ChangePasswordDialog from './components/ChangePasswordDialog.svelte';
   import CopilotPanel from './components/CopilotPanel.svelte';
   import ThemeToggle from './components/ThemeToggle.svelte';
   import { get } from 'svelte/store';
@@ -15,6 +16,7 @@
   let pendingCiphertext = $state('');
   let initialized = $state(false);
   let initError = $state('');
+  let showChangePasswordDialog = $state(false);
 
   onMount(async () => {
     console.log('App mounted, initializing...');
@@ -39,24 +41,43 @@
   });
 
   async function handleFileSelect(filename: string) {
-    if (get(isDirty)) {
-      error.set('Please save or discard changes before switching files');
-      return;
+    // Lock current file first if there's one open
+    if (get(currentFile)) {
+      if (get(isDirty)) {
+        await handleSave();
+      }
+      currentFile.set(null);
+      passages.set([]);
+      currentPassageIndex.set(0);
     }
 
     try {
       isLoading.set(true);
-      const result = await api.openFile(filename);
 
-      if (result.is_new) {
+      // Check if this is a new file (not in the existing list)
+      const fileList = get(files);
+      const isNewFile = !fileList.includes(filename);
+
+      if (isNewFile) {
+        // For new files, directly show password dialog
         passwordDialogMode = 'new';
         pendingFilename = filename;
+        pendingCiphertext = '';
         showPasswordDialog = true;
-      } else if (result.ciphertext) {
-        passwordDialogMode = 'decrypt';
-        pendingFilename = filename;
-        pendingCiphertext = result.ciphertext;
-        showPasswordDialog = true;
+      } else {
+        // For existing files, open and check
+        const result = await api.openFile(filename);
+
+        if (result.is_new) {
+          passwordDialogMode = 'new';
+          pendingFilename = filename;
+          showPasswordDialog = true;
+        } else if (result.ciphertext) {
+          passwordDialogMode = 'decrypt';
+          pendingFilename = filename;
+          pendingCiphertext = result.ciphertext;
+          showPasswordDialog = true;
+        }
       }
     } catch (e: any) {
       error.set(`Failed to open file: ${e?.message || e}`);
@@ -122,6 +143,24 @@
     document.documentElement.setAttribute('data-theme', newTheme);
     api.updateConfig({ theme: newTheme });
   }
+
+  function handleChangePassword() {
+    showChangePasswordDialog = true;
+  }
+
+  async function handlePasswordChange(oldPassword: string, newPassword: string) {
+    try {
+      isLoading.set(true);
+      showChangePasswordDialog = false;
+      await api.changePassword(oldPassword, newPassword);
+      success.set('Password changed successfully');
+      setTimeout(() => success.set(null), 3000);
+    } catch (e: any) {
+      error.set(`Failed to change password: ${e?.message || e}`);
+    } finally {
+      isLoading.set(false);
+    }
+  }
 </script>
 
 <div class="app-container">
@@ -150,6 +189,7 @@
         currentFile={$currentFile}
         onFileSelect={handleFileSelect}
         isDirtyProp={$isDirty}
+        onChangePassword={handleChangePassword}
       />
 
       {#if $currentFile}
@@ -177,6 +217,13 @@
         filename={pendingFilename}
         onSubmit={handlePasswordSubmit}
         onCancel={() => showPasswordDialog = false}
+      />
+    {/if}
+
+    {#if showChangePasswordDialog}
+      <ChangePasswordDialog
+        onSubmit={handlePasswordChange}
+        onCancel={() => showChangePasswordDialog = false}
       />
     {/if}
 

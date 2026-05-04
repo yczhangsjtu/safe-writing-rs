@@ -61,6 +61,10 @@ export async function getImages(): Promise<ImageInfo[]> {
   return invoke('get_images');
 }
 
+export async function getImageMetadata(index: number): Promise<string> {
+  return invoke('get_image_metadata', { index });
+}
+
 export async function getCurrentFile(): Promise<string> {
   return invoke('get_current_file');
 }

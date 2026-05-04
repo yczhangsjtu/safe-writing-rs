@@ -33,6 +33,7 @@ pub fn run() {
             commands::editor::move_passage,
             commands::editor::insert_image,
             commands::editor::get_images,
+            commands::editor::get_image_metadata,
             commands::editor::get_current_file,
             commands::editor::set_current_passage,
             commands::editor::get_current_passage_index,
