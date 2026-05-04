@@ -3,12 +3,14 @@
     mode,
     filename,
     onSubmit,
-    onCancel
+    onCancel,
+    onChangePassword
   }: {
     mode: 'new' | 'decrypt';
     filename: string;
     onSubmit: (password: string) => void;
     onCancel: () => void;
+    onChangePassword?: () => void;
   } = $props();
 
   let password = $state('');
@@ -66,7 +68,8 @@
     <div class="form">
       <label>
         <span>Password</span>
-        <input type="password" bind:value={password} placeholder="Enter password" />
+        <!-- svelte-ignore a11y_autofocus -->
+        <input type="password" bind:value={password} placeholder="Enter password" autofocus />
       </label>
 
       {#if mode === 'new'}
@@ -82,6 +85,12 @@
         </button>
         <button onclick={onCancel}>Cancel</button>
       </div>
+
+      {#if mode === 'decrypt' && onChangePassword}
+        <button class="btn-change-password" onclick={onChangePassword}>
+          Change Password
+        </button>
+      {/if}
     </div>
   </div>
 </div>
@@ -126,7 +135,7 @@
     border-radius: var(--radius-sm);
     text-align: center;
     color: var(--danger-color);
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
   }
 
   .form {
@@ -142,7 +151,7 @@
   }
 
   label span {
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     color: var(--text-faint);
   }
 
@@ -174,7 +183,7 @@
     color: var(--text-secondary);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     transition: all 0.15s ease;
   }
 
@@ -191,5 +200,23 @@
   .btn-primary:hover {
     background: var(--accent-color-hover);
     color: var(--text-inverse);
+  }
+
+  .btn-change-password {
+    width: 100%;
+    padding: var(--spacing-sm);
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    transition: all 0.15s ease;
+    text-align: center;
+  }
+
+  .btn-change-password:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
   }
 </style>

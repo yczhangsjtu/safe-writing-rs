@@ -10,8 +10,7 @@
     isDirtyProp,
     editMode,
     onSave,
-    onToggleEdit,
-    onChangePassword
+    onToggleEdit
   }: {
     passagesProp: any[];
     currentIndex: number;
@@ -19,19 +18,21 @@
     editMode: boolean;
     onSave: () => void;
     onToggleEdit: () => void;
-    onChangePassword: () => void;
   } = $props();
 
   let showNewPassageDialog = $state(false);
   let showRenameDialog = $state(false);
-  let showMoreMenu = $state(false);
   let confirmDelete = $state(false);
   let pendingDeleteIndex = $state(-1);
   let draggedIndex = $state<number | null>(null);
   let dragOverIndex = $state<number | null>(null);
+  let showItemMenu = $state<number | null>(null);
+
+  const editPreviewTitle = $derived(editMode ? "Preview" : "Edit");
 
   async function handleSelect(index: number) {
     await api.setCurrentPassage(index);
+    showItemMenu = null;
   }
 
   function handleAdd() {
@@ -43,20 +44,24 @@
     await api.addPassage(title);
   }
 
-  function handleRename() {
-    showMoreMenu = false;
+  function handleRename(index: number) {
+    pendingDeleteIndex = index;
     showRenameDialog = true;
+    showItemMenu = null;
   }
 
   async function handleRenameSubmit(newTitle: string) {
     showRenameDialog = false;
-    await api.updatePassageTitle(currentIndex, newTitle);
+    if (pendingDeleteIndex >= 0) {
+      await api.updatePassageTitle(pendingDeleteIndex, newTitle);
+    }
+    pendingDeleteIndex = -1;
   }
 
   function handleDeleteClick(index: number) {
     pendingDeleteIndex = index;
     confirmDelete = true;
-    showMoreMenu = false;
+    showItemMenu = null;
   }
 
   async function handleDeleteConfirm() {
@@ -65,13 +70,10 @@
     pendingDeleteIndex = -1;
   }
 
-  function toggleMoreMenu() {
-    showMoreMenu = !showMoreMenu;
-  }
-
   // Drag and drop handlers
   function handleDragStart(e: DragEvent, index: number) {
     draggedIndex = index;
+    showItemMenu = null;
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', index.toString());
@@ -102,7 +104,6 @@
   async function handleDropBottom(e: DragEvent) {
     e.preventDefault();
     if (draggedIndex !== null && passagesProp.length > 0) {
-      // Move to the end: pass to = passagesProp.length (insert after last)
       await api.movePassage(draggedIndex, passagesProp.length);
     }
     draggedIndex = null;
@@ -112,6 +113,10 @@
   function handleDragEnd() {
     draggedIndex = null;
     dragOverIndex = null;
+  }
+
+  function toggleItemMenu(index: number) {
+    showItemMenu = showItemMenu === index ? null : index;
   }
 </script>
 
@@ -123,27 +128,9 @@
     <button class="btn-icon" title="Save" onclick={onSave} disabled={!isDirtyProp}>
       <span class="icon">{#if isDirtyProp}💾{:else}○{/if}</span>
     </button>
-    <div class="more-wrapper">
-      <button class="btn-icon" title="More" onclick={toggleMoreMenu}>
-        <span class="icon">{#if showMoreMenu}✕{:else}⋮{/if}</span>
-      </button>
-      {#if showMoreMenu}
-        <div class="more-menu">
-          <button class="menu-item" onclick={() => { onToggleEdit(); showMoreMenu = false; }}>
-            {#if editMode}Preview{:else}Edit{/if}
-          </button>
-          <button class="menu-item" onclick={handleRename}>
-            Rename
-          </button>
-          <button class="menu-item danger" onclick={() => { handleDeleteClick(currentIndex); }}>
-            Delete
-          </button>
-          <button class="menu-item" onclick={() => { onChangePassword(); showMoreMenu = false; }}>
-            Change Password
-          </button>
-        </div>
-      {/if}
-    </div>
+    <button class="btn-icon" title={editPreviewTitle} onclick={onToggleEdit}>
+      <span class="icon">{#if editMode}👁{:else}✎{/if}</span>
+    </button>
   </div>
 
   {#if confirmDelete}
@@ -176,6 +163,18 @@
         ondragend={handleDragEnd}
       >
         <span class="passage-title">{passage.title}</span>
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <button
+          class="btn-more"
+          onclick={(e) => { e.stopPropagation(); toggleItemMenu(i); }}
+        >⋮</button>
+        {#if showItemMenu === i}
+          <div class="item-menu">
+            <button class="menu-item" onclick={() => handleRename(i)}>Rename</button>
+            <button class="menu-item danger" onclick={() => handleDeleteClick(i)}>Delete</button>
+          </div>
+        {/if}
       </div>
     {/each}
 
@@ -213,7 +212,7 @@
     title="Rename Passage"
     placeholder="Enter new title..."
     onSubmit={handleRenameSubmit}
-    onCancel={() => showRenameDialog = false}
+    onCancel={() => { showRenameDialog = false; pendingDeleteIndex = -1; }}
   />
 {/if}
 
@@ -231,7 +230,6 @@
     gap: 4px;
     padding: var(--spacing-md);
     padding-bottom: var(--spacing-sm);
-    position: relative;
   }
 
   .btn-icon {
@@ -261,53 +259,6 @@
   .btn-icon:disabled {
     opacity: 0.4;
     cursor: not-allowed;
-  }
-
-  .more-wrapper {
-    position: relative;
-    z-index: 10;
-  }
-
-  .more-menu {
-    position: absolute;
-    top: 36px;
-    left: 0;
-    z-index: 1000;
-    background: var(--bg-modal);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: var(--spacing-xs);
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    min-width: 100px;
-    box-shadow: var(--shadow-md);
-  }
-
-  .menu-item {
-    width: 100%;
-    padding: 8px 12px;
-    border: none;
-    background: transparent;
-    color: var(--text-secondary);
-    text-align: left;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    font-size: var(--font-size-sm);
-    transition: all 0.15s ease;
-  }
-
-  .menu-item:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
-  .menu-item.danger {
-    color: var(--danger-color);
-  }
-
-  .menu-item.danger:hover {
-    background: rgba(248, 71, 71, 0.1);
   }
 
   .confirm-overlay {
@@ -391,6 +342,7 @@
     cursor: pointer;
     transition: background-color 0.15s ease;
     user-select: none;
+    position: relative;
   }
 
   .passage-item:hover {
@@ -410,6 +362,86 @@
     border-top: 2px solid var(--accent-color);
   }
 
+  .passage-title {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+
+  .passage-item.selected .passage-title {
+    color: var(--text-primary);
+  }
+
+  .btn-more {
+    display: none;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0;
+  }
+
+  .passage-item:hover .btn-more,
+  .passage-item.selected .btn-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .btn-more:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .item-menu {
+    position: absolute;
+    top: 100%;
+    right: 4px;
+    z-index: 1000;
+    background: var(--bg-modal);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-xs);
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 80px;
+    box-shadow: var(--shadow-md);
+  }
+
+  .menu-item {
+    width: 100%;
+    padding: 6px 10px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    text-align: left;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    transition: all 0.15s ease;
+  }
+
+  .menu-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .menu-item.danger {
+    color: var(--danger-color);
+  }
+
+  .menu-item.danger:hover {
+    background: rgba(248, 71, 71, 0.1);
+  }
+
   .drop-zone {
     height: 24px;
     margin-top: 2px;
@@ -421,18 +453,6 @@
     background: var(--accent-color);
     opacity: 0.3;
     border: 2px solid var(--accent-color);
-  }
-
-  .passage-title {
-    font-size: var(--font-size-sm);
-    color: var(--text-secondary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .passage-item.selected .passage-title {
-    color: var(--text-primary);
   }
 
   .empty-state {

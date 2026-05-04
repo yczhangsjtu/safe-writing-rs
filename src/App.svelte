@@ -226,18 +226,17 @@
 
       {#if $currentFile}
         <div class="editor-container">
-          <div class="top-bar">
-            <button class="btn-icon ai-btn" class:active={$copilotVisible} title="AI Copilot" onclick={toggleCopilot}>
-              <span class="icon">✦</span>
-            </button>
-          </div>
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <button class="floating-ai-btn" class:active={$copilotVisible} title="AI Copilot" onclick={toggleCopilot}>
+            <span class="icon">✦</span>
+          </button>
           <Editor
             passagesProp={$passages}
             currentIndex={$currentPassageIndex}
             isDirtyProp={$isDirty}
             onSave={handleSave}
             onLock={handleLock}
-            onChangePassword={handleChangePassword}
           />
         </div>
       {:else}
@@ -257,6 +256,7 @@
         filename={pendingFilename}
         onSubmit={handlePasswordSubmit}
         onCancel={() => showPasswordDialog = false}
+        onChangePassword={() => { showPasswordDialog = false; showChangePasswordDialog = true; }}
       />
     {/if}
 
@@ -338,19 +338,13 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative;
   }
 
-  .top-bar {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    padding: var(--spacing-sm) var(--spacing-md);
-    background: var(--bg-sidebar);
-    border-bottom: 1px solid var(--border-color-faint);
-    height: 40px;
-  }
-
-  .btn-icon {
+  .floating-ai-btn {
+    position: absolute;
+    top: var(--spacing-md);
+    right: var(--spacing-md);
     width: 32px;
     height: 32px;
     border: none;
@@ -362,25 +356,26 @@
     align-items: center;
     justify-content: center;
     transition: all 0.15s ease;
+    z-index: 10;
+  }
+
+  .floating-ai-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .floating-ai-btn.active {
+    background: var(--accent-color);
+    color: var(--text-inverse);
+  }
+
+  .floating-ai-btn.active:hover {
+    opacity: 0.9;
   }
 
   .icon {
     font-size: 16px;
     line-height: 1;
-  }
-
-  .btn-icon:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
-  .ai-btn.active {
-    background: var(--accent-color);
-    color: var(--text-inverse);
-  }
-
-  .ai-btn.active:hover {
-    opacity: 0.9;
   }
 
   .empty-state {

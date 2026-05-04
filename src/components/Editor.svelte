@@ -9,15 +9,13 @@
     currentIndex,
     isDirtyProp,
     onSave,
-    onLock,
-    onChangePassword
+    onLock
   }: {
     passagesProp: any[];
     currentIndex: number;
     isDirtyProp: boolean;
     onSave: () => void;
     onLock: () => void;
-    onChangePassword: () => void;
   } = $props();
 
   let editMode = $state(true);
@@ -149,7 +147,6 @@
     onSave={onSave}
     onToggleEdit={toggleEditMode}
     editMode={editMode}
-    onChangePassword={onChangePassword}
   />
 
   <div class="editor-area">
