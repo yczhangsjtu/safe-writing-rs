@@ -230,7 +230,7 @@
   }
 
   .icon {
-    font-size: 11px;
+    font-size: var(--font-size-xs);
     line-height: 1;
   }
 
@@ -403,7 +403,7 @@
   }
 
   .passage-title {
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     color: var(--text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -417,6 +417,7 @@
   .empty-state {
     padding: var(--spacing-lg);
     text-align: center;
+    font-size: var(--font-size-sm);
   }
 
   .btn-link {

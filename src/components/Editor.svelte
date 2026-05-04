@@ -1,6 +1,7 @@
 <script lang="ts">
   import { passages, currentPassageIndex, isDirty, config } from '../lib/stores';
   import * as api from '../lib/tauri';
+  import { emit } from '@tauri-apps/api/event';
   import PassageList from './PassageList.svelte';
 
   let {
@@ -67,6 +68,18 @@
     if (currentIndex < passagesProp.length) {
       await api.updatePassageContent(currentIndex, editorContent);
       isDirty.set(true);
+    }
+  }
+
+  function handleSelectionChange(e: Event) {
+    const textarea = e.target as HTMLTextAreaElement;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    if (start !== end) {
+      const selected = editorContent.slice(start, end);
+      emit('editor-selection', selected);
+    } else {
+      emit('editor-selection', '');
     }
   }
 
@@ -145,6 +158,7 @@
         <textarea
           bind:value={editorContent}
           oninput={handleContentChange}
+          onselect={handleSelectionChange}
           placeholder="Start writing..."
           style="font-size: {$config.font_size}px; font-family: 'LXGW WenKai', sans-serif;"
         ></textarea>

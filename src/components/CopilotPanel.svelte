@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { copilotSettings, passages, currentPassageIndex } from '../lib/stores';
+  import { copilotSettings, passages, currentPassageIndex, isDirty } from '../lib/stores';
   import { listen } from '@tauri-apps/api/event';
   import * as api from '../lib/tauri';
 
@@ -7,6 +7,51 @@
   let output = $state('');
   let waiting = $state(false);
   let showSettings = $state(false);
+  let selectedText = $state('');
+
+  // Listen for selected text changes from Editor
+  $effect(() => {
+    const unlisten = listen<string>('editor-selection', (event) => {
+      selectedText = event.payload;
+    });
+    return async () => {
+      (await unlisten)();
+    };
+  });
+
+  // Listen for streaming events from backend
+  $effect(() => {
+    const unlistenUserMessage = listen<{role: string; content: string; display: string}>('copilot-user-message', (event) => {
+      copilotSettings.update(s => {
+        s.messages = [...s.messages, event.payload];
+        return s;
+      });
+    });
+
+    const unlistenStart = listen('copilot-start', () => {
+      output = '';
+    });
+
+    const unlistenChunk = listen<string>('copilot-chunk', (event) => {
+      output += event.payload;
+    });
+
+    const unlistenDone = listen<{role: string; content: string; display: string}>('copilot-done', (event) => {
+      copilotSettings.update(s => {
+        s.messages = [...s.messages, event.payload];
+        return s;
+      });
+      output = ''; // Clear output since it's now in messages
+      waiting = false;
+    });
+
+    return async () => {
+      (await unlistenUserMessage)();
+      (await unlistenStart)();
+      (await unlistenChunk)();
+      (await unlistenDone)();
+    };
+  });
 
   function getCurrentPassageContent() {
     return $passages[$currentPassageIndex]?.content || '';
@@ -41,63 +86,57 @@
     }
   }
 
-  function handleInsert() {
+  async function handleInsert() {
+    if (!output) return;
     const currentContent = $passages[$currentPassageIndex]?.content || '';
-    api.updatePassageContent($currentPassageIndex, currentContent + '\n\n' + output);
+    const newContent = currentContent + '\n\n' + output;
+    await api.updatePassageContent($currentPassageIndex, newContent);
+    passages.update(p => {
+      p[$currentPassageIndex].content = newContent;
+      return p;
+    });
+    isDirty.set(true);
+    output = '';
   }
 
   async function handleClearHistory() {
-    $copilotSettings.messages = [];
+    copilotSettings.update(s => {
+      s.messages = [];
+      return s;
+    });
     await api.saveCopilotSettings($copilotSettings);
   }
 
   function handleAddBuffer() {
-    const emptyIndex = $copilotSettings.buffers.findIndex((b: string) => b === '');
-    if (emptyIndex >= 0) {
-      const content = getCurrentPassageContent();
-      $copilotSettings.buffers[emptyIndex] = content.slice(0, 100);
-    }
+    const textToAdd = selectedText || getCurrentPassageContent();
+    if (!textToAdd) return;
+
+    copilotSettings.update(s => {
+      const emptyIndex = s.buffers.findIndex((b: string) => b === '');
+      if (emptyIndex >= 0) {
+        s.buffers[emptyIndex] = textToAdd.slice(0, 100);
+      }
+      return s;
+    });
   }
 
   function handleRemoveBuffer(index: number) {
-    $copilotSettings.buffers[index] = '';
+    copilotSettings.update(s => {
+      s.buffers[index] = '';
+      return s;
+    });
   }
 
-  function handleResetSettings() {
-    $copilotSettings.system_prompt = 'You are a helpful writing assistant.';
-    $copilotSettings.buffers = Array(10).fill('');
-    $copilotSettings.favorite_prompts = [];
-    $copilotSettings.messages = [];
-    api.saveCopilotSettings($copilotSettings);
+  async function handleResetSettings() {
+    copilotSettings.set({
+      system_prompt: 'You are a helpful writing assistant.',
+      buffers: Array(10).fill(''),
+      favorite_prompts: [],
+      messages: []
+    });
+    await api.saveCopilotSettings($copilotSettings);
     showSettings = false;
   }
-
-  // Listen for streaming events from backend
-  $effect(() => {
-    const unlistenUserMessage = listen<{role: string; content: string; display: string}>('copilot-user-message', (event) => {
-      $copilotSettings.messages.push(event.payload);
-    });
-
-    const unlistenStart = listen('copilot-start', () => {
-      output = '';
-    });
-
-    const unlistenChunk = listen<string>('copilot-chunk', (event) => {
-      output += event.payload;
-    });
-
-    const unlistenDone = listen<{role: string; content: string; display: string}>('copilot-done', (event) => {
-      $copilotSettings.messages.push(event.payload);
-      waiting = false;
-    });
-
-    return async () => {
-      (await unlistenUserMessage)();
-      (await unlistenStart)();
-      (await unlistenChunk)();
-      (await unlistenDone)();
-    };
-  });
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -149,7 +188,9 @@
 
     <div class="buffers">
       <h4>Buffers</h4>
-      <button onclick={handleAddBuffer}>Add Current</button>
+      <button onclick={handleAddBuffer}>
+        {#if selectedText}Add Selection{:else}Add Current{/if}
+      </button>
       {#each $copilotSettings.buffers as buf, i}
         {#if buf}
           <div class="buffer-item">
@@ -192,8 +233,8 @@
   }
 
   .copilot-header h3 {
-    font-size: var(--font-size-xs);
-    color: var(--text-faint);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
     font-weight: 500;
   }
 
@@ -231,8 +272,8 @@
   }
 
   .settings-section label span {
-    font-size: var(--font-size-xs);
-    color: var(--text-faint);
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
   }
 
   .settings-section textarea {
@@ -243,7 +284,7 @@
     color: var(--text-primary);
     border-radius: var(--radius-sm);
     resize: none;
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
   }
 
   .btn-reset {
@@ -295,12 +336,12 @@
   .message strong {
     display: block;
     margin-bottom: 2px;
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     color: var(--text-muted);
   }
 
   .message p {
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     white-space: pre-wrap;
     color: var(--text-primary);
     line-height: 1.5;
@@ -328,8 +369,8 @@
   }
 
   .buffers h4 {
-    font-size: var(--font-size-xs);
-    color: var(--text-faint);
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
     margin-bottom: var(--spacing-sm);
     font-weight: 500;
   }
@@ -341,7 +382,7 @@
     color: var(--text-muted);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     transition: all 0.15s ease;
   }
 
@@ -362,7 +403,7 @@
 
   .buffer-item span {
     flex: 1;
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     color: var(--text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -390,7 +431,7 @@
     color: var(--text-primary);
     border-radius: var(--radius-sm);
     resize: none;
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
   }
 
   .input-area textarea:focus {
