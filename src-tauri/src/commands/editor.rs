@@ -360,6 +360,7 @@ pub fn append_file(
 mod tests {
     use super::*;
     use crate::data_structures::Passage;
+    use crate::state::EditorSession;
 
     fn create_test_session() -> EditorSession {
         let plaintext = PlainText::from_passages(vec![

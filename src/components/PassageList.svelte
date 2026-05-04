@@ -2,6 +2,7 @@
   import { passages, currentPassageIndex } from '../lib/stores';
   import * as api from '../lib/tauri';
   import ConfirmDialog from './ConfirmDialog.svelte';
+  import Resizable from './Resizable.svelte';
 
   let {
     passagesProp,
@@ -10,7 +11,10 @@
     editMode,
     onSave,
     onLock,
-    onToggleEdit
+    onToggleEdit,
+    width,
+    onWidthResize,
+    onWidthSave
   }: {
     passagesProp: any[];
     currentIndex: number;
@@ -19,6 +23,9 @@
     onSave: () => void;
     onLock: () => void;
     onToggleEdit: () => void;
+    width: number;
+    onWidthResize: (width: number) => void;
+    onWidthSave: (width: number) => void;
   } = $props();
 
   let confirmDelete = $state(false);
@@ -112,7 +119,8 @@
   }
 </script>
 
-<div class="passage-list">
+<div class="passage-list" style="width: {width}px;">
+  <Resizable width={width} side="right" onResize={onWidthResize} onSave={onWidthSave} />
   <div class="passage-header">
     <button class="btn-icon" title="Add Passage" onclick={handleAdd}>
       <span class="material-icons icon">add</span>
@@ -197,12 +205,12 @@
 
 <style>
   .passage-list {
-    width: var(--passage-list-width);
     background: var(--bg-card);
     border-radius: var(--card-radius);
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative;
   }
 
   .passage-header {

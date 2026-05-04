@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { theme, files, currentFile, passages, currentPassageIndex, config, isLoading, error, success, copilotVisible, isDirty, copilotSettings } from './lib/stores';
+  import { theme, files, currentFile, passages, currentPassageIndex, config, isLoading, error, success, copilotVisible, isDirty, copilotSettings, sidebarWidth, passageListWidth, copilotWidth } from './lib/stores';
   import * as api from './lib/tauri';
   import { listen } from '@tauri-apps/api/event';
   import Sidebar from './components/Sidebar.svelte';
@@ -27,6 +27,9 @@
       config.set(cfg);
       theme.set(cfg.theme as 'light' | 'dark');
       document.documentElement.setAttribute('data-theme', cfg.theme);
+      sidebarWidth.set(cfg.sidebar_width);
+      passageListWidth.set(cfg.passage_list_width);
+      copilotWidth.set(cfg.copilot_width);
 
       // Load files list
       const fileList = await api.listFiles();
@@ -162,6 +165,45 @@
     api.updateConfig({ theme: newTheme });
   }
 
+  async function handleSidebarWidthSave(newWidth: number) {
+    sidebarWidth.set(newWidth);
+    try {
+      await api.updateConfig({ sidebarWidth: newWidth });
+    } catch (e) {
+      console.error('Failed to save sidebar width:', e);
+    }
+  }
+
+  function handleSidebarWidthResize(newWidth: number) {
+    sidebarWidth.set(newWidth);
+  }
+
+  async function handlePassageListWidthSave(newWidth: number) {
+    passageListWidth.set(newWidth);
+    try {
+      await api.updateConfig({ passageListWidth: newWidth });
+    } catch (e) {
+      console.error('Failed to save passage list width:', e);
+    }
+  }
+
+  function handlePassageListWidthResize(newWidth: number) {
+    passageListWidth.set(newWidth);
+  }
+
+  async function handleCopilotWidthSave(newWidth: number) {
+    copilotWidth.set(newWidth);
+    try {
+      await api.updateConfig({ copilotWidth: newWidth });
+    } catch (e) {
+      console.error('Failed to save copilot width:', e);
+    }
+  }
+
+  function handleCopilotWidthResize(newWidth: number) {
+    copilotWidth.set(newWidth);
+  }
+
   function toggleCopilot() {
     copilotVisible.update(v => !v);
   }
@@ -175,7 +217,7 @@
     if (newDir && newDir !== $config.data_dir) {
       try {
         isLoading.set(true);
-        const newConfig = await api.updateConfig({ data_dir: newDir });
+        const newConfig = await api.updateConfig({ dataDir: newDir });
         config.set(newConfig);
         // Refresh file list for new directory
         const fileList = await api.listFiles();
@@ -209,6 +251,9 @@
         onSave={handleSave}
         isDirtyProp={$isDirty}
         onOpenSettings={handleOpenSettings}
+        width={$sidebarWidth}
+        onWidthResize={handleSidebarWidthResize}
+        onWidthSave={handleSidebarWidthSave}
       />
 
       {#if $currentFile}
@@ -224,6 +269,9 @@
             isDirtyProp={$isDirty}
             onSave={handleSave}
             onLock={handleLock}
+            passageListWidth={$passageListWidth}
+            onPassageListWidthResize={handlePassageListWidthResize}
+            onPassageListWidthSave={handlePassageListWidthSave}
           />
         </div>
       {:else}
@@ -233,7 +281,7 @@
       {/if}
 
       {#if $copilotVisible && $currentFile}
-        <CopilotPanel />
+        <CopilotPanel width={$copilotWidth} onWidthResize={handleCopilotWidthResize} onWidthSave={handleCopilotWidthSave} />
       {/if}
     </main>
 

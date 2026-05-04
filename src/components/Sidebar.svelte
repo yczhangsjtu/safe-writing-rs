@@ -4,6 +4,7 @@
   import NameDialog from './NameDialog.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
   import ThemeToggle from './ThemeToggle.svelte';
+  import Resizable from './Resizable.svelte';
 
   let {
     filesProp,
@@ -11,7 +12,10 @@
     isDirtyProp,
     onSave,
     onFileSelect,
-    onOpenSettings
+    onOpenSettings,
+    width,
+    onWidthResize,
+    onWidthSave
   }: {
     filesProp: string[];
     currentFile: string | null;
@@ -19,6 +23,9 @@
     onSave: () => void;
     onFileSelect: (filename: string) => void;
     onOpenSettings: () => void;
+    width: number;
+    onWidthResize: (width: number) => void;
+    onWidthSave: (width: number) => void;
   } = $props();
 
   let showNewFileDialog = $state(false);
@@ -83,7 +90,8 @@
   }
 </script>
 
-<div class="sidebar">
+<div class="sidebar" style="width: {width}px;">
+  <Resizable width={width} side="right" onResize={onWidthResize} onSave={onWidthSave} />
   <div class="sidebar-header">
     <button class="btn-icon" title="New File" onclick={handleNewFile}>
       <span class="material-icons icon">add</span>
@@ -143,13 +151,13 @@
 
 <style>
   .sidebar {
-    width: var(--sidebar-width);
     background: var(--bg-card);
     border-radius: var(--card-radius);
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
     overflow: hidden;
+    position: relative;
   }
 
   .sidebar-header {

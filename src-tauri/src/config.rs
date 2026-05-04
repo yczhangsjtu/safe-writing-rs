@@ -14,6 +14,18 @@ fn default_theme() -> String {
     "dark".to_string()
 }
 
+fn default_sidebar_width() -> f32 {
+    200.0
+}
+
+fn default_passage_list_width() -> f32 {
+    160.0
+}
+
+fn default_copilot_width() -> f32 {
+    320.0
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Config {
     #[serde(default = "default_font_size")]
@@ -23,6 +35,12 @@ pub struct Config {
     pub llamacpp_url: String,
     #[serde(default = "default_theme")]
     pub theme: String,
+    #[serde(default = "default_sidebar_width")]
+    pub sidebar_width: f32,
+    #[serde(default = "default_passage_list_width")]
+    pub passage_list_width: f32,
+    #[serde(default = "default_copilot_width")]
+    pub copilot_width: f32,
 }
 
 impl Default for Config {
@@ -34,6 +52,9 @@ impl Default for Config {
             data_dir,
             llamacpp_url: "http://localhost:8080".to_string(),
             theme: "dark".to_string(),
+            sidebar_width: 200.0,
+            passage_list_width: 160.0,
+            copilot_width: 320.0,
         }
     }
 }
@@ -101,6 +122,9 @@ mod tests {
         assert!(!config.data_dir.is_empty());
         assert_eq!(config.llamacpp_url, "http://localhost:8080");
         assert_eq!(config.theme, "dark");
+        assert_eq!(config.sidebar_width, 200.0);
+        assert_eq!(config.passage_list_width, 160.0);
+        assert_eq!(config.copilot_width, 320.0);
     }
 
     #[test]

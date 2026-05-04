@@ -2,6 +2,17 @@
   import { copilotSettings, passages, currentPassageIndex } from '../lib/stores';
   import { listen } from '@tauri-apps/api/event';
   import * as api from '../lib/tauri';
+  import Resizable from './Resizable.svelte';
+
+  let {
+    width,
+    onWidthResize,
+    onWidthSave
+  }: {
+    width: number;
+    onWidthResize: (width: number) => void;
+    onWidthSave: (width: number) => void;
+  } = $props();
 
   let userInput = $state('');
   let output = $state('');
@@ -168,7 +179,8 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="copilot-panel">
+<div class="copilot-panel" style="width: {width}px;">
+  <Resizable width={width} side="left" onResize={onWidthResize} onSave={onWidthSave} />
   <!-- Section 1: System Prompt (blue-ish background) -->
   <div class="section system-section" class:collapsed={collapsedSystem}>
     <div class="section-header clickable" onclick={() => collapsedSystem = !collapsedSystem}>
@@ -278,7 +290,6 @@
 
 <style>
   .copilot-panel {
-    width: var(--copilot-width);
     background: var(--bg-card);
     border-radius: var(--card-radius);
     display: flex;
@@ -287,6 +298,7 @@
     padding: var(--spacing-sm);
     overflow-y: auto;
     overflow: hidden;
+    position: relative;
   }
 
   .section {

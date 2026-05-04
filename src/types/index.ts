@@ -9,6 +9,9 @@ export interface Config {
   data_dir: string;
   llamacpp_url: string;
   theme: string;
+  sidebar_width: number;
+  passage_list_width: number;
+  copilot_width: number;
 }
 
 export interface FileInfo {

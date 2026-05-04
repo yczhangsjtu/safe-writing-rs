@@ -9,13 +9,19 @@
     currentIndex,
     isDirtyProp,
     onSave,
-    onLock
+    onLock,
+    passageListWidth,
+    onPassageListWidthResize,
+    onPassageListWidthSave
   }: {
     passagesProp: any[];
     currentIndex: number;
     isDirtyProp: boolean;
     onSave: () => Promise<void>;
     onLock: () => void;
+    passageListWidth: number;
+    onPassageListWidthResize: (width: number) => void;
+    onPassageListWidthSave: (width: number) => void;
   } = $props();
 
   let editMode = $state(true);
@@ -178,6 +184,9 @@
     onLock={onLock}
     onToggleEdit={toggleEditMode}
     editMode={editMode}
+    width={passageListWidth}
+    onWidthResize={onPassageListWidthResize}
+    onWidthSave={onPassageListWidthSave}
   />
 
   <div class="editor-area">

@@ -12,6 +12,9 @@ pub fn update_config(
     theme: Option<String>,
     llamacpp_url: Option<String>,
     data_dir: Option<String>,
+    sidebar_width: Option<f32>,
+    passage_list_width: Option<f32>,
+    copilot_width: Option<f32>,
     state: tauri::State<'_, crate::state::AppState>,
 ) -> Result<Config, String> {
     let mut config = state.config.lock().map_err(|e| e.to_string())?;
@@ -26,9 +29,17 @@ pub fn update_config(
         config.llamacpp_url = url;
     }
     if let Some(dir) = data_dir {
-        // Ensure the directory exists
         ensure_data_dir(&dir)?;
         config.data_dir = dir;
+    }
+    if let Some(w) = sidebar_width {
+        config.sidebar_width = w;
+    }
+    if let Some(w) = passage_list_width {
+        config.passage_list_width = w;
+    }
+    if let Some(w) = copilot_width {
+        config.copilot_width = w;
     }
 
     save_config(&config)?;

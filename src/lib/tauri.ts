@@ -1,6 +1,9 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { Passage, Config, FileInfo, OpenFileResult, DecryptResult, ImageInfo, CopilotSettings, CopilotMessage } from '../types';
 
+// Check if running in Tauri environment
+const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+
 export interface AppStateResponse {
   current_file: string | null;
   passages: Passage[];

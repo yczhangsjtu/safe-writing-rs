@@ -111,6 +111,7 @@ pub fn refresh_files(state: tauri::State<'_, AppState>) -> Result<Vec<String>, S
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     fn create_unique_temp_dir(test_name: &str) -> PathBuf {
         let temp_dir = std::env::temp_dir().join(format!("safe_writing_test_{}", test_name));

@@ -11,8 +11,14 @@ export const config = writable<Config>({
   font_size: 24,
   data_dir: '',
   llamacpp_url: 'http://localhost:8080',
-  theme: 'dark'
+  theme: 'dark',
+  sidebar_width: 200,
+  passage_list_width: 160,
+  copilot_width: 320
 });
+export const sidebarWidth = writable<number>(200);
+export const passageListWidth = writable<number>(160);
+export const copilotWidth = writable<number>(320);
 export const copilotSettings = writable<CopilotSettings>({
   system_prompt: 'You are a helpful writing assistant.',
   buffers: Array(10).fill(''),
