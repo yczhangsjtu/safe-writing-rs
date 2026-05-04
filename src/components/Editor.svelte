@@ -24,6 +24,8 @@
   let imagesLoaded = $state(false);
   let showMetadataIndex = $state<number | null>(null);
   let metadataText = $state<string>('');
+  let currentLineTop = $state(0);
+  let textareaElement: HTMLTextAreaElement | undefined = $state();
 
   // Sync editor content with current passage
   $effect(() => {
@@ -31,6 +33,22 @@
       editorContent = passagesProp[currentIndex]?.content || '';
     }
   });
+
+  function updateCurrentLine() {
+    if (!textareaElement) return;
+    const textarea = textareaElement;
+    const text = textarea.value;
+    const selectionStart = textarea.selectionStart;
+
+    // Calculate line number
+    const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight) || 28.8; // 1.8 * 16px
+    const lines = text.substring(0, selectionStart).split('\n');
+    const lineNumber = lines.length;
+
+    // Calculate top position
+    const paddingTop = parseFloat(getComputedStyle(textarea).paddingTop) || 0;
+    currentLineTop = (lineNumber - 1) * lineHeight + paddingTop;
+  }
 
   async function loadImages() {
     if (!editMode && !imagesLoaded) {
@@ -82,6 +100,7 @@
     } else {
       emit('editor-selection', '');
     }
+    updateCurrentLine();
   }
 
   async function handleKeydown(e: KeyboardEvent) {
@@ -156,15 +175,24 @@
   <div class="editor-area">
     {#if passagesProp && passagesProp.length > 0 && currentIndex < passagesProp.length}
       {#if editMode}
-        <textarea
-          bind:value={editorContent}
-          oninput={handleContentChange}
-          onselect={handleSelectionChange}
-          placeholder="Start writing..."
-          style="font-size: {$config.font_size}px; font-family: 'LXGW WenKai', sans-serif;"
-        ></textarea>
+        <div class="editor-content">
+          <div class="textarea-wrapper">
+            <div class="line-highlight" style="top: {currentLineTop}px;"></div>
+            <textarea
+              bind:value={editorContent}
+              bind:this={textareaElement}
+              oninput={handleContentChange}
+              onselect={handleSelectionChange}
+              onclick={updateCurrentLine}
+              onkeyup={updateCurrentLine}
+              placeholder="Start writing..."
+              style="font-size: {$config.font_size}px; font-family: 'LXGW WenKai', sans-serif;"
+            ></textarea>
+          </div>
+        </div>
       {:else}
-        <div class="preview-content" style="font-size: {$config.font_size}px;">
+        <div class="editor-content">
+          <div class="preview-content" style="font-size: {$config.font_size}px;">
           {#each renderPreviewContent(editorContent) as part}
             {#if part.type === 'text'}
               <pre class="text-block">{part.content}</pre>
@@ -196,6 +224,7 @@
             {/if}
           {/each}
         </div>
+      </div>
       {/if}
     {:else}
       <div class="empty-editor">
@@ -209,19 +238,46 @@
   .editor-container {
     display: flex;
     flex: 1;
-    background: var(--bg-editor);
     overflow: hidden;
+    gap: var(--card-gap);
+    padding: 0;
   }
 
   .editor-area {
     flex: 1;
     display: flex;
     flex-direction: column;
-    padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-xl) 48px;
+    overflow: hidden;
+    background: var(--bg-card);
+    border-radius: var(--card-radius);
+  }
+
+  .editor-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: var(--spacing-xl);
     overflow: hidden;
     max-width: 800px;
     margin: 0 auto;
     width: 100%;
+  }
+
+  .textarea-wrapper {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .line-highlight {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: calc(var(--font-size-base, 18px) * 1.8);
+    background: var(--bg-hover);
+    border-radius: 4px;
+    pointer-events: none;
+    transition: top 0.05s ease;
   }
 
   textarea {
@@ -235,10 +291,9 @@
     line-height: 1.8;
     padding: 0;
     caret-color: var(--accent-color);
-  }
-
-  textarea:focus {
     outline: none;
+    position: relative;
+    z-index: 1;
   }
 
   .preview-content {

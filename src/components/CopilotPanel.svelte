@@ -279,13 +279,14 @@
 <style>
   .copilot-panel {
     width: var(--copilot-width);
-    background: var(--bg-sidebar);
-    border-left: 1px solid var(--border-color-faint);
+    background: var(--bg-card);
+    border-radius: var(--card-radius);
     display: flex;
     flex-direction: column;
     gap: var(--spacing-sm);
     padding: var(--spacing-sm);
     overflow-y: auto;
+    overflow: hidden;
   }
 
   .section {

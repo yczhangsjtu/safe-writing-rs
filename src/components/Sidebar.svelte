@@ -144,11 +144,12 @@
 <style>
   .sidebar {
     width: var(--sidebar-width);
-    background: var(--bg-sidebar);
-    border-right: 1px solid var(--border-color-faint);
+    background: var(--bg-card);
+    border-radius: var(--card-radius);
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
+    overflow: hidden;
   }
 
   .sidebar-header {
@@ -255,7 +256,6 @@
     display: flex;
     gap: 4px;
     padding: var(--spacing-md);
-    border-top: 1px solid var(--border-color-faint);
     margin-top: auto;
   }
 </style>

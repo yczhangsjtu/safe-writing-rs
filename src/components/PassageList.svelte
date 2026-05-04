@@ -227,10 +227,11 @@
 <style>
   .passage-list {
     width: var(--passage-list-width);
-    background: var(--bg-secondary);
-    border-right: 1px solid var(--border-color-faint);
+    background: var(--bg-card);
+    border-radius: var(--card-radius);
     display: flex;
     flex-direction: column;
+    overflow: hidden;
   }
 
   .passage-header {

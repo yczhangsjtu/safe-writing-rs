@@ -310,6 +310,9 @@
     display: flex;
     height: 100vh;
     overflow: hidden;
+    padding: var(--card-gap);
+    gap: var(--card-gap);
+    background: var(--bg-primary);
   }
 
   .editor-container {
@@ -376,7 +379,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--bg-editor);
+    background: var(--bg-card);
+    border-radius: var(--card-radius);
   }
 
   .hint {
