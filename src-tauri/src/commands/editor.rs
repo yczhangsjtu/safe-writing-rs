@@ -1,8 +1,7 @@
 use crate::config::ensure_data_dir;
 use crate::data_structures::{Passage, PlainText};
-use crate::state::{AppState, EditorSession};
+use crate::state::AppState;
 use sha2::Digest;
-use tauri::Emitter;
 use crate::commands::state::emit_state_change;
 
 #[derive(serde::Serialize, serde::Deserialize)]

@@ -4,7 +4,7 @@ use sha2::Digest;
 
 use crate::config::Config;
 use crate::data_structures::PlainText;
-use crate::commands::copilot::{CopilotSettings, AI_PASSAGE_NAME};
+use crate::commands::copilot::CopilotSettings;
 
 pub struct EditorSession {
     pub filename: String,

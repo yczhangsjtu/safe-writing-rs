@@ -1,4 +1,4 @@
-use crate::config::{load_or_create_config, save_config, Config};
+use crate::config::{save_config, Config};
 
 #[tauri::command]
 pub fn get_config(state: tauri::State<'_, crate::state::AppState>) -> Result<Config, String> {

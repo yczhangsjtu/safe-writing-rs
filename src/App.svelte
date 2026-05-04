@@ -201,6 +201,7 @@
         filesProp={$files}
         currentFile={$currentFile}
         onFileSelect={handleFileSelect}
+        onSave={handleSave}
         isDirtyProp={$isDirty}
         onChangePassword={handleChangePassword}
       />

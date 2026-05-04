@@ -1,6 +1,8 @@
 <script lang="ts">
   import { passages, currentPassageIndex } from '../lib/stores';
   import * as api from '../lib/tauri';
+  import NameDialog from './NameDialog.svelte';
+  import ConfirmDialog from './ConfirmDialog.svelte';
 
   let {
     passagesProp,
@@ -18,31 +20,23 @@
     onToggleEdit: () => void;
   } = $props();
 
-  let newPassageTitle = $state('');
-  let showNewPassage = $state(false);
+  let showNewPassageDialog = $state(false);
+  let showRenameDialog = $state(false);
   let showMoreMenu = $state(false);
-  let editingTitle = $state(false);
-  let editingTitleValue = $state('');
   let confirmDelete = $state(false);
   let pendingDeleteIndex = $state(-1);
 
-  // Just call API, state will be updated by state-changed event
   async function handleSelect(index: number) {
     await api.setCurrentPassage(index);
   }
 
   function handleAdd() {
-    showNewPassage = true;
-    newPassageTitle = '';
+    showNewPassageDialog = true;
   }
 
-  async function handleNewPassageSubmit() {
-    if (!newPassageTitle.trim()) {
-      showNewPassage = false;
-      return;
-    }
-    await api.addPassage(newPassageTitle.trim());
-    showNewPassage = false;
+  async function handleNewPassageSubmit(title: string) {
+    showNewPassageDialog = false;
+    await api.addPassage(title);
   }
 
   async function handleMoveUp() {
@@ -58,16 +52,13 @@
   }
 
   function handleRename() {
-    editingTitleValue = passagesProp[currentIndex]?.title || '';
-    editingTitle = true;
     showMoreMenu = false;
+    showRenameDialog = true;
   }
 
-  async function handleRenameSubmit() {
-    if (editingTitleValue.trim()) {
-      await api.updatePassageTitle(currentIndex, editingTitleValue.trim());
-    }
-    editingTitle = false;
+  async function handleRenameSubmit(newTitle: string) {
+    showRenameDialog = false;
+    await api.updatePassageTitle(currentIndex, newTitle);
   }
 
   function handleDeleteClick(index: number) {
@@ -89,16 +80,16 @@
 
 <div class="passage-list">
   <div class="passage-header">
-    <button class="btn-icon" title="Add" onclick={handleAdd}>
+    <button class="btn-icon" title="Add Passage" onclick={handleAdd}>
       <span class="icon">+</span>
     </button>
     <button class="btn-icon" title="Save" onclick={onSave} disabled={!isDirtyProp}>
       <span class="icon">{#if isDirtyProp}💾{:else}○{/if}</span>
     </button>
-    <button class="btn-icon" title="Up" onclick={handleMoveUp} disabled={currentIndex === 0}>
+    <button class="btn-icon" title="Move Up" onclick={handleMoveUp} disabled={currentIndex === 0}>
       <span class="icon">↑</span>
     </button>
-    <button class="btn-icon" title="Down" onclick={handleMoveDown} disabled={currentIndex >= passagesProp.length - 1}>
+    <button class="btn-icon" title="Move Down" onclick={handleMoveDown} disabled={currentIndex >= passagesProp.length - 1}>
       <span class="icon">↓</span>
     </button>
     <div class="more-wrapper">
@@ -110,7 +101,7 @@
           <button class="menu-item" onclick={() => { onToggleEdit(); showMoreMenu = false; }}>
             {#if editMode}Preview{:else}Edit{/if}
           </button>
-          <button class="menu-item" onclick={() => { handleRename(); }}>
+          <button class="menu-item" onclick={handleRename}>
             Rename
           </button>
           <button class="menu-item danger" onclick={() => { handleDeleteClick(currentIndex); }}>
@@ -120,30 +111,6 @@
       {/if}
     </div>
   </div>
-
-  {#if showNewPassage}
-    <div class="input-row">
-      <input
-        type="text"
-        bind:value={newPassageTitle}
-        placeholder="Title..."
-        onkeydown={(e) => e.key === 'Enter' && handleNewPassageSubmit()}
-        onblur={() => showNewPassage = false}
-      />
-    </div>
-  {/if}
-
-  {#if editingTitle}
-    <div class="input-row">
-      <input
-        type="text"
-        bind:value={editingTitleValue}
-        placeholder="New title..."
-        onkeydown={(e) => e.key === 'Enter' && handleRenameSubmit()}
-        onblur={() => editingTitle = false}
-      />
-    </div>
-  {/if}
 
   {#if confirmDelete}
     <div class="confirm-overlay">
@@ -178,6 +145,24 @@
   </div>
 </div>
 
+{#if showNewPassageDialog}
+  <NameDialog
+    title="Create New Passage"
+    placeholder="Enter passage title..."
+    onSubmit={handleNewPassageSubmit}
+    onCancel={() => showNewPassageDialog = false}
+  />
+{/if}
+
+{#if showRenameDialog}
+  <NameDialog
+    title="Rename Passage"
+    placeholder="Enter new title..."
+    onSubmit={handleRenameSubmit}
+    onCancel={() => showRenameDialog = false}
+  />
+{/if}
+
 <style>
   .passage-list {
     width: var(--passage-list-width);
@@ -189,15 +174,15 @@
 
   .passage-header {
     display: flex;
-    gap: 2px;
+    gap: 4px;
     padding: var(--spacing-md);
     padding-bottom: var(--spacing-sm);
     position: relative;
   }
 
   .btn-icon {
-    width: 24px;
-    height: 24px;
+    width: 32px;
+    height: 32px;
     border: none;
     background: transparent;
     color: var(--text-muted);
@@ -210,7 +195,7 @@
   }
 
   .icon {
-    font-size: var(--font-size-xs);
+    font-size: 16px;
     line-height: 1;
   }
 
@@ -231,7 +216,7 @@
 
   .more-menu {
     position: absolute;
-    top: 28px;
+    top: 36px;
     left: 0;
     z-index: 1000;
     background: var(--bg-modal);
@@ -247,7 +232,7 @@
 
   .menu-item {
     width: 100%;
-    padding: 6px 10px;
+    padding: 8px 12px;
     border: none;
     background: transparent;
     color: var(--text-secondary);
@@ -269,26 +254,6 @@
 
   .menu-item.danger:hover {
     background: rgba(248, 71, 71, 0.1);
-  }
-
-  .input-row {
-    padding: var(--spacing-sm) var(--spacing-md);
-    border-bottom: 1px solid var(--border-color-faint);
-  }
-
-  .input-row input {
-    width: 100%;
-    padding: 4px 8px;
-    border: none;
-    background: var(--bg-input);
-    color: var(--text-primary);
-    border-radius: var(--radius-sm);
-    font-size: var(--font-size-xs);
-  }
-
-  .input-row input:focus {
-    outline: none;
-    box-shadow: inset 0 0 0 1px var(--accent-color);
   }
 
   .confirm-overlay {
@@ -367,7 +332,7 @@
   .passage-item {
     display: flex;
     align-items: center;
-    padding: 4px 8px;
+    padding: 6px 10px;
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: background-color 0.15s ease;

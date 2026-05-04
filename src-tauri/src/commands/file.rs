@@ -1,8 +1,5 @@
-use std::path::PathBuf;
-
 use crate::config::ensure_data_dir;
 use crate::data_structures::PlainText;
-use crate::error::Error;
 use crate::state::AppState;
 
 #[derive(serde::Serialize, serde::Deserialize)]

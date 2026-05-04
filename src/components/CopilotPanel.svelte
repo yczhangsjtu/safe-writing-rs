@@ -375,17 +375,22 @@
 
   .header-buttons {
     display: flex;
-    gap: 2px;
+    gap: 4px;
   }
 
   .copilot-header button {
-    padding: 4px 8px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
     border: none;
     background: transparent;
     color: var(--text-muted);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    font-size: var(--font-size-xs);
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transition: all 0.15s ease;
   }
 

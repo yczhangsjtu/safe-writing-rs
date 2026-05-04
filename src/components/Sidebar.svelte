@@ -1,23 +1,28 @@
 <script lang="ts">
   import { files, copilotVisible } from '../lib/stores';
   import * as api from '../lib/tauri';
+  import NameDialog from './NameDialog.svelte';
+  import ConfirmDialog from './ConfirmDialog.svelte';
 
   let {
     filesProp,
     currentFile,
     isDirtyProp,
+    onSave,
     onFileSelect,
     onChangePassword
   }: {
     filesProp: string[];
     currentFile: string | null;
     isDirtyProp: boolean;
+    onSave: () => void;
     onFileSelect: (filename: string) => void;
     onChangePassword: () => void;
   } = $props();
 
-  let newFilename = $state('');
-  let showNewFileInput = $state(false);
+  let showNewFileDialog = $state(false);
+  let showUnsavedDialog = $state(false);
+  let pendingFilename = $state('');
 
   async function handleRefresh() {
     if (isDirtyProp) return;
@@ -30,22 +35,44 @@
   }
 
   function handleNewFile() {
-    if (isDirtyProp) return;
-    showNewFileInput = true;
-    newFilename = '';
+    showNewFileDialog = true;
   }
 
-  function handleNewFileSubmit() {
-    if (!newFilename.trim()) {
-      showNewFileInput = false;
+  function handleNewFileSubmit(filename: string) {
+    showNewFileDialog = false;
+    if (filesProp.includes(filename)) {
       return;
     }
-    if (filesProp.includes(newFilename.trim())) {
-      return;
+    onFileSelect(filename);
+  }
+
+  function handleFileClick(filename: string) {
+    if (filename === currentFile) return;
+
+    if (isDirtyProp) {
+      pendingFilename = filename;
+      showUnsavedDialog = true;
+    } else {
+      onFileSelect(filename);
     }
-    onFileSelect(newFilename.trim());
-    showNewFileInput = false;
-    newFilename = '';
+  }
+
+  function handleSaveAndSwitch() {
+    showUnsavedDialog = false;
+    onSave();
+    onFileSelect(pendingFilename);
+    pendingFilename = '';
+  }
+
+  function handleDiscardAndSwitch() {
+    showUnsavedDialog = false;
+    onFileSelect(pendingFilename);
+    pendingFilename = '';
+  }
+
+  function handleCancelSwitch() {
+    showUnsavedDialog = false;
+    pendingFilename = '';
   }
 
   function toggleCopilot() {
@@ -55,7 +82,7 @@
 
 <div class="sidebar">
   <div class="sidebar-header">
-    <button class="btn-icon" title="New File" onclick={handleNewFile} disabled={isDirtyProp}>
+    <button class="btn-icon" title="New File" onclick={handleNewFile}>
       <span class="icon">+</span>
     </button>
     <button class="btn-icon" title="Refresh" onclick={handleRefresh} disabled={isDirtyProp}>
@@ -71,25 +98,13 @@
     {/if}
   </div>
 
-  {#if showNewFileInput}
-    <div class="new-file-input">
-      <input
-        type="text"
-        bind:value={newFilename}
-        placeholder="New file name..."
-        onkeydown={(e) => e.key === 'Enter' && handleNewFileSubmit()}
-        onblur={() => showNewFileInput = false}
-      />
-    </div>
-  {/if}
-
   <div class="file-list">
     {#each filesProp as filename}
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <div
         class="file-item"
         class:selected={filename === currentFile}
-        onclick={() => !isDirtyProp && filename !== currentFile && onFileSelect(filename)}
+        onclick={() => handleFileClick(filename)}
       >
         <span class="file-icon">📄</span>
         <span class="file-name">{filename}</span>
@@ -104,6 +119,26 @@
   </div>
 </div>
 
+{#if showNewFileDialog}
+  <NameDialog
+    title="Create New File"
+    placeholder="Enter file name..."
+    onSubmit={handleNewFileSubmit}
+    onCancel={() => showNewFileDialog = false}
+  />
+{/if}
+
+{#if showUnsavedDialog}
+  <ConfirmDialog
+    message="Current file has unsaved changes. Do you want to save before switching?"
+    confirmText="Save"
+    cancelText="Discard"
+    onConfirm={handleSaveAndSwitch}
+    onCancel={handleCancelSwitch}
+    onDiscard={handleDiscardAndSwitch}
+  />
+{/if}
+
 <style>
   .sidebar {
     width: var(--sidebar-width);
@@ -115,14 +150,14 @@
 
   .sidebar-header {
     display: flex;
-    gap: 2px;
+    gap: 4px;
     padding: var(--spacing-md);
     padding-bottom: var(--spacing-sm);
   }
 
   .btn-icon {
-    width: 26px;
-    height: 26px;
+    width: 32px;
+    height: 32px;
     border: none;
     background: transparent;
     color: var(--text-muted);
@@ -135,7 +170,7 @@
   }
 
   .icon {
-    font-size: var(--font-size-xs);
+    font-size: 16px;
     line-height: 1;
   }
 
@@ -149,26 +184,6 @@
     cursor: not-allowed;
   }
 
-  .new-file-input {
-    padding: var(--spacing-sm) var(--spacing-md);
-    border-bottom: 1px solid var(--border-color-faint);
-  }
-
-  .new-file-input input {
-    width: 100%;
-    padding: 4px 8px;
-    border: none;
-    background: var(--bg-input);
-    color: var(--text-primary);
-    border-radius: var(--radius-sm);
-    font-size: var(--font-size-sm);
-  }
-
-  .new-file-input input:focus {
-    outline: none;
-    box-shadow: inset 0 0 0 1px var(--accent-color);
-  }
-
   .file-list {
     flex: 1;
     overflow-y: auto;
@@ -179,7 +194,7 @@
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
-    padding: 4px 8px;
+    padding: 6px 10px;
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: background-color 0.15s ease;
@@ -196,7 +211,7 @@
   }
 
   .file-icon {
-    font-size: 12px;
+    font-size: 14px;
     opacity: 0.6;
   }
 

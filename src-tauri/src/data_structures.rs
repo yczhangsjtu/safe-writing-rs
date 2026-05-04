@@ -1,5 +1,5 @@
 use crate::{
-    encode::{base64_decode, base64_encode},
+    encode::base64_encode,
     error::Error,
 };
 
