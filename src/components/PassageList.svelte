@@ -199,7 +199,6 @@
     border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
   }
 
   .passage-header {
@@ -208,6 +207,8 @@
     padding: 8px;
     border-bottom: 1px solid var(--border-color);
     flex-wrap: wrap;
+    overflow: visible;
+    position: relative;
   }
 
   .btn-sm {
@@ -237,13 +238,14 @@
 
   .more-wrapper {
     position: relative;
+    z-index: 10;
   }
 
   .more-menu {
     position: absolute;
     top: 32px;
     left: 0;
-    z-index: 100;
+    z-index: 1000;
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: 4px;
