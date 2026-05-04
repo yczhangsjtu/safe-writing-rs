@@ -248,7 +248,8 @@
   <Resizable width={width} side="left" onResize={onWidthResize} onSave={onWidthSave} />
   <!-- Section 1: System Prompt (blue-ish background) -->
   <div class="section system-section" class:collapsed={collapsedSystem}>
-    <div class="section-header clickable" onclick={() => collapsedSystem = !collapsedSystem}>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="section-header clickable" onclick={() => collapsedSystem = !collapsedSystem} role="button" tabindex="0">
       <h4>System Prompt</h4>
       <span class="collapse-icon">{collapsedSystem ? '▸' : '▾'}</span>
     </div>
@@ -266,7 +267,8 @@
   <!-- Section 2: Buffers (green-ish background) -->
   <div class="section buffers-section" class:collapsed={collapsedBuffers}>
     <div class="section-header">
-      <div class="header-left clickable" onclick={() => collapsedBuffers = !collapsedBuffers}>
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <div class="header-left clickable" onclick={() => collapsedBuffers = !collapsedBuffers} role="button" tabindex="0">
         <h4>Buffers <span class="hint">#0-#9</span></h4>
         <span class="collapse-icon">{collapsedBuffers ? '▸' : '▾'}</span>
       </div>
@@ -296,7 +298,8 @@
   <!-- Section 3: Conversation (purple-ish background) -->
   <div class="section conversation-section" class:collapsed={collapsedConversation}>
     <div class="section-header">
-      <div class="header-left clickable" onclick={() => collapsedConversation = !collapsedConversation}>
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <div class="header-left clickable" onclick={() => collapsedConversation = !collapsedConversation} role="button" tabindex="0">
         <h4>Conversation</h4>
         <span class="collapse-icon">{collapsedConversation ? '▸' : '▾'}</span>
       </div>

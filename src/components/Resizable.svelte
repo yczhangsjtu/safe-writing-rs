@@ -17,10 +17,10 @@
     onSave?: (width: number) => void;
   } = $props();
 
-  let isDragging = false;
+  let isDragging = $state(false);
   let startX = 0;
   let startWidth = 0;
-  let dragWidth = width; // Track the actual width during drag
+  let dragWidth = $state(0);
 
   function handleMouseDown(e: MouseEvent) {
     e.preventDefault();
@@ -59,6 +59,7 @@
   });
 </script>
 
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="resize-handle" class:active={isDragging} onmousedown={handleMouseDown} style="left: {side === 'left' ? 0 : 'auto'}; right: {side === 'right' ? 0 : 'auto'};"></div>
 
 <style>

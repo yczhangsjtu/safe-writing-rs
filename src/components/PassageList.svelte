@@ -155,6 +155,7 @@
   <div class="passages">
     {#each passagesProp as passage, i}
       <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         class="passage-item"
         class:selected={i === currentIndex}

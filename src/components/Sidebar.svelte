@@ -104,10 +104,13 @@
   <div class="file-list">
     {#each filesProp as filename}
       <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         class="file-item"
         class:selected={filename === currentFile}
         onclick={() => handleFileClick(filename)}
+        role="button"
+        tabindex="0"
       >
         <span class="material-icons file-icon">description</span>
         <span class="file-name">{filename}</span>
