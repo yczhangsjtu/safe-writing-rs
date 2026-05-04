@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { files, copilotVisible } from '../lib/stores';
+  import { files, theme } from '../lib/stores';
   import * as api from '../lib/tauri';
   import NameDialog from './NameDialog.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
+  import ThemeToggle from './ThemeToggle.svelte';
 
   let {
     filesProp,
@@ -10,14 +11,14 @@
     isDirtyProp,
     onSave,
     onFileSelect,
-    onChangePassword
+    onOpenSettings
   }: {
     filesProp: string[];
     currentFile: string | null;
     isDirtyProp: boolean;
     onSave: () => void;
     onFileSelect: (filename: string) => void;
-    onChangePassword: () => void;
+    onOpenSettings: () => void;
   } = $props();
 
   let showNewFileDialog = $state(false);
@@ -75,8 +76,10 @@
     pendingFilename = '';
   }
 
-  function toggleCopilot() {
-    copilotVisible.update(v => !v);
+  function handleThemeChange(newTheme: 'light' | 'dark') {
+    theme.set(newTheme);
+    document.documentElement.setAttribute('data-theme', newTheme);
+    api.updateConfig({ theme: newTheme });
   }
 </script>
 
@@ -88,14 +91,6 @@
     <button class="btn-icon" title="Refresh" onclick={handleRefresh} disabled={isDirtyProp}>
       <span class="icon">↻</span>
     </button>
-    <button class="btn-icon" title="AI Copilot" onclick={toggleCopilot}>
-      <span class="icon">{#if $copilotVisible}✓{:else}AI{/if}</span>
-    </button>
-    {#if currentFile}
-      <button class="btn-icon" title="Change Password" onclick={onChangePassword}>
-        <span class="icon">🔑</span>
-      </button>
-    {/if}
   </div>
 
   <div class="file-list">
@@ -116,6 +111,13 @@
         <span class="text-muted">No files</span>
       </div>
     {/if}
+  </div>
+
+  <div class="sidebar-footer">
+    <button class="btn-icon" title="Settings" onclick={onOpenSettings}>
+      <span class="icon">⚙</span>
+    </button>
+    <ThemeToggle currentTheme={$theme} onThemeChange={handleThemeChange} />
   </div>
 </div>
 
@@ -146,6 +148,7 @@
     border-right: 1px solid var(--border-color-faint);
     display: flex;
     flex-direction: column;
+    flex-shrink: 0;
   }
 
   .sidebar-header {
@@ -232,5 +235,13 @@
     text-align: center;
     font-size: var(--font-size-sm);
     color: var(--text-muted);
+  }
+
+  .sidebar-footer {
+    display: flex;
+    gap: 4px;
+    padding: var(--spacing-md);
+    border-top: 1px solid var(--border-color-faint);
+    margin-top: auto;
   }
 </style>

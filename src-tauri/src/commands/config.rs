@@ -1,4 +1,4 @@
-use crate::config::{save_config, Config};
+use crate::config::{ensure_data_dir, save_config, Config};
 
 #[tauri::command]
 pub fn get_config(state: tauri::State<'_, crate::state::AppState>) -> Result<Config, String> {
@@ -11,6 +11,7 @@ pub fn update_config(
     font_size: Option<f32>,
     theme: Option<String>,
     llamacpp_url: Option<String>,
+    data_dir: Option<String>,
     state: tauri::State<'_, crate::state::AppState>,
 ) -> Result<Config, String> {
     let mut config = state.config.lock().map_err(|e| e.to_string())?;
@@ -23,6 +24,11 @@ pub fn update_config(
     }
     if let Some(url) = llamacpp_url {
         config.llamacpp_url = url;
+    }
+    if let Some(dir) = data_dir {
+        // Ensure the directory exists
+        ensure_data_dir(&dir)?;
+        config.data_dir = dir;
     }
 
     save_config(&config)?;

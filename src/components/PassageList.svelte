@@ -10,7 +10,8 @@
     isDirtyProp,
     editMode,
     onSave,
-    onToggleEdit
+    onToggleEdit,
+    onChangePassword
   }: {
     passagesProp: any[];
     currentIndex: number;
@@ -18,6 +19,7 @@
     editMode: boolean;
     onSave: () => void;
     onToggleEdit: () => void;
+    onChangePassword: () => void;
   } = $props();
 
   let showNewPassageDialog = $state(false);
@@ -106,6 +108,9 @@
           </button>
           <button class="menu-item danger" onclick={() => { handleDeleteClick(currentIndex); }}>
             Delete
+          </button>
+          <button class="menu-item" onclick={() => { onChangePassword(); showMoreMenu = false; }}>
+            Change Password
           </button>
         </div>
       {/if}

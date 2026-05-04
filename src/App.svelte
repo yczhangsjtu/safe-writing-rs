@@ -9,6 +9,7 @@
   import ChangePasswordDialog from './components/ChangePasswordDialog.svelte';
   import CopilotPanel from './components/CopilotPanel.svelte';
   import ThemeToggle from './components/ThemeToggle.svelte';
+  import SettingsDialog from './components/SettingsDialog.svelte';
 
   let showPasswordDialog = $state(false);
   let passwordDialogMode: 'new' | 'decrypt' = $state('decrypt');
@@ -17,6 +18,7 @@
   let initialized = $state(false);
   let initError = $state('');
   let showChangePasswordDialog = $state(false);
+  let showSettingsDialog = $state(false);
   let lastCurrentFile = $state<string | null>(null);
 
   onMount(async () => {
@@ -172,6 +174,34 @@
       isLoading.set(false);
     }
   }
+
+  function toggleCopilot() {
+    copilotVisible.update(v => !v);
+  }
+
+  function handleOpenSettings() {
+    showSettingsDialog = true;
+  }
+
+  async function handleSettingsSave(newDir: string) {
+    showSettingsDialog = false;
+    if (newDir && newDir !== $config.data_dir) {
+      try {
+        isLoading.set(true);
+        const newConfig = await api.updateConfig({ data_dir: newDir });
+        config.set(newConfig);
+        // Refresh file list for new directory
+        const fileList = await api.listFiles();
+        files.set(fileList);
+        success.set('Settings saved successfully');
+        setTimeout(() => success.set(null), 3000);
+      } catch (e: any) {
+        error.set(`Failed to save settings: ${e?.message || e}`);
+      } finally {
+        isLoading.set(false);
+      }
+    }
+  }
 </script>
 
 <div class="app-container">
@@ -184,18 +214,6 @@
       {/if}
     </div>
   {:else}
-    <header class="app-header">
-      <div class="header-left">
-        <span class="app-title">Safe Writing</span>
-        {#if $config.data_dir}
-          <span class="data-dir">{ $config.data_dir }</span>
-        {/if}
-      </div>
-      <div class="header-right">
-        <ThemeToggle currentTheme={$theme} onThemeChange={handleThemeChange} />
-      </div>
-    </header>
-
     <main class="app-main">
       <Sidebar
         filesProp={$files}
@@ -203,20 +221,28 @@
         onFileSelect={handleFileSelect}
         onSave={handleSave}
         isDirtyProp={$isDirty}
-        onChangePassword={handleChangePassword}
+        onOpenSettings={handleOpenSettings}
       />
 
       {#if $currentFile}
-        <Editor
-          passagesProp={$passages}
-          currentIndex={$currentPassageIndex}
-          isDirtyProp={$isDirty}
-          onSave={handleSave}
-          onLock={handleLock}
-        />
+        <div class="editor-container">
+          <div class="top-bar">
+            <button class="btn-icon ai-btn" class:active={$copilotVisible} title="AI Copilot" onclick={toggleCopilot}>
+              <span class="icon">✦</span>
+            </button>
+          </div>
+          <Editor
+            passagesProp={$passages}
+            currentIndex={$currentPassageIndex}
+            isDirtyProp={$isDirty}
+            onSave={handleSave}
+            onLock={handleLock}
+            onChangePassword={handleChangePassword}
+          />
+        </div>
       {:else}
         <div class="empty-state">
-          <p>Select a file to begin</p>
+          <p class="hint">Select a file to begin</p>
         </div>
       {/if}
 
@@ -238,6 +264,14 @@
       <ChangePasswordDialog
         onSubmit={handlePasswordChange}
         onCancel={() => showChangePasswordDialog = false}
+      />
+    {/if}
+
+    {#if showSettingsDialog}
+      <SettingsDialog
+        dataDir={$config.data_dir}
+        onSubmit={handleSettingsSave}
+        onCancel={() => showSettingsDialog = false}
       />
     {/if}
 
@@ -293,42 +327,60 @@
     font-size: var(--font-size-sm);
   }
 
-  .app-header {
+  .app-main {
     display: flex;
-    justify-content: space-between;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .editor-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .top-bar {
+    display: flex;
+    justify-content: flex-end;
     align-items: center;
-    padding: var(--spacing-md) var(--spacing-lg);
+    padding: var(--spacing-sm) var(--spacing-md);
     background: var(--bg-sidebar);
     border-bottom: 1px solid var(--border-color-faint);
     height: 40px;
   }
 
-  .header-left {
+  .btn-icon {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
     display: flex;
     align-items: center;
-    gap: var(--spacing-md);
+    justify-content: center;
+    transition: all 0.15s ease;
   }
 
-  .app-title {
-    font-size: var(--font-size-sm);
-    font-weight: 500;
-    color: var(--text-secondary);
+  .icon {
+    font-size: 16px;
+    line-height: 1;
   }
 
-  .data-dir {
-    font-size: var(--font-size-xs);
-    color: var(--text-faint);
+  .btn-icon:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
   }
 
-  .header-right {
-    display: flex;
-    gap: var(--spacing-sm);
+  .ai-btn.active {
+    background: var(--accent-color);
+    color: var(--text-inverse);
   }
 
-  .app-main {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
+  .ai-btn.active:hover {
+    opacity: 0.9;
   }
 
   .empty-state {
@@ -337,6 +389,9 @@
     align-items: center;
     justify-content: center;
     background: var(--bg-editor);
+  }
+
+  .hint {
     color: var(--text-muted);
     font-size: var(--font-size-sm);
   }
