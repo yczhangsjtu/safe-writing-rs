@@ -6,6 +6,8 @@ use crate::data_structures::PlainText;
 use crate::error::Error;
 use crate::safe_note::load_safe_note_file;
 use crate::state::{AppState, EditorSession};
+use tauri::Emitter;
+use crate::commands::state::emit_state_change;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct DecryptResult {
@@ -16,6 +18,7 @@ pub struct DecryptResult {
 
 #[tauri::command]
 pub fn decrypt_file(
+    app: tauri::AppHandle,
     filename: String,
     ciphertext: String,
     password: String,
@@ -30,6 +33,8 @@ pub fn decrypt_file(
         *current_session = Some(session);
     }
 
+    emit_state_change(&app, &state);
+
     Ok(DecryptResult {
         passages: plaintext.passages().clone(),
         num_images: plaintext.num_images(),
@@ -38,9 +43,13 @@ pub fn decrypt_file(
 }
 
 #[tauri::command]
-pub fn encrypt_and_save(state: tauri::State<'_, AppState>) -> Result<(), String> {
+pub fn encrypt_and_save(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
     let data_dir = ensure_data_dir(&config.data_dir)?;
+    drop(config); // Release config lock
 
     let mut current_session = state.current_session.lock().map_err(|e| e.to_string())?;
 
@@ -50,6 +59,8 @@ pub fn encrypt_and_save(state: tauri::State<'_, AppState>) -> Result<(), String>
         std::fs::write(&file_path, ciphertext)
             .map_err(|e| format!("Failed to save file: {}", e))?;
         session.dirty = false;
+        drop(current_session);
+        emit_state_change(&app, &state);
     } else {
         return Err("No file is currently open".to_string());
     }
@@ -59,12 +70,14 @@ pub fn encrypt_and_save(state: tauri::State<'_, AppState>) -> Result<(), String>
 
 #[tauri::command]
 pub fn change_password(
+    app: tauri::AppHandle,
     old_password: String,
     new_password: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
     let data_dir = ensure_data_dir(&config.data_dir)?;
+    drop(config); // Release config lock
 
     let mut current_session = state.current_session.lock().map_err(|e| e.to_string())?;
 
@@ -78,6 +91,8 @@ pub fn change_password(
         std::fs::write(&file_path, ciphertext)
             .map_err(|e| format!("Failed to save file: {}", e))?;
         session.dirty = false;
+        drop(current_session);
+        emit_state_change(&app, &state);
     } else {
         return Err("No file is currently open".to_string());
     }
@@ -86,7 +101,20 @@ pub fn change_password(
 }
 
 #[tauri::command]
+pub fn close_file(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let mut current_session = state.current_session.lock().map_err(|e| e.to_string())?;
+    *current_session = None;
+    drop(current_session);
+    emit_state_change(&app, &state);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn import_safe_notes(
+    app: tauri::AppHandle,
     file_path: String,
     password: String,
     new_filename: String,
@@ -94,6 +122,7 @@ pub fn import_safe_notes(
 ) -> Result<DecryptResult, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
     let data_dir = ensure_data_dir(&config.data_dir)?;
+    drop(config); // Release config lock
 
     let path = PathBuf::from(&file_path);
     let safe_note = load_safe_note_file(&password, &path)
@@ -114,6 +143,8 @@ pub fn import_safe_notes(
         let mut current_session = state.current_session.lock().map_err(|e| e.to_string())?;
         *current_session = Some(session);
     }
+
+    emit_state_change(&app, &state);
 
     Ok(DecryptResult {
         passages: plaintext.passages().clone(),

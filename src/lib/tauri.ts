@@ -1,6 +1,13 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { Passage, Config, FileInfo, OpenFileResult, DecryptResult, ImageInfo, CopilotSettings, CopilotMessage } from '../types';
 
+export interface AppStateResponse {
+  current_file: string | null;
+  passages: Passage[];
+  current_passage_index: number;
+  is_dirty: boolean;
+}
+
 export async function listFiles(): Promise<string[]> {
   return invoke('list_files');
 }
@@ -23,6 +30,10 @@ export async function decryptFile(filename: string, ciphertext: string, password
 
 export async function encryptAndSave(): Promise<void> {
   return invoke('encrypt_and_save');
+}
+
+export async function closeFile(): Promise<void> {
+  return invoke('close_file');
 }
 
 export async function changePassword(oldPassword: string, newPassword: string): Promise<void> {
@@ -91,6 +102,10 @@ export async function updateConfig(config: Partial<Config>): Promise<Config> {
 
 export async function getDataDir(): Promise<string> {
   return invoke('get_data_dir');
+}
+
+export async function getAppState(): Promise<AppStateResponse> {
+  return invoke('get_app_state');
 }
 
 export async function loadCopilotSettings(): Promise<CopilotSettings> {

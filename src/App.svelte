@@ -2,13 +2,13 @@
   import { onMount } from 'svelte';
   import { theme, files, currentFile, passages, currentPassageIndex, config, isLoading, error, success, copilotVisible, isDirty, copilotSettings } from './lib/stores';
   import * as api from './lib/tauri';
+  import { listen } from '@tauri-apps/api/event';
   import Sidebar from './components/Sidebar.svelte';
   import Editor from './components/Editor.svelte';
   import PasswordDialog from './components/PasswordDialog.svelte';
   import ChangePasswordDialog from './components/ChangePasswordDialog.svelte';
   import CopilotPanel from './components/CopilotPanel.svelte';
   import ThemeToggle from './components/ThemeToggle.svelte';
-  import { get } from 'svelte/store';
 
   let showPasswordDialog = $state(false);
   let passwordDialogMode: 'new' | 'decrypt' = $state('decrypt');
@@ -21,16 +21,14 @@
   onMount(async () => {
     console.log('App mounted, initializing...');
     try {
-      console.log('Fetching config...');
+      // Load config
       const cfg = await api.getConfig();
-      console.log('Config received:', cfg);
       config.set(cfg);
       theme.set(cfg.theme as 'light' | 'dark');
       document.documentElement.setAttribute('data-theme', cfg.theme);
 
-      console.log('Fetching files...');
+      // Load files list
       const fileList = await api.listFiles();
-      console.log('Files received:', fileList);
       files.set(fileList);
       initialized = true;
       console.log('Initialization complete');
@@ -38,36 +36,61 @@
       initError = e?.message || String(e);
       console.error('Init error:', e);
     }
+
+    // Listen for state-changed events from backend
+    const unlistenState = listen<api.AppStateResponse>('state-changed', (event) => {
+      const state = event.payload;
+      currentFile.set(state.current_file);
+      passages.set(state.passages);
+      currentPassageIndex.set(state.current_passage_index);
+      isDirty.set(state.is_dirty);
+
+      // Load copilot settings when file opens
+      if (state.current_file && state.passages.length > 0) {
+        api.loadCopilotSettings()
+          .then(settings => copilotSettings.set(settings))
+          .catch(() => {
+            copilotSettings.set({
+              system_prompt: 'You are a helpful writing assistant.',
+              buffers: Array(10).fill(''),
+              favorite_prompts: [],
+              messages: []
+            });
+          });
+      } else {
+        copilotSettings.set({
+          system_prompt: 'You are a helpful writing assistant.',
+          buffers: Array(10).fill(''),
+          favorite_prompts: [],
+          messages: []
+        });
+      }
+    });
+
+    return async () => {
+      (await unlistenState)();
+    };
   });
 
   async function handleFileSelect(filename: string) {
-    // Lock current file first if there's one open
-    if (get(currentFile)) {
-      if (get(isDirty)) {
-        await handleSave();
-      }
-      currentFile.set(null);
-      passages.set([]);
-      currentPassageIndex.set(0);
+    // Close current file first
+    if ($currentFile) {
+      await api.closeFile();
     }
 
     try {
       isLoading.set(true);
 
-      // Check if this is a new file (not in the existing list)
-      const fileList = get(files);
-      const isNewFile = !fileList.includes(filename);
+      // Check if this is a new file
+      const isNewFile = !$files.includes(filename);
 
       if (isNewFile) {
-        // For new files, directly show password dialog
         passwordDialogMode = 'new';
         pendingFilename = filename;
         pendingCiphertext = '';
         showPasswordDialog = true;
       } else {
-        // For existing files, open and check
         const result = await api.openFile(filename);
-
         if (result.is_new) {
           passwordDialogMode = 'new';
           pendingFilename = filename;
@@ -93,40 +116,13 @@
 
       if (passwordDialogMode === 'new') {
         await api.createFile(pendingFilename, password);
-        // Refresh file list after creating new file
+        // Refresh file list
         const fileList = await api.listFiles();
         files.set(fileList);
-        const decryptResult = await api.decryptFile(pendingFilename, '', password);
-        currentFile.set(pendingFilename);
-        passages.set(decryptResult.passages);
-        currentPassageIndex.set(0);
-        isDirty.set(false);
-        // Initialize copilot with default settings for new file
-        copilotSettings.set({
-          system_prompt: 'You are a helpful writing assistant.',
-          buffers: Array(10).fill(''),
-          favorite_prompts: [],
-          messages: []
-        });
+        // Decrypt (will trigger state-changed event)
+        await api.decryptFile(pendingFilename, '', password);
       } else {
-        const decryptResult = await api.decryptFile(pendingFilename, pendingCiphertext, password);
-        currentFile.set(pendingFilename);
-        passages.set(decryptResult.passages);
-        currentPassageIndex.set(0);
-        isDirty.set(false);
-        // Load copilot settings from .ai passage
-        try {
-          const aiSettings = await api.loadCopilotSettings();
-          copilotSettings.set(aiSettings);
-        } catch (e) {
-          // If no .ai passage exists, use default settings
-          copilotSettings.set({
-            system_prompt: 'You are a helpful writing assistant.',
-            buffers: Array(10).fill(''),
-            favorite_prompts: [],
-            messages: []
-          });
-        }
+        await api.decryptFile(pendingFilename, pendingCiphertext, password);
       }
 
       success.set('File opened successfully');
@@ -141,8 +137,7 @@
   async function handleSave() {
     try {
       isLoading.set(true);
-      await api.encryptAndSave();
-      isDirty.set(false);
+      await api.encryptAndSave(); // Will trigger state-changed event
       success.set('Saved successfully');
       setTimeout(() => success.set(null), 3000);
     } catch (e: any) {
@@ -153,19 +148,7 @@
   }
 
   async function handleLock() {
-    if (get(isDirty)) {
-      await handleSave();
-    }
-    currentFile.set(null);
-    passages.set([]);
-    currentPassageIndex.set(0);
-    // Clear copilot settings when locking
-    copilotSettings.set({
-      system_prompt: 'You are a helpful writing assistant.',
-      buffers: Array(10).fill(''),
-      favorite_prompts: [],
-      messages: []
-    });
+    await api.closeFile(); // Will trigger state-changed event
   }
 
   function handleThemeChange(newTheme: 'light' | 'dark') {

@@ -2,6 +2,8 @@ use crate::config::ensure_data_dir;
 use crate::data_structures::{Passage, PlainText};
 use crate::state::{AppState, EditorSession};
 use sha2::Digest;
+use tauri::Emitter;
+use crate::commands::state::emit_state_change;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ImageInfo {
@@ -21,6 +23,7 @@ pub fn get_passages(state: tauri::State<'_, AppState>) -> Result<Vec<Passage>, S
 
 #[tauri::command]
 pub fn update_passage_content(
+    app: tauri::AppHandle,
     index: usize,
     content: String,
     state: tauri::State<'_, AppState>,
@@ -31,6 +34,9 @@ pub fn update_passage_content(
             if index < session.plaintext.num_passages() {
                 session.plaintext.set_content(index, content);
                 session.dirty = true;
+                // Release lock before emitting
+                drop(current_session);
+                emit_state_change(&app, &state);
                 Ok(())
             } else {
                 Err(format!("Passage index {} out of bounds", index))
@@ -42,6 +48,7 @@ pub fn update_passage_content(
 
 #[tauri::command]
 pub fn update_passage_title(
+    app: tauri::AppHandle,
     index: usize,
     title: String,
     state: tauri::State<'_, AppState>,
@@ -52,6 +59,8 @@ pub fn update_passage_title(
             if index < session.plaintext.num_passages() {
                 session.plaintext.set_title(index, title);
                 session.dirty = true;
+                drop(current_session);
+                emit_state_change(&app, &state);
                 Ok(())
             } else {
                 Err(format!("Passage index {} out of bounds", index))
@@ -63,6 +72,7 @@ pub fn update_passage_title(
 
 #[tauri::command]
 pub fn add_passage(
+    app: tauri::AppHandle,
     title: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<usize, String> {
@@ -72,6 +82,8 @@ pub fn add_passage(
             let index = session.current_passage_index + 1;
             session.plaintext.insert_new_passage(index, title);
             session.dirty = true;
+            drop(current_session);
+            emit_state_change(&app, &state);
             Ok(index)
         }
         None => Err("No file is currently open".to_string()),
@@ -79,7 +91,11 @@ pub fn add_passage(
 }
 
 #[tauri::command]
-pub fn remove_passage(index: usize, state: tauri::State<'_, AppState>) -> Result<(), String> {
+pub fn remove_passage(
+    app: tauri::AppHandle,
+    index: usize,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
     let mut current_session = state.current_session.lock().map_err(|e| e.to_string())?;
     match current_session.as_mut() {
         Some(session) => {
@@ -89,6 +105,8 @@ pub fn remove_passage(index: usize, state: tauri::State<'_, AppState>) -> Result
                 if session.current_passage_index >= session.plaintext.num_passages() {
                     session.current_passage_index = session.plaintext.bounded_index(session.current_passage_index);
                 }
+                drop(current_session);
+                emit_state_change(&app, &state);
                 Ok(())
             } else {
                 Err(format!("Passage index {} out of bounds", index))
@@ -100,6 +118,7 @@ pub fn remove_passage(index: usize, state: tauri::State<'_, AppState>) -> Result
 
 #[tauri::command]
 pub fn move_passage(
+    app: tauri::AppHandle,
     from: usize,
     to: usize,
     state: tauri::State<'_, AppState>,
@@ -111,6 +130,8 @@ pub fn move_passage(
             if from < num && to < num {
                 session.plaintext.swap(from, to);
                 session.dirty = true;
+                drop(current_session);
+                emit_state_change(&app, &state);
                 Ok(())
             } else {
                 Err("Passage index out of bounds".to_string())
@@ -122,6 +143,7 @@ pub fn move_passage(
 
 #[tauri::command]
 pub fn insert_image(
+    app: tauri::AppHandle,
     image_data: Vec<u8>,
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
@@ -143,6 +165,8 @@ pub fn insert_image(
             session.image_digests.insert(digest.clone(), index);
             session.dirty = true;
 
+            drop(current_session);
+            emit_state_change(&app, &state);
             Ok(digest)
         }
         None => Err("No file is currently open".to_string()),
@@ -202,12 +226,18 @@ pub fn get_current_file(state: tauri::State<'_, AppState>) -> Result<String, Str
 }
 
 #[tauri::command]
-pub fn set_current_passage(index: usize, state: tauri::State<'_, AppState>) -> Result<(), String> {
+pub fn set_current_passage(
+    app: tauri::AppHandle,
+    index: usize,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
     let mut current_session = state.current_session.lock().map_err(|e| e.to_string())?;
     match current_session.as_mut() {
         Some(session) => {
             if index < session.plaintext.num_passages() {
                 session.current_passage_index = index;
+                drop(current_session);
+                emit_state_change(&app, &state);
                 Ok(())
             } else {
                 Err(format!("Passage index {} out of bounds", index))
@@ -237,12 +267,14 @@ pub fn is_dirty(state: tauri::State<'_, AppState>) -> Result<bool, String> {
 
 #[tauri::command]
 pub fn append_file(
+    app: tauri::AppHandle,
     filename: String,
     password: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
     let data_dir = ensure_data_dir(&config.data_dir)?;
+    drop(config); // Release config lock
 
     let mut current_session = state.current_session.lock().map_err(|e| e.to_string())?;
 
@@ -282,6 +314,8 @@ pub fn append_file(
             session.plaintext.append_plaintext(&other_plaintext);
             session.dirty = true;
 
+            drop(current_session);
+            emit_state_change(&app, &state);
             Ok(())
         }
         None => Err("No file is currently open".to_string()),

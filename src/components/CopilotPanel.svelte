@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { copilotSettings, passages, currentPassageIndex, isDirty } from '../lib/stores';
+  import { copilotSettings, passages, currentPassageIndex } from '../lib/stores';
   import { listen } from '@tauri-apps/api/event';
   import * as api from '../lib/tauri';
-  import { get } from 'svelte/store';
 
   let userInput = $state('');
   let output = $state('');
@@ -19,89 +18,6 @@
     const half = maxLen / 2;
     return text.slice(0, half) + '...' + text.slice(text.length - half);
   }
-
-  // Auto-save when system_prompt, buffers, or favorite_prompts change
-  let lastSavedSettings = $state({
-    system_prompt: $copilotSettings.system_prompt,
-    buffers: [...$copilotSettings.buffers],
-    favorite_prompts: [...$copilotSettings.favorite_prompts]
-  });
-
-  $effect(() => {
-    const currentSettings = {
-      system_prompt: $copilotSettings.system_prompt,
-      buffers: [...$copilotSettings.buffers],
-      favorite_prompts: [...$copilotSettings.favorite_prompts]
-    };
-
-    // Check if any persistent settings changed (excluding messages)
-    const systemChanged = currentSettings.system_prompt !== lastSavedSettings.system_prompt;
-    const buffersChanged = JSON.stringify(currentSettings.buffers) !== JSON.stringify(lastSavedSettings.buffers);
-    const favsChanged = JSON.stringify(currentSettings.favorite_prompts) !== JSON.stringify(lastSavedSettings.favorite_prompts);
-
-    if (systemChanged || buffersChanged || favsChanged) {
-      lastSavedSettings = currentSettings;
-      // Save to .ai passage (debounce with setTimeout)
-      setTimeout(async () => {
-        try {
-          await api.saveCopilotSettings($copilotSettings);
-          isDirty.set(true);
-        } catch (e) {
-          console.error('Failed to save copilot settings:', e);
-        }
-      }, 500);
-    }
-  });
-
-  // Track last .ai passage content to detect external edits
-  let lastAiContent = $state('');
-
-  // Initialize lastAiContent when passages are loaded
-  $effect(() => {
-    if ($passages.length > 0 && lastAiContent === '') {
-      const aiPassage = $passages.find(p => p.title === '.ai');
-      if (aiPassage) {
-        lastAiContent = aiPassage.content;
-      }
-    }
-    // Reset when passages are cleared (file closed)
-    if ($passages.length === 0) {
-      lastAiContent = '';
-      lastSavedSettings = {
-        system_prompt: 'You are a helpful writing assistant.',
-        buffers: Array(10).fill(''),
-        favorite_prompts: []
-      };
-    }
-  });
-
-  // Sync from .ai passage when it's edited externally (in the editor)
-  $effect(() => {
-    const currentPassages = $passages;
-    const aiPassage = currentPassages.find(p => p.title === '.ai');
-
-    if (aiPassage && aiPassage.content !== lastAiContent) {
-      // .ai passage was edited in the editor, sync to copilot settings
-      lastAiContent = aiPassage.content;
-      // Only reload if we're not currently editing in copilot panel (to avoid conflict)
-      if (!showSettings) {
-        setTimeout(async () => {
-          try {
-            const aiSettings = await api.loadCopilotSettings();
-            // Update lastSavedSettings to prevent auto-save triggering
-            lastSavedSettings = {
-              system_prompt: aiSettings.system_prompt,
-              buffers: [...aiSettings.buffers],
-              favorite_prompts: [...aiSettings.favorite_prompts]
-            };
-            copilotSettings.set(aiSettings);
-          } catch (e) {
-            // Failed to parse .ai passage, ignore
-          }
-        }, 100);
-      }
-    }
-  });
 
   // Listen for selected text changes from Editor
   $effect(() => {
@@ -135,7 +51,7 @@
         s.messages = [...s.messages, event.payload];
         return s;
       });
-      output = ''; // Clear output since it's now in messages
+      output = '';
       waiting = false;
     });
 
@@ -180,16 +96,12 @@
     }
   }
 
+  // Just call API, don't update store directly - state-changed event will update
   async function handleInsert() {
     if (!output) return;
     const currentContent = $passages[$currentPassageIndex]?.content || '';
     const newContent = currentContent + '\n\n' + output;
     await api.updatePassageContent($currentPassageIndex, newContent);
-    passages.update(p => {
-      p[$currentPassageIndex].content = newContent;
-      return p;
-    });
-    isDirty.set(true);
     output = '';
   }
 
@@ -199,11 +111,6 @@
     const currentContent = $passages[$currentPassageIndex]?.content || '';
     const newContent = currentContent + '\n\n' + msg.content;
     await api.updatePassageContent($currentPassageIndex, newContent);
-    passages.update(p => {
-      p[$currentPassageIndex].content = newContent;
-      return p;
-    });
-    isDirty.set(true);
   }
 
   async function handleClearHistory() {
@@ -217,24 +124,13 @@
   async function handleRefresh() {
     try {
       const aiSettings = await api.loadCopilotSettings();
-      // Update lastSavedSettings to prevent auto-save triggering
-      lastSavedSettings = {
-        system_prompt: aiSettings.system_prompt,
-        buffers: [...aiSettings.buffers],
-        favorite_prompts: [...aiSettings.favorite_prompts]
-      };
-      // Update lastAiContent to prevent re-sync
-      const aiPassage = $passages.find(p => p.title === '.ai');
-      if (aiPassage) {
-        lastAiContent = aiPassage.content;
-      }
       copilotSettings.set(aiSettings);
     } catch (e) {
-      // If no .ai passage exists, keep current settings
+      // If no .ai passage, keep current settings
     }
   }
 
-  function handleAddBuffer() {
+  async function handleAddBuffer() {
     const textToAdd = selectedText || getCurrentPassageContent();
     if (!textToAdd) return;
 
@@ -245,13 +141,15 @@
       }
       return s;
     });
+    await api.saveCopilotSettings($copilotSettings);
   }
 
-  function handleRemoveBuffer(index: number) {
+  async function handleRemoveBuffer(index: number) {
     copilotSettings.update(s => {
       s.buffers[index] = '';
       return s;
     });
+    await api.saveCopilotSettings($copilotSettings);
   }
 
   async function handleStopGeneration() {
@@ -259,14 +157,14 @@
     waiting = false;
   }
 
-  function handleDeleteMessage(index: number) {
+  async function handleDeleteMessage(index: number) {
     copilotSettings.update(s => {
       s.messages = s.messages.filter((_, i) => i !== index);
       return s;
     });
   }
 
-  function handleAddMessageToFavorites(index: number) {
+  async function handleAddMessageToFavorites(index: number) {
     const msg = $copilotSettings.messages[index];
     if (!msg || msg.role !== 'user') return;
     const name = makeBriefSummary(msg.display, 20);
@@ -274,6 +172,7 @@
       s.favorite_prompts = [...s.favorite_prompts, { name, prompt: msg.display }];
       return s;
     });
+    await api.saveCopilotSettings($copilotSettings);
   }
 
   async function handleResetSettings() {
@@ -282,12 +181,6 @@
       buffers: Array(10).fill(''),
       favorite_prompts: [],
       messages: []
-    };
-    // Update lastSavedSettings to prevent auto-save triggering
-    lastSavedSettings = {
-      system_prompt: defaultSettings.system_prompt,
-      buffers: [...defaultSettings.buffers],
-      favorite_prompts: [...defaultSettings.favorite_prompts]
     };
     copilotSettings.set(defaultSettings);
     await api.saveCopilotSettings($copilotSettings);
@@ -298,7 +191,7 @@
     userInput = prompt;
   }
 
-  function handleAddFavoritePrompt() {
+  async function handleAddFavoritePrompt() {
     if (!newFavName.trim() || !newFavPrompt.trim()) return;
 
     copilotSettings.update(s => {
@@ -308,15 +201,17 @@
       }];
       return s;
     });
+    await api.saveCopilotSettings($copilotSettings);
     newFavName = '';
     newFavPrompt = '';
   }
 
-  function handleRemoveFavoritePrompt(index: number) {
+  async function handleRemoveFavoritePrompt(index: number) {
     copilotSettings.update(s => {
       s.favorite_prompts = s.favorite_prompts.filter((_, i) => i !== index);
       return s;
     });
+    await api.saveCopilotSettings($copilotSettings);
   }
 </script>
 
@@ -571,9 +466,51 @@
     background: rgba(22, 163, 74, 0.1);
   }
 
-  .message strong {
+  .message-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+  }
+
+  .message-header strong {
     font-size: var(--font-size-sm);
     color: var(--text-muted);
+  }
+
+  .message-actions {
+    display: flex;
+    gap: 2px;
+  }
+
+  .btn-add-fav-msg {
+    padding: 2px 4px;
+    border: none;
+    background: var(--success-color);
+    color: var(--text-inverse);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+  }
+
+  .btn-delete-msg {
+    padding: 2px 4px;
+    border: none;
+    background: var(--danger-color);
+    color: var(--text-inverse);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+  }
+
+  .btn-insert-small {
+    padding: 2px 6px;
+    border: none;
+    background: var(--accent-color);
+    color: var(--text-inverse);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
   }
 
   .message p {
@@ -593,6 +530,12 @@
     color: var(--text-muted);
     margin-bottom: var(--spacing-sm);
     font-weight: 500;
+  }
+
+  .buffer-hint {
+    font-size: var(--font-size-xs);
+    color: var(--text-faint);
+    margin-left: var(--spacing-sm);
   }
 
   .buffers button {
@@ -621,18 +564,20 @@
     margin-top: 2px;
   }
 
-  .buffer-item span {
+  .btn-remove-buf {
+    padding: 2px 4px;
+    border: none;
+    background: transparent;
+    color: var(--danger-color);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+  }
+
+  .buffer-info {
     flex: 1;
     font-size: var(--font-size-sm);
     color: var(--text-secondary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .buffer-item button {
-    padding: 2px 4px;
-    background: transparent;
-    color: var(--danger-color);
   }
 
   .input-area {
@@ -674,9 +619,19 @@
     opacity: 0.9;
   }
 
-  .input-area button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  .btn-stop {
+    padding: var(--spacing-sm);
+    border: none;
+    background: var(--danger-color);
+    color: var(--text-inverse);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+    transition: all 0.15s ease;
+  }
+
+  .btn-stop:hover {
+    opacity: 0.9;
   }
 
   .favorite-prompts-quick {
@@ -778,88 +733,5 @@
     border-radius: var(--radius-sm);
     cursor: pointer;
     font-size: var(--font-size-xs);
-  }
-
-  .message-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 2px;
-  }
-
-  .message-header strong {
-    margin-bottom: 0;
-  }
-
-  .message-actions {
-    display: flex;
-    gap: 2px;
-  }
-
-  .btn-add-fav-msg {
-    padding: 2px 4px;
-    border: none;
-    background: var(--success-color);
-    color: var(--text-inverse);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    font-size: var(--font-size-xs);
-  }
-
-  .btn-delete-msg {
-    padding: 2px 4px;
-    border: none;
-    background: var(--danger-color);
-    color: var(--text-inverse);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    font-size: var(--font-size-xs);
-  }
-
-  .btn-insert-small {
-    padding: 2px 6px;
-    border: none;
-    background: var(--accent-color);
-    color: var(--text-inverse);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    font-size: var(--font-size-xs);
-  }
-
-  .buffer-hint {
-    font-size: var(--font-size-xs);
-    color: var(--text-faint);
-    margin-left: var(--spacing-sm);
-  }
-
-  .btn-remove-buf {
-    padding: 2px 4px;
-    border: none;
-    background: transparent;
-    color: var(--danger-color);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    font-size: var(--font-size-xs);
-  }
-
-  .buffer-info {
-    flex: 1;
-    font-size: var(--font-size-sm);
-    color: var(--text-secondary);
-  }
-
-  .btn-stop {
-    padding: var(--spacing-sm);
-    border: none;
-    background: var(--danger-color);
-    color: var(--text-inverse);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    font-size: var(--font-size-xs);
-    transition: all 0.15s ease;
-  }
-
-  .btn-stop:hover {
-    opacity: 0.9;
   }
 </style>

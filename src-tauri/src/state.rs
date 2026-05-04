@@ -36,9 +36,39 @@ impl EditorSession {
     }
 }
 
+/// Response for get_app_state command - contains all frontend state
+#[derive(serde::Serialize, Clone)]
+pub struct AppStateResponse {
+    pub current_file: Option<String>,
+    pub passages: Vec<crate::data_structures::Passage>,
+    pub current_passage_index: usize,
+    pub is_dirty: bool,
+}
+
 pub struct AppState {
     pub config: Mutex<Config>,
     pub current_session: Mutex<Option<EditorSession>>,
+}
+
+impl AppState {
+    /// Get current state for frontend
+    pub fn get_state(&self) -> AppStateResponse {
+        let session = self.current_session.lock().unwrap();
+        match session.as_ref() {
+            Some(s) => AppStateResponse {
+                current_file: Some(s.filename.clone()),
+                passages: s.plaintext.passages().clone(),
+                current_passage_index: s.current_passage_index,
+                is_dirty: s.dirty,
+            },
+            None => AppStateResponse {
+                current_file: None,
+                passages: Vec::new(),
+                current_passage_index: 0,
+                is_dirty: false,
+            },
+        }
+    }
 }
 
 impl Default for AppState {

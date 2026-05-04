@@ -24,6 +24,7 @@ pub fn run() {
             commands::cipher::decrypt_file,
             commands::cipher::encrypt_and_save,
             commands::cipher::change_password,
+            commands::cipher::close_file,
             commands::cipher::import_safe_notes,
             commands::editor::get_passages,
             commands::editor::update_passage_content,
@@ -47,6 +48,7 @@ pub fn run() {
             commands::copilot::save_ai_settings,
             commands::copilot::load_ai_settings,
             commands::copilot::clear_copilot,
+            commands::state::get_app_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

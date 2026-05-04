@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { passages, currentPassageIndex, isDirty, config } from '../lib/stores';
+  import { passages, currentPassageIndex, config } from '../lib/stores';
   import * as api from '../lib/tauri';
   import { emit } from '@tauri-apps/api/event';
   import PassageList from './PassageList.svelte';
@@ -25,6 +25,7 @@
   let showMetadataIndex = $state<number | null>(null);
   let metadataText = $state<string>('');
 
+  // Sync editor content with current passage
   $effect(() => {
     if (passagesProp && passagesProp.length > 0 && currentIndex < passagesProp.length) {
       editorContent = passagesProp[currentIndex]?.content || '';
@@ -64,17 +65,10 @@
     }
   }
 
+  // Just call API, state will be updated by state-changed event
   async function handleContentChange() {
     if (currentIndex < passagesProp.length) {
       await api.updatePassageContent(currentIndex, editorContent);
-      // Update the passages store to reflect the change
-      passages.update(p => {
-        if (p[currentIndex]) {
-          p[currentIndex].content = editorContent;
-        }
-        return p;
-      });
-      isDirty.set(true);
     }
   }
 
@@ -115,19 +109,16 @@
   function renderPreviewContent(content: string): { type: 'text' | 'image'; content: string; digest?: string }[] {
     const parts: { type: 'text' | 'image'; content: string; digest?: string }[] = [];
     const imagePattern = /^image!\(([a-fA-F0-9]{64})\)$/;
-
     const lines = content.split('\n');
     let textBuffer = '';
 
     for (const line of lines) {
       const match = line.match(imagePattern);
       if (match) {
-        // Flush text buffer first
         if (textBuffer) {
           parts.push({ type: 'text', content: textBuffer });
           textBuffer = '';
         }
-        // Add image placeholder
         parts.push({ type: 'image', content: line, digest: match[1] });
       } else {
         if (textBuffer) {
@@ -138,7 +129,6 @@
       }
     }
 
-    // Flush remaining text
     if (textBuffer) {
       parts.push({ type: 'text', content: textBuffer });
     }

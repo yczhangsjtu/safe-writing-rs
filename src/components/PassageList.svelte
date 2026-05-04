@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { passages, currentPassageIndex, isDirty } from '../lib/stores';
+  import { passages, currentPassageIndex } from '../lib/stores';
   import * as api from '../lib/tauri';
 
   let {
@@ -26,9 +26,9 @@
   let confirmDelete = $state(false);
   let pendingDeleteIndex = $state(-1);
 
+  // Just call API, state will be updated by state-changed event
   async function handleSelect(index: number) {
     await api.setCurrentPassage(index);
-    currentPassageIndex.set(index);
   }
 
   function handleAdd() {
@@ -42,29 +42,18 @@
       return;
     }
     await api.addPassage(newPassageTitle.trim());
-    const updatedPassages = await api.getPassages();
-    passages.set(updatedPassages);
-    isDirty.set(true);
     showNewPassage = false;
   }
 
   async function handleMoveUp() {
     if (currentIndex > 0) {
       await api.movePassage(currentIndex, currentIndex - 1);
-      currentPassageIndex.set(currentIndex - 1);
-      const updatedPassages = await api.getPassages();
-      passages.set(updatedPassages);
-      isDirty.set(true);
     }
   }
 
   async function handleMoveDown() {
     if (currentIndex < passagesProp.length - 1) {
       await api.movePassage(currentIndex, currentIndex + 1);
-      currentPassageIndex.set(currentIndex + 1);
-      const updatedPassages = await api.getPassages();
-      passages.set(updatedPassages);
-      isDirty.set(true);
     }
   }
 
@@ -77,9 +66,6 @@
   async function handleRenameSubmit() {
     if (editingTitleValue.trim()) {
       await api.updatePassageTitle(currentIndex, editingTitleValue.trim());
-      const updatedPassages = await api.getPassages();
-      passages.set(updatedPassages);
-      isDirty.set(true);
     }
     editingTitle = false;
   }
@@ -92,12 +78,6 @@
 
   async function handleDeleteConfirm() {
     await api.removePassage(pendingDeleteIndex);
-    const updatedPassages = await api.getPassages();
-    passages.set(updatedPassages);
-    isDirty.set(true);
-    if (currentIndex >= updatedPassages.length) {
-      currentPassageIndex.set(Math.max(0, updatedPassages.length - 1));
-    }
     confirmDelete = false;
     pendingDeleteIndex = -1;
   }
