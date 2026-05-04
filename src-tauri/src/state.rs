@@ -4,6 +4,7 @@ use sha2::Digest;
 
 use crate::config::Config;
 use crate::data_structures::PlainText;
+use crate::commands::copilot::{CopilotSettings, AI_PASSAGE_NAME};
 
 pub struct EditorSession {
     pub filename: String,
@@ -12,6 +13,7 @@ pub struct EditorSession {
     pub current_passage_index: usize,
     pub dirty: bool,
     pub image_digests: HashMap<String, usize>,
+    pub copilot_settings: CopilotSettings, // Persistent copilot state
 }
 
 impl EditorSession {
@@ -25,6 +27,8 @@ impl EditorSession {
             });
             image_digests.insert(digest, i);
         }
+        // Load copilot settings from .ai passage if exists
+        let copilot_settings = CopilotSettings::load_from_plaintext(&plaintext);
         Self {
             filename,
             plaintext,
@@ -32,7 +36,13 @@ impl EditorSession {
             current_passage_index: 0,
             dirty: false,
             image_digests,
+            copilot_settings,
         }
+    }
+
+    /// Update .ai passage with current copilot settings
+    pub fn sync_copilot_to_ai_passage(&mut self) {
+        self.copilot_settings.save_to_plaintext(&mut self.plaintext);
     }
 }
 
@@ -43,6 +53,7 @@ pub struct AppStateResponse {
     pub passages: Vec<crate::data_structures::Passage>,
     pub current_passage_index: usize,
     pub is_dirty: bool,
+    pub copilot_settings: CopilotSettings,
 }
 
 pub struct AppState {
@@ -60,12 +71,14 @@ impl AppState {
                 passages: s.plaintext.passages().clone(),
                 current_passage_index: s.current_passage_index,
                 is_dirty: s.dirty,
+                copilot_settings: s.copilot_settings.clone(),
             },
             None => AppStateResponse {
                 current_file: None,
                 passages: Vec::new(),
                 current_passage_index: 0,
                 is_dirty: false,
+                copilot_settings: CopilotSettings::default(),
             },
         }
     }

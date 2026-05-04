@@ -6,6 +6,7 @@ export interface AppStateResponse {
   passages: Passage[];
   current_passage_index: number;
   is_dirty: boolean;
+  copilot_settings: CopilotSettings;
 }
 
 export async function listFiles(): Promise<string[]> {

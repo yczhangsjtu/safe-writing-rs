@@ -54,6 +54,9 @@ pub fn encrypt_and_save(
     let mut current_session = state.current_session.lock().map_err(|e| e.to_string())?;
 
     if let Some(session) = current_session.as_mut() {
+        // Sync copilot settings to .ai passage before saving
+        session.sync_copilot_to_ai_passage();
+
         let ciphertext = session.plaintext.encrypt(&session.password);
         let file_path = data_dir.join(format!("{}.safe", session.filename));
         std::fs::write(&file_path, ciphertext)

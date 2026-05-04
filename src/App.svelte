@@ -17,6 +17,7 @@
   let initialized = $state(false);
   let initError = $state('');
   let showChangePasswordDialog = $state(false);
+  let lastCurrentFile = $state<string | null>(null);
 
   onMount(async () => {
     console.log('App mounted, initializing...');
@@ -40,31 +41,28 @@
     // Listen for state-changed events from backend
     const unlistenState = listen<api.AppStateResponse>('state-changed', (event) => {
       const state = event.payload;
+
+      // Check if file actually changed (opened/closed)
+      const fileChanged = (lastCurrentFile === null && state.current_file !== null) ||
+                          (lastCurrentFile !== null && state.current_file === null);
+
       currentFile.set(state.current_file);
+      lastCurrentFile = state.current_file;
       passages.set(state.passages);
       currentPassageIndex.set(state.current_passage_index);
       isDirty.set(state.is_dirty);
 
-      // Load copilot settings when file opens
-      if (state.current_file && state.passages.length > 0) {
-        api.loadCopilotSettings()
-          .then(settings => copilotSettings.set(settings))
-          .catch(() => {
-            copilotSettings.set({
-              system_prompt: 'You are a helpful writing assistant.',
-              buffers: Array(10).fill(''),
-              favorite_prompts: [],
-              messages: []
-            });
-          });
-      } else {
-        copilotSettings.set({
-          system_prompt: 'You are a helpful writing assistant.',
-          buffers: Array(10).fill(''),
-          favorite_prompts: [],
-          messages: []
-        });
-      }
+      // Update copilot persistent settings (preserve runtime messages)
+      copilotSettings.update(s => {
+        s.system_prompt = state.copilot_settings.system_prompt;
+        s.buffers = state.copilot_settings.buffers;
+        s.favorite_prompts = state.copilot_settings.favorite_prompts;
+        // Only reset messages when file changes
+        if (fileChanged) {
+          s.messages = [];
+        }
+        return s;
+      });
     });
 
     return async () => {

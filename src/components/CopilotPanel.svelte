@@ -96,7 +96,6 @@
     }
   }
 
-  // Just call API, don't update store directly - state-changed event will update
   async function handleInsert() {
     if (!output) return;
     const currentContent = $passages[$currentPassageIndex]?.content || '';
@@ -113,21 +112,16 @@
     await api.updatePassageContent($currentPassageIndex, newContent);
   }
 
-  async function handleClearHistory() {
+  function handleClearHistory() {
     copilotSettings.update(s => {
       s.messages = [];
       return s;
     });
-    await api.saveCopilotSettings($copilotSettings);
   }
 
-  async function handleRefresh() {
-    try {
-      const aiSettings = await api.loadCopilotSettings();
-      copilotSettings.set(aiSettings);
-    } catch (e) {
-      // If no .ai passage, keep current settings
-    }
+  // Save copilot settings (will trigger state-changed which updates .ai passage)
+  async function saveSettings() {
+    await api.saveCopilotSettings($copilotSettings);
   }
 
   async function handleAddBuffer() {
@@ -141,7 +135,7 @@
       }
       return s;
     });
-    await api.saveCopilotSettings($copilotSettings);
+    await saveSettings();
   }
 
   async function handleRemoveBuffer(index: number) {
@@ -149,7 +143,7 @@
       s.buffers[index] = '';
       return s;
     });
-    await api.saveCopilotSettings($copilotSettings);
+    await saveSettings();
   }
 
   async function handleStopGeneration() {
@@ -157,7 +151,7 @@
     waiting = false;
   }
 
-  async function handleDeleteMessage(index: number) {
+  function handleDeleteMessage(index: number) {
     copilotSettings.update(s => {
       s.messages = s.messages.filter((_, i) => i !== index);
       return s;
@@ -172,18 +166,17 @@
       s.favorite_prompts = [...s.favorite_prompts, { name, prompt: msg.display }];
       return s;
     });
-    await api.saveCopilotSettings($copilotSettings);
+    await saveSettings();
   }
 
   async function handleResetSettings() {
-    const defaultSettings = {
-      system_prompt: 'You are a helpful writing assistant.',
-      buffers: Array(10).fill(''),
-      favorite_prompts: [],
-      messages: []
-    };
-    copilotSettings.set(defaultSettings);
-    await api.saveCopilotSettings($copilotSettings);
+    copilotSettings.update(s => {
+      s.system_prompt = 'You are a helpful writing assistant.';
+      s.buffers = Array(10).fill('');
+      s.favorite_prompts = [];
+      return s;
+    });
+    await saveSettings();
     showSettings = false;
   }
 
@@ -201,7 +194,7 @@
       }];
       return s;
     });
-    await api.saveCopilotSettings($copilotSettings);
+    await saveSettings();
     newFavName = '';
     newFavPrompt = '';
   }
@@ -211,7 +204,16 @@
       s.favorite_prompts = s.favorite_prompts.filter((_, i) => i !== index);
       return s;
     });
-    await api.saveCopilotSettings($copilotSettings);
+    await saveSettings();
+  }
+
+  // Save system prompt when it changes
+  let saveTimeout: number | null = null;
+  function handleSystemPromptChange() {
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+      saveSettings();
+    }, 500);
   }
 </script>
 
@@ -221,7 +223,6 @@
   <div class="copilot-header">
     <h3>AI Copilot</h3>
     <div class="header-buttons">
-      <button title="Refresh from .ai" onclick={handleRefresh}>↻</button>
       <button onclick={() => showSettings = !showSettings}>
         {#if showSettings}✕{:else}⚙{/if}
       </button>
@@ -235,6 +236,7 @@
         <span>System Prompt</span>
         <textarea
           bind:value={$copilotSettings.system_prompt}
+          oninput={handleSystemPromptChange}
           rows="4"
           placeholder="You are a helpful writing assistant."
         ></textarea>
@@ -284,7 +286,7 @@
               {#if msg.role === 'user'}
                 <button class="btn-add-fav-msg" title="Add to favorites" onclick={() => handleAddMessageToFavorites(i)}>+</button>
               {/if}
-              {#if msg.role === 'assistant' && i === $copilotSettings.messages.length - 1 && $copilotSettings.messages.filter(m => m.role === 'assistant').length > 0}
+              {#if msg.role === 'assistant' && i === $copilotSettings.messages.filter(m => m.role === 'assistant').length - 1}
                 <button class="btn-insert-small" onclick={() => handleInsertFromHistory(i)}>Insert</button>
               {/if}
               <button class="btn-delete-msg" onclick={() => handleDeleteMessage(i)}>Delete</button>

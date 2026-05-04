@@ -354,6 +354,7 @@ pub fn abort_generation() -> Result<(), String> {
 
 #[tauri::command]
 pub fn save_ai_settings(
+    app: tauri::AppHandle,
     settings: CopilotSettings,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
@@ -361,8 +362,17 @@ pub fn save_ai_settings(
 
     match current_session.as_mut() {
         Some(session) => {
-            settings.save_to_plaintext(&mut session.plaintext);
+            // Update copilot settings in session (excluding messages which are runtime)
+            session.copilot_settings.system_prompt = settings.system_prompt.clone();
+            session.copilot_settings.buffers = settings.buffers.clone();
+            session.copilot_settings.favorite_prompts = settings.favorite_prompts.clone();
+
+            // Sync to .ai passage
+            session.sync_copilot_to_ai_passage();
             session.dirty = true;
+            drop(current_session);
+            // Emit state change so passages update in frontend
+            crate::commands::state::emit_state_change(&app, &state);
             Ok(())
         }
         None => Err("No file is currently open".to_string()),
@@ -374,7 +384,7 @@ pub fn load_ai_settings(state: tauri::State<'_, AppState>) -> Result<CopilotSett
     let current_session = state.current_session.lock().map_err(|e| e.to_string())?;
 
     match current_session.as_ref() {
-        Some(session) => Ok(CopilotSettings::load_from_plaintext(&session.plaintext)),
+        Some(session) => Ok(session.copilot_settings.clone()),
         None => Err("No file is currently open".to_string()),
     }
 }
