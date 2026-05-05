@@ -2,6 +2,7 @@
   import { copilotSettings, passages, currentPassageIndex } from '../lib/stores';
   import { listen } from '@tauri-apps/api/event';
   import * as api from '../lib/tauri';
+  import { isCommandKey, commandKeyName } from '../lib/platform';
   import Resizable from './Resizable.svelte';
   import { onMount } from 'svelte';
 
@@ -126,7 +127,7 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.ctrlKey && e.key === 'Enter') {
+    if (isCommandKey(e) && e.key === 'Enter') {
       e.preventDefault();
       handleSend();
     }
@@ -372,7 +373,7 @@
         {/if}
         <textarea
           bind:value={userInput}
-          placeholder="Ask AI... (Ctrl+Enter)"
+          placeholder="Ask AI... ({commandKeyName()}+Enter)"
           rows="2"
         ></textarea>
         {#if waiting}

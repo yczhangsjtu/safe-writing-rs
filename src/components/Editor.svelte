@@ -2,6 +2,7 @@
   import { passages, currentPassageIndex, config } from '../lib/stores';
   import * as api from '../lib/tauri';
   import { emit } from '@tauri-apps/api/event';
+  import { isCommandKey } from '../lib/platform';
   import PassageList from './PassageList.svelte';
 
   let {
@@ -32,30 +33,78 @@
   let showMetadataIndex = $state<number | null>(null);
   let metadataText = $state<string>('');
   let currentLineTop = $state(0);
+  let currentLineHeight = $state(0);
   let textareaElement: HTMLTextAreaElement | undefined = $state();
+  let mirrorElement: HTMLDivElement | undefined = $state();
+  let isComposing = $state(false); // Track IME composition state
+  let lastSyncedIndex = $state<number | null>(null); // Track last synced passage index
+  let initialized = $state(false); // Track if editor is initialized
 
-  // Sync editor content with current passage
+  // Sync editor content with current passage - only on passage switch
   $effect(() => {
     if (passagesProp && passagesProp.length > 0 && currentIndex < passagesProp.length) {
-      editorContent = passagesProp[currentIndex]?.content || '';
-      editorTitle = passagesProp[currentIndex]?.title || '';
+      // Only sync when passage index changes, not when content changes from user input
+      if (currentIndex !== lastSyncedIndex) {
+        editorContent = passagesProp[currentIndex]?.content || '';
+        editorTitle = passagesProp[currentIndex]?.title || '';
+        lastSyncedIndex = currentIndex;
+      }
+    }
+  });
+
+  // Initialize after elements are mounted
+  $effect(() => {
+    if (textareaElement && mirrorElement && !initialized) {
+      initialized = true;
+      updateCurrentLine();
+    }
+  });
+
+  // Sync font styles when config changes
+  $effect(() => {
+    if (mirrorElement && $config.font_size) {
+      mirrorElement.style.fontSize = `${$config.font_size}px`;
+      updateCurrentLine();
     }
   });
 
   function updateCurrentLine() {
-    if (!textareaElement) return;
+    if (!textareaElement || !mirrorElement) return;
     const textarea = textareaElement;
+    const mirror = mirrorElement;
     const text = textarea.value;
     const selectionStart = textarea.selectionStart;
 
-    // Calculate line number
-    const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight) || 28.8; // 1.8 * 16px
-    const lines = text.substring(0, selectionStart).split('\n');
-    const lineNumber = lines.length;
+    // Ensure mirror width and font styles match textarea exactly
+    mirror.style.width = `${textarea.clientWidth}px`;
+    mirror.style.fontSize = textarea.style.fontSize || `${$config.font_size}px`;
+    mirror.style.fontFamily = textarea.style.fontFamily || "'LXGW WenKai', sans-serif";
 
-    // Calculate top position
-    const paddingTop = parseFloat(getComputedStyle(textarea).paddingTop) || 0;
-    currentLineTop = (lineNumber - 1) * lineHeight + paddingTop;
+    // Find current paragraph (logical line)
+    const lines = text.substring(0, selectionStart).split('\n');
+    const currentParagraphIndex = lines.length - 1;
+    const allParagraphs = text.split('\n');
+
+    // Calculate height of paragraphs before current one
+    let topOffset = 0;
+    for (let i = 0; i < currentParagraphIndex; i++) {
+      // Use a space for empty lines to ensure proper height calculation
+      mirror.textContent = allParagraphs[i] || ' ';
+      topOffset += mirror.offsetHeight;
+    }
+
+    // Calculate current paragraph height
+    mirror.textContent = allParagraphs[currentParagraphIndex] || ' ';
+    const paragraphHeight = mirror.offsetHeight;
+
+    // Clear mirror after calculation
+    mirror.textContent = '';
+
+    // Adjust for scroll position
+    const scrollTop = textarea.scrollTop;
+
+    currentLineTop = topOffset - scrollTop;
+    currentLineHeight = paragraphHeight;
   }
 
   async function loadImages() {
@@ -93,9 +142,22 @@
 
   // Just call API, state will be updated by state-changed event
   async function handleContentChange() {
+    // Don't update during IME composition (macOS Chinese input fix)
+    if (isComposing) return;
     if (currentIndex < passagesProp.length) {
       await api.updatePassageContent(currentIndex, editorContent);
     }
+  }
+
+  // Handle IME composition events for macOS Chinese input
+  function handleCompositionStart() {
+    isComposing = true;
+  }
+
+  function handleCompositionEnd() {
+    isComposing = false;
+    // Now update the content after composition ends
+    handleContentChange();
   }
 
   async function handleTitleChange() {
@@ -126,12 +188,16 @@
     }
   }
 
+  function handleScroll() {
+    updateCurrentLine();
+  }
+
   async function handleKeydown(e: KeyboardEvent) {
-    if (e.ctrlKey && e.key === 's') {
+    if (isCommandKey(e) && e.key === 's') {
       e.preventDefault();
       await onSave();
     }
-    if (e.ctrlKey && e.key === 'l') {
+    if (isCommandKey(e) && e.key === 'l') {
       e.preventDefault();
       if (isDirtyProp) {
         await onSave();
@@ -210,14 +276,18 @@
             placeholder="Untitled"
           />
           <div class="textarea-wrapper">
-            <div class="line-highlight" style="top: {currentLineTop}px;"></div>
+            <div class="line-highlight" style="top: {currentLineTop}px; height: {currentLineHeight}px;"></div>
+            <div class="mirror-div" bind:this={mirrorElement} style="font-size: {$config.font_size}px; font-family: 'LXGW WenKai', sans-serif;"></div>
             <textarea
               bind:value={editorContent}
               bind:this={textareaElement}
               oninput={handleContentChange}
+              oncompositionstart={handleCompositionStart}
+              oncompositionend={handleCompositionEnd}
               onselect={handleSelectionChange}
               onclick={handleClick}
               onkeyup={handleKeyUp}
+              onscroll={handleScroll}
               placeholder="Start writing..."
               style="font-size: {$config.font_size}px; font-family: 'LXGW WenKai', sans-serif;"
             ></textarea>
@@ -341,17 +411,29 @@
     position: absolute;
     left: 0;
     right: 0;
-    height: calc(var(--font-size-base, 18px) * 1.8);
     background: var(--bg-hover);
     border-radius: 4px;
     pointer-events: none;
-    transition: top 0.05s ease;
+    transition: top 0.05s ease, height 0.05s ease;
+    z-index: 0;
+  }
+
+  .mirror-div {
+    position: absolute;
+    visibility: hidden;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.8;
+    padding: 0;
+    pointer-events: none;
+    box-sizing: border-box;
+    border: none;
   }
 
   textarea {
-    flex: 1;
     width: 100%;
-    min-height: 100%;
+    height: 100%;
     resize: none;
     border: none;
     background: transparent;
@@ -362,6 +444,11 @@
     outline: none;
     position: relative;
     z-index: 1;
+    box-sizing: border-box;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    overflow-y: auto;
   }
 
   .preview-content {
