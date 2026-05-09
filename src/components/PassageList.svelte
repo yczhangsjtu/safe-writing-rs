@@ -35,6 +35,7 @@
   let showItemMenu = $state<number | null>(null);
 
   const editPreviewTitle = $derived(editMode ? "Preview" : "Edit");
+  const isAIPassage = $derived(passagesProp[currentIndex]?.title === '.ai');
 
   function generateTimestampTitle(): string {
     const now = new Date();
@@ -134,9 +135,11 @@
         <span class="material-icons icon">lock</span>
       </button>
     {/if}
+    {#if !isAIPassage}
     <button class="btn-icon" title={editPreviewTitle} onclick={onToggleEdit}>
       <span class="material-icons icon">{#if editMode}visibility{:else}edit{/if}</span>
     </button>
+    {/if}
   </div>
 
   {#if confirmDelete}
@@ -161,7 +164,7 @@
         class:selected={i === currentIndex}
         class:dragging={draggedIndex === i}
         class:drag-over={dragOverIndex === i}
-        draggable="true"
+        draggable={passage.title !== '.ai'}
         onclick={() => handleSelect(i)}
         ondragstart={(e) => handleDragStart(e, i)}
         ondragover={(e) => handleDragOver(e, i)}
@@ -169,13 +172,15 @@
         ondrop={(e) => handleDrop(e, i)}
         ondragend={handleDragEnd}
       >
-        <span class="passage-title">{passage.title}</span>
+        <span class="passage-title" class:ai-settings={passage.title === '.ai'}>{passage.title === '.ai' ? 'AI Settings' : passage.title}</span>
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
+        {#if passage.title !== '.ai'}
         <button
           class="btn-more"
           onclick={(e) => { e.stopPropagation(); toggleItemMenu(i); }}
         >⋮</button>
+        {/if}
         {#if showItemMenu === i}
           <div class="item-menu">
             <button class="menu-item danger" onclick={() => handleDeleteClick(i)}>Delete</button>
@@ -376,6 +381,15 @@
 
   .passage-item.selected .passage-title {
     color: var(--text-primary);
+  }
+
+  .passage-title.ai-settings {
+    font-weight: 600;
+    color: var(--text-faint);
+  }
+
+  .passage-item.selected .passage-title.ai-settings {
+    color: var(--text-muted);
   }
 
   .btn-more {

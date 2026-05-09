@@ -28,7 +28,6 @@
     $currentPassageIndex;
     cursorPosition = Infinity;
   });
-  let collapsedSystem = $state(false);
   let collapsedBuffers = $state(false);
   let collapsedConversation = $state(false);
   let showFavoriteDropdown = $state(false);
@@ -233,39 +232,14 @@
     });
   }
 
-  // Save system prompt when it changes
-  let saveTimeout: number | null = null;
-  function handleSystemPromptChange() {
-    if (saveTimeout) clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(() => {
-      saveSettings();
-    }, 500);
-  }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="copilot-panel" style="width: {width}px;">
   <Resizable width={width} side="left" onResize={onWidthResize} onSave={onWidthSave} />
-  <!-- Section 1: System Prompt (blue-ish background) -->
-  <div class="section system-section" class:collapsed={collapsedSystem}>
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="section-header clickable" onclick={() => collapsedSystem = !collapsedSystem} role="button" tabindex="0">
-      <h4>System Prompt</h4>
-      <span class="collapse-icon">{collapsedSystem ? '▸' : '▾'}</span>
-    </div>
-    {#if !collapsedSystem}
-      <textarea
-        bind:value={$copilotSettings.system_prompt}
-        oninput={handleSystemPromptChange}
-        rows="3"
-        placeholder="You are a helpful writing assistant."
-        class="system-input"
-      ></textarea>
-    {/if}
-  </div>
 
-  <!-- Section 2: Buffers (green-ish background) -->
+  <!-- Section 1: Buffers (green-ish background) -->
   <div class="section buffers-section" class:collapsed={collapsedBuffers}>
     <div class="section-header">
       <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -296,7 +270,7 @@
     {/if}
   </div>
 
-  <!-- Section 3: Conversation (purple-ish background) -->
+  <!-- Section 2: Conversation (purple-ish background) -->
   <div class="section conversation-section" class:collapsed={collapsedConversation}>
     <div class="section-header">
       <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -412,13 +386,7 @@
     padding: var(--spacing-md);
   }
 
-  /* Section 1: System Prompt - blue tint */
-  .system-section {
-    background: rgba(59, 130, 246, 0.1);
-    border: 1px solid rgba(59, 130, 246, 0.2);
-  }
-
-  /* Section 2: Buffers - green tint */
+  /* Section 1: Buffers - green tint */
   .buffers-section {
     background: rgba(22, 163, 74, 0.1);
     border: 1px solid rgba(22, 163, 74, 0.2);
@@ -426,7 +394,7 @@
     overflow-y: auto;
   }
 
-  /* Section 3: Conversation - purple tint */
+  /* Section 2: Conversation - purple tint */
   .conversation-section {
     background: rgba(124, 58, 237, 0.1);
     border: 1px solid rgba(124, 58, 237, 0.2);
@@ -478,22 +446,6 @@
   .hint {
     font-size: 12px;
     color: var(--text-faint);
-  }
-
-  .system-input {
-    width: 100%;
-    padding: var(--spacing-sm);
-    border: 1px solid var(--border-color-faint);
-    background: var(--bg-input);
-    color: var(--text-primary);
-    border-radius: var(--radius-sm);
-    resize: none;
-    font-size: var(--font-size-sm);
-  }
-
-  .system-input:focus {
-    outline: none;
-    border-color: var(--accent-color);
   }
 
   .btn-small {

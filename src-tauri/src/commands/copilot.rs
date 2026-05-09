@@ -352,6 +352,32 @@ pub fn abort_generation() -> Result<(), String> {
     Ok(())
 }
 
+/// Directly update copilot settings in memory (no XML/parse round-trip).
+/// Used by AISettingsEditor on every keystroke — like update_passage_content for regular articles.
+/// XML serialization only happens at file save time (encrypt_and_save → sync_copilot_to_ai_passage).
+#[tauri::command]
+pub fn update_copilot_settings(
+    app: tauri::AppHandle,
+    settings: CopilotSettings,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let mut current_session = state.current_session.lock().map_err(|e| e.to_string())?;
+
+    match current_session.as_mut() {
+        Some(session) => {
+            // Preserve runtime messages
+            let messages = session.copilot_settings.messages.clone();
+            session.copilot_settings = settings;
+            session.copilot_settings.messages = messages;
+            session.dirty = true;
+            drop(current_session);
+            crate::commands::state::emit_state_change(&app, &state);
+            Ok(())
+        }
+        None => Err("No file is currently open".to_string()),
+    }
+}
+
 #[tauri::command]
 pub fn save_ai_settings(
     app: tauri::AppHandle,

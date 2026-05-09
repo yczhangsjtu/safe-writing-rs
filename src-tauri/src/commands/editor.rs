@@ -56,6 +56,10 @@ pub fn update_passage_title(
     match current_session.as_mut() {
         Some(session) => {
             if index < session.plaintext.num_passages() {
+                // Protect .ai passage from being renamed
+                if session.plaintext.title_of_passage(index) == Some(".ai".to_string()) {
+                    return Err("Cannot rename the AI settings passage".to_string());
+                }
                 session.plaintext.set_title(index, title);
                 session.dirty = true;
                 drop(current_session);
@@ -105,6 +109,10 @@ pub fn remove_passage(
     match current_session.as_mut() {
         Some(session) => {
             if index < session.plaintext.num_passages() {
+                // Protect .ai passage from deletion
+                if session.plaintext.title_of_passage(index) == Some(".ai".to_string()) {
+                    return Err("Cannot delete the AI settings passage".to_string());
+                }
                 session.plaintext.remove_passage(index);
                 session.dirty = true;
                 if session.current_passage_index >= session.plaintext.num_passages() {

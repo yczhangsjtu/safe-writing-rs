@@ -45,6 +45,7 @@ pub fn run() {
             commands::config::get_data_dir,
             commands::copilot::send_message,
             commands::copilot::abort_generation,
+            commands::copilot::update_copilot_settings,
             commands::copilot::save_ai_settings,
             commands::copilot::load_ai_settings,
             commands::copilot::clear_copilot,

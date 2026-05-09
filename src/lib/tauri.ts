@@ -124,6 +124,10 @@ export async function clearCopilot(): Promise<CopilotSettings> {
   return invoke('clear_copilot');
 }
 
+export async function updateCopilotSettings(settings: CopilotSettings): Promise<void> {
+  return invoke('update_copilot_settings', { settings });
+}
+
 export async function abortGeneration(): Promise<void> {
   return invoke('abort_generation');
 }

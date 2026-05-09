@@ -4,6 +4,7 @@
   import { emit } from '@tauri-apps/api/event';
   import { isCommandKey } from '../lib/platform';
   import PassageList from './PassageList.svelte';
+  import AISettingsEditor from './AISettingsEditor.svelte';
 
   let {
     passagesProp,
@@ -39,15 +40,26 @@
   let isComposing = $state(false); // Track IME composition state
   let lastSyncedIndex = $state<number | null>(null); // Track last synced passage index
   let initialized = $state(false); // Track if editor is initialized
+  let isAIPassage = $derived(passagesProp[currentIndex]?.title === '.ai');
+  let aiSettingsEditor: { save?: () => Promise<void> } = $state({});
 
-  // Sync editor content with current passage - only on passage switch
+  // Sync editor content with current passage
   $effect(() => {
     if (passagesProp && passagesProp.length > 0 && currentIndex < passagesProp.length) {
-      // Only sync when passage index changes, not when content changes from user input
+      const backendContent = passagesProp[currentIndex]?.content || '';
+      const backendTitle = passagesProp[currentIndex]?.title || '';
+
       if (currentIndex !== lastSyncedIndex) {
-        editorContent = passagesProp[currentIndex]?.content || '';
-        editorTitle = passagesProp[currentIndex]?.title || '';
+        // Passage switched — always sync
+        editorContent = backendContent;
+        editorTitle = backendTitle;
         lastSyncedIndex = currentIndex;
+      } else if (editMode && editorContent !== backendContent) {
+        // Same passage, content changed externally (e.g., CopilotPanel Insert)
+        // Only sync when textarea is not focused (user isn't actively typing)
+        if (document.activeElement !== textareaElement) {
+          editorContent = backendContent;
+        }
       }
     }
   });
@@ -195,6 +207,10 @@
   async function handleKeydown(e: KeyboardEvent) {
     if (isCommandKey(e) && e.key === 's') {
       e.preventDefault();
+      // If AI Settings editor is active, save it first
+      if (isAIPassage && aiSettingsEditor.save) {
+        await aiSettingsEditor.save();
+      }
       await onSave();
     }
     if (isCommandKey(e) && e.key === 'l') {
@@ -266,7 +282,9 @@
 
   <div class="editor-area">
     {#if passagesProp && passagesProp.length > 0 && currentIndex < passagesProp.length}
-      {#if editMode}
+      {#if isAIPassage}
+        <AISettingsEditor bind:this={aiSettingsEditor} />
+      {:else if editMode}
         <div class="editor-content">
           <input
             type="text"
