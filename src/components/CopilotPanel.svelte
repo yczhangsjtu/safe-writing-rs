@@ -30,6 +30,8 @@
   });
   let collapsedBuffers = $state(false);
   let collapsedConversation = $state(false);
+  let editingIndex = $state<number | null>(null);
+  let editText = $state('');
   let showFavoriteDropdown = $state(false);
 
   function closeDropdownOnClick(e: MouseEvent) {
@@ -232,6 +234,68 @@
     });
   }
 
+  // ===== Regenerate: remove assistant reply and re-send the preceding user message =====
+  async function handleRegenerate(assistantIndex: number) {
+    if (waiting) return;
+
+    const userIndex = assistantIndex - 1;
+    if (userIndex < 0) return;
+
+    const allMessages = $copilotSettings.messages;
+    const userMsg = allMessages[userIndex];
+    if (!userMsg || userMsg.role !== 'user') return;
+
+    // Remove the user message + assistant response (and anything after).
+    // sendMessage on the backend will emit a fresh user message from the prompt.
+    copilotSettings.update(s => {
+      s.messages = s.messages.slice(0, userIndex);
+      return s;
+    });
+
+    waiting = true;
+    output = '';
+
+    try {
+      await api.sendMessage(
+        userMsg.display,
+        getCurrentPassageContent(),
+        $copilotSettings.buffers,
+        $copilotSettings.system_prompt,
+        $copilotSettings.messages
+      );
+    } catch (e: any) {
+      output = `Error: ${e?.message || e}`;
+      waiting = false;
+    }
+  }
+
+  // ===== Edit message inline =====
+  function startEditMessage(index: number) {
+    const msg = $copilotSettings.messages[index];
+    if (!msg || msg.role !== 'user') return;
+    editingIndex = index;
+    editText = msg.display;
+  }
+
+  function saveEditMessage(index: number) {
+    if (editingIndex === null) return;
+    copilotSettings.update(s => {
+      s.messages[index] = {
+        ...s.messages[index],
+        display: editText,
+        content: editText, // For user messages, content === display (no buffer markup applied yet)
+      };
+      return s;
+    });
+    editingIndex = null;
+    editText = '';
+  }
+
+  function cancelEditMessage() {
+    editingIndex = null;
+    editText = '';
+  }
+
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -292,6 +356,11 @@
               <div class="message-actions">
                 {#if msg.role === 'user'}
                   <button
+                    class="btn-tiny edit"
+                    onclick={() => startEditMessage(i)}
+                    title="Edit message"
+                  >Edit</button>
+                  <button
                     class="btn-tiny favorite"
                     class:active={isFavoritePrompt(msg.content)}
                     onclick={() => toggleFavoritePrompt(i)}
@@ -302,11 +371,31 @@
                 {/if}
                 {#if msg.role === 'assistant'}
                   <button class="btn-tiny accent" onclick={() => handleInsertFromHistory(i)}>Insert</button>
+                  <button
+                    class="btn-tiny regenerate"
+                    onclick={() => handleRegenerate(i)}
+                    title="Regenerate response"
+                    disabled={waiting}
+                  >↻</button>
                 {/if}
                 <button class="btn-tiny danger" onclick={() => handleDeleteMessage(i)}>×</button>
               </div>
             </div>
-            <p class="message-content">{msg.role === 'user' ? msg.display : msg.content}</p>
+            {#if editingIndex === i}
+              <div class="edit-area">
+                <textarea
+                  bind:value={editText}
+                  rows="3"
+                  class="edit-textarea"
+                ></textarea>
+                <div class="edit-actions">
+                  <button class="btn-tiny accent" onclick={() => saveEditMessage(i)}>Save</button>
+                  <button class="btn-tiny" onclick={cancelEditMessage}>Cancel</button>
+                </div>
+              </div>
+            {:else}
+              <p class="message-content">{msg.role === 'user' ? msg.display : msg.content}</p>
+            {/if}
           </div>
         {/each}
 
@@ -574,6 +663,63 @@
 
   .btn-tiny.favorite.active {
     color: var(--warning-color);
+  }
+
+  .btn-tiny.edit {
+    background: transparent;
+    color: var(--text-muted);
+    padding: 2px 5px;
+  }
+
+  .btn-tiny.edit:hover {
+    color: var(--text-primary);
+  }
+
+  .btn-tiny.regenerate {
+    background: transparent;
+    color: var(--text-muted);
+    padding: 2px 5px;
+    font-size: 14px;
+  }
+
+  .btn-tiny.regenerate:hover:not(:disabled) {
+    color: var(--accent-color);
+  }
+
+  .btn-tiny.regenerate:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .edit-area {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    margin-top: 6px;
+  }
+
+  .edit-textarea {
+    width: 100%;
+    padding: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border-radius: var(--radius-sm);
+    resize: vertical;
+    font-size: var(--font-size-sm);
+    line-height: 1.4;
+    font-family: inherit;
+  }
+
+  .edit-textarea:focus {
+    outline: none;
+    border-color: var(--accent-color);
+  }
+
+  .edit-actions {
+    display: flex;
+    gap: 4px;
+    justify-content: flex-end;
   }
 
   .icon-tiny {
