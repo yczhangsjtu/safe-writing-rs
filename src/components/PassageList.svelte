@@ -8,10 +8,8 @@
     passagesProp,
     currentIndex,
     isDirtyProp,
-    editMode,
     onSave,
     onLock,
-    onToggleEdit,
     width,
     onWidthResize,
     onWidthSave
@@ -19,10 +17,8 @@
     passagesProp: any[];
     currentIndex: number;
     isDirtyProp: boolean;
-    editMode: boolean;
     onSave: () => void;
     onLock: () => void;
-    onToggleEdit: () => void;
     width: number;
     onWidthResize: (width: number) => void;
     onWidthSave: (width: number) => void;
@@ -34,8 +30,6 @@
   let dragOverIndex = $state<number | null>(null);
   let showItemMenu = $state<number | null>(null);
 
-  const editPreviewTitle = $derived(editMode ? "Preview" : "Edit");
-  const isAIPassage = $derived(passagesProp[currentIndex]?.title === '.ai');
 
   function generateTimestampTitle(): string {
     const now = new Date();
@@ -134,11 +128,6 @@
       <button class="btn-icon" title="Lock" onclick={onLock}>
         <span class="material-icons icon">lock</span>
       </button>
-    {/if}
-    {#if !isAIPassage}
-    <button class="btn-icon" title={editPreviewTitle} onclick={onToggleEdit}>
-      <span class="material-icons icon">{#if editMode}visibility{:else}edit{/if}</span>
-    </button>
     {/if}
   </div>
 

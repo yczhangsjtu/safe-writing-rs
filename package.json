@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@fontsource/material-icons": "^5.2.7",
+    "@milkdown/crepe": "^7.21.1",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
     "@tauri-apps/plugin-opener": "^2.0.0"

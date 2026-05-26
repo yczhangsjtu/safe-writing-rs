@@ -19,33 +19,36 @@
   let showSettingsDialog = $state(false);
   let lastCurrentFile = $state<string | null>(null);
 
-  onMount(async () => {
-    console.log('App mounted, initializing...');
-    try {
-      // Load config
-      const cfg = await api.getConfig();
-      config.set(cfg);
-      theme.set(cfg.theme as 'light' | 'dark');
-      document.documentElement.setAttribute('data-theme', cfg.theme);
-      sidebarWidth.set(cfg.sidebar_width);
-      passageListWidth.set(cfg.passage_list_width);
-      copilotWidth.set(cfg.copilot_width);
+  let unlistenState: (() => void) | undefined;
 
-      // Load files list
-      const fileList = await api.listFiles();
-      files.set(fileList.sort());
-      initialized = true;
-      console.log('Initialization complete');
-    } catch (e: any) {
-      initError = e?.message || String(e);
-      console.error('Init error:', e);
-    }
+  onMount(() => {
+    console.log('App mounted, initializing...');
+
+    // Load config and files async
+    (async () => {
+      try {
+        const cfg = await api.getConfig();
+        config.set(cfg);
+        theme.set(cfg.theme as 'light' | 'dark');
+        document.documentElement.setAttribute('data-theme', cfg.theme);
+        sidebarWidth.set(cfg.sidebar_width);
+        passageListWidth.set(cfg.passage_list_width);
+        copilotWidth.set(cfg.copilot_width);
+
+        const fileList = await api.listFiles();
+        files.set(fileList.sort());
+        initialized = true;
+        console.log('Initialization complete');
+      } catch (e: any) {
+        initError = e?.message || String(e);
+        console.error('Init error:', e);
+      }
+    })();
 
     // Listen for state-changed events from backend
-    const unlistenState = listen<api.AppStateResponse>('state-changed', (event) => {
+    listen<api.AppStateResponse>('state-changed', (event) => {
       const state = event.payload;
 
-      // Check if file actually changed (opened/closed)
       const fileChanged = (lastCurrentFile === null && state.current_file !== null) ||
                           (lastCurrentFile !== null && state.current_file === null);
 
@@ -55,21 +58,19 @@
       currentPassageIndex.set(state.current_passage_index);
       isDirty.set(state.is_dirty);
 
-      // Update copilot persistent settings (preserve runtime messages)
       copilotSettings.update(s => {
         s.system_prompt = state.copilot_settings.system_prompt;
         s.buffers = state.copilot_settings.buffers;
         s.favorite_prompts = state.copilot_settings.favorite_prompts;
-        // Only reset messages when file changes
         if (fileChanged) {
           s.messages = [];
         }
         return s;
       });
-    });
+    }).then(fn => { unlistenState = fn; });
 
-    return async () => {
-      (await unlistenState)();
+    return () => {
+      unlistenState?.();
     };
   });
 
@@ -168,7 +169,7 @@
   async function handleSidebarWidthSave(newWidth: number) {
     sidebarWidth.set(newWidth);
     try {
-      await api.updateConfig({ sidebarWidth: newWidth });
+      await api.updateConfig({ sidebar_width: newWidth });
     } catch (e) {
       console.error('Failed to save sidebar width:', e);
     }
@@ -181,7 +182,7 @@
   async function handlePassageListWidthSave(newWidth: number) {
     passageListWidth.set(newWidth);
     try {
-      await api.updateConfig({ passageListWidth: newWidth });
+      await api.updateConfig({ passage_list_width: newWidth });
     } catch (e) {
       console.error('Failed to save passage list width:', e);
     }
@@ -194,7 +195,7 @@
   async function handleCopilotWidthSave(newWidth: number) {
     copilotWidth.set(newWidth);
     try {
-      await api.updateConfig({ copilotWidth: newWidth });
+      await api.updateConfig({ copilot_width: newWidth });
     } catch (e) {
       console.error('Failed to save copilot width:', e);
     }
@@ -217,7 +218,7 @@
     if (newDir && newDir !== $config.data_dir) {
       try {
         isLoading.set(true);
-        const newConfig = await api.updateConfig({ dataDir: newDir });
+        const newConfig = await api.updateConfig({ data_dir: newDir });
         config.set(newConfig);
         // Refresh file list for new directory
         const fileList = await api.listFiles();
