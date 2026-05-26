@@ -90,6 +90,7 @@
   // Process image files: encrypt and insert into editor
   async function processImageFiles(files: FileList | File[]) {
     const arr = Array.from(files);
+    let inserted = false;
     for (const file of arr) {
       const isImage = file.type?.startsWith('image/') || file.name?.match(/\.(png|jpg|jpeg|gif|webp|bmp)$/i);
       if (!isImage) continue;
@@ -100,37 +101,78 @@
         const digest = await api.insertImage(Array.from(bytes));
         imageMap.set(digest, b64);
         vditor!.insertValue(`![image](data:image/png;base64,${b64})`);
+        inserted = true;
       } catch (e) {
         console.error('[MarkdownEditor] image insert failed:', e);
       }
     }
+
+    if (inserted && vditor) {
+      const stored = toStorage(vditor.getValue());
+      if (stored !== prevStoredContent) {
+        prevStoredContent = stored;
+        await onContentChange(stored);
+      }
+    }
+  }
+
+  function isImageFile(file: File): boolean {
+    return file.type?.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|bmp)$/i.test(file.name || '');
+  }
+
+  function imageFilesFromItems(items?: DataTransferItemList | null): File[] {
+    if (!items) return [];
+
+    const files: File[] = [];
+    for (const item of Array.from(items)) {
+      if (item.kind !== 'file' || !item.type.startsWith('image/')) continue;
+      const file = item.getAsFile();
+      if (file) files.push(file);
+    }
+    return files;
+  }
+
+  function imageFilesFromFileList(files?: FileList | null): File[] {
+    if (!files) return [];
+    return Array.from(files).filter(isImageFile);
+  }
+
+  function imageFilesFromTransfer(data?: DataTransfer | null): File[] {
+    const itemFiles = imageFilesFromItems(data?.items);
+    return itemFiles.length > 0 ? itemFiles : imageFilesFromFileList(data?.files);
+  }
+
+  function imageFilesFromClipboard(data?: DataTransfer | null): File[] {
+    const itemFiles = imageFilesFromItems(data?.items);
+    return itemFiles.length > 0 ? itemFiles : imageFilesFromFileList(data?.files);
   }
 
   // Use capture phase to intercept drop/paste BEFORE Vditor's handlers
   function setupImageHandlers(el: HTMLElement) {
     el.addEventListener('dragover', (e: DragEvent) => {
-      if (e.dataTransfer?.types.includes('Files')) {
+      const data = e.dataTransfer;
+      if (data && (data.types.includes('Files') || imageFilesFromItems(data.items).length > 0)) {
         e.preventDefault();
         e.stopPropagation();
-        e.dataTransfer.dropEffect = 'copy';
+        data.dropEffect = 'copy';
       }
     }, true); // capture phase
 
     el.addEventListener('drop', (e: DragEvent) => {
-      const files = e.dataTransfer?.files;
-      if (files?.length) {
+      const files = imageFilesFromTransfer(e.dataTransfer);
+      if (files.length > 0) {
         e.preventDefault();
         e.stopPropagation();
-        processImageFiles(files);
+        void processImageFiles(files);
       }
     }, true); // capture phase
 
     el.addEventListener('paste', (e: ClipboardEvent) => {
-      const files = e.clipboardData?.files;
-      if (files?.length) {
+      const files = imageFilesFromClipboard(e.clipboardData);
+      if (files.length > 0) {
         e.preventDefault();
         e.stopPropagation();
-        processImageFiles(files);
+        void processImageFiles(files);
       }
     }, true); // capture phase
   }
