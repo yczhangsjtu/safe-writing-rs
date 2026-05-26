@@ -20,7 +20,7 @@ pub fn list_files(state: tauri::State<'_, AppState>) -> Result<Vec<String>, Stri
     let config = state.config.lock().map_err(|e| e.to_string())?;
     let data_dir = ensure_data_dir(&config.data_dir)?;
 
-    let files: Vec<String> = std::fs::read_dir(&data_dir)
+    let mut files: Vec<String> = std::fs::read_dir(&data_dir)
         .map_err(|e| format!("Failed to read data directory: {}", e))?
         .filter_map(|entry| {
             let entry = entry.ok()?;
@@ -32,6 +32,8 @@ pub fn list_files(state: tauri::State<'_, AppState>) -> Result<Vec<String>, Stri
             }
         })
         .collect();
+
+    files.sort_unstable();
 
     Ok(files)
 }
