@@ -40,6 +40,7 @@ pub fn run() {
             commands::editor::get_current_passage_index,
             commands::editor::is_dirty,
             commands::editor::append_file,
+            commands::editor::read_clipboard_images,
             commands::config::get_config,
             commands::config::update_config,
             commands::config::get_data_dir,

@@ -147,6 +147,30 @@
     return itemFiles.length > 0 ? itemFiles : imageFilesFromFileList(data?.files);
   }
 
+  async function processImagesFromBackend() {
+    try {
+      const images = await api.readClipboardImages();
+      if (!images?.length) return;
+      for (const img of images) {
+        const bytes = new Uint8Array(img.data);
+        const b64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve((reader.result as string).split(',')[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(new Blob([bytes]));
+        });
+        const digest = await api.insertImage(Array.from(bytes));
+        imageMap.set(digest, b64);
+        vditor!.insertValue(`![image](data:image/png;base64,${b64})`);
+      }
+      const stored = toStorage(vditor!.getValue());
+      if (stored !== prevStoredContent) {
+        prevStoredContent = stored;
+        await onContentChange(stored);
+      }
+    } catch (_) {}
+  }
+
   // Use capture phase to intercept drop/paste BEFORE Vditor's handlers
   function setupImageHandlers(el: HTMLElement) {
     el.addEventListener('dragover', (e: DragEvent) => {
@@ -173,6 +197,12 @@
         e.preventDefault();
         e.stopPropagation();
         void processImageFiles(files);
+        return;
+      }
+      if (e.clipboardData?.types.includes('text/uri-list')) {
+        e.preventDefault();
+        e.stopPropagation();
+        void processImagesFromBackend();
       }
     }, true); // capture phase
   }

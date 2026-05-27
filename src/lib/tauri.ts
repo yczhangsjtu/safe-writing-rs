@@ -128,6 +128,10 @@ export async function updateCopilotSettings(settings: CopilotSettings): Promise<
   return invoke('update_copilot_settings', { settings });
 }
 
+export async function readClipboardImages(): Promise<{ name: string; data: number[] }[]> {
+  return invoke('read_clipboard_images');
+}
+
 export async function abortGeneration(): Promise<void> {
   return invoke('abort_generation');
 }

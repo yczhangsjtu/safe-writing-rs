@@ -364,6 +364,50 @@ pub fn append_file(
     }
 }
 
+#[derive(serde::Serialize)]
+pub struct ClipboardImage {
+    pub name: String,
+    pub data: Vec<u8>,
+}
+
+fn run_cli_uris() -> Option<Vec<String>> {
+    let cmds: &[(&str, &[&str])] = &[
+        ("wl-paste", &["-t", "text/uri-list"]),
+        ("xclip", &["-selection", "clipboard", "-o", "-t", "text/uri-list"]),
+    ];
+    for (cmd, args) in cmds {
+        if let Ok(out) = std::process::Command::new(cmd).args(*args).output() {
+            if out.status.success() {
+                let uris: Vec<String> = String::from_utf8_lossy(&out.stdout)
+                    .lines().map(|l| l.trim().to_string())
+                    .filter(|l| !l.is_empty() && !l.starts_with('#')).collect();
+                if !uris.is_empty() { return Some(uris); }
+            }
+        }
+    }
+    None
+}
+
+#[tauri::command]
+pub fn read_clipboard_images() -> Result<Vec<ClipboardImage>, String> {
+        let uris = run_cli_uris().ok_or("No image in clipboard".to_string())?;
+        let mut images = Vec::new();
+        for line in &uris {
+            let path = if let Some(p) = line.strip_prefix("file://") {
+                p.to_string()
+            } else if line.starts_with('/') {
+                line.clone()
+            } else { continue };
+            let name = std::path::Path::new(&path)
+                .file_name().and_then(|n| n.to_str()).unwrap_or("image.png").to_string();
+            if let Ok(data) = std::fs::read(&path) {
+                images.push(ClipboardImage { name, data });
+            }
+        }
+        if images.is_empty() { Err("No image files found".to_string()) }
+        else { Ok(images) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
