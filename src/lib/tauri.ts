@@ -9,6 +9,7 @@ export interface AppStateResponse {
   passages: Passage[];
   current_passage_index: number;
   is_dirty: boolean;
+  num_images: number;
   copilot_settings: CopilotSettings;
 }
 
@@ -78,6 +79,14 @@ export async function getImages(): Promise<ImageInfo[]> {
 
 export async function getImageMetadata(index: number): Promise<string> {
   return invoke('get_image_metadata', { index });
+}
+
+export async function deleteImage(digest: string): Promise<void> {
+  return invoke('delete_image', { digest });
+}
+
+export async function findReferencedDigests(): Promise<string[]> {
+  return invoke('find_referenced_digests');
 }
 
 export async function getCurrentFile(): Promise<string> {

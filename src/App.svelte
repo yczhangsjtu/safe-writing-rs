@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { theme, files, currentFile, passages, currentPassageIndex, config, isLoading, error, success, copilotVisible, isDirty, copilotSettings, sidebarWidth, passageListWidth, copilotWidth } from './lib/stores';
+  import { theme, files, currentFile, passages, currentPassageIndex, config, isLoading, error, success, copilotVisible, isDirty, copilotSettings, sidebarWidth, passageListWidth, copilotWidth, numImages } from './lib/stores';
   import * as api from './lib/tauri';
   import { listen } from '@tauri-apps/api/event';
   import Sidebar from './components/Sidebar.svelte';
@@ -57,6 +57,7 @@
       passages.set(state.passages);
       currentPassageIndex.set(state.current_passage_index);
       isDirty.set(state.is_dirty);
+      numImages.set(state.num_images);
 
       copilotSettings.update(s => {
         s.system_prompt = state.copilot_settings.system_prompt;
@@ -268,6 +269,7 @@
             passagesProp={$passages}
             currentIndex={$currentPassageIndex}
             isDirtyProp={$isDirty}
+            numImages={$numImages}
             onSave={handleSave}
             onLock={handleLock}
             passageListWidth={$passageListWidth}

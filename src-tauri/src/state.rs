@@ -53,6 +53,7 @@ pub struct AppStateResponse {
     pub passages: Vec<crate::data_structures::Passage>,
     pub current_passage_index: usize,
     pub is_dirty: bool,
+    pub num_images: usize,
     pub copilot_settings: CopilotSettings,
 }
 
@@ -71,6 +72,7 @@ impl AppState {
                 passages: s.plaintext.passages().clone(),
                 current_passage_index: s.current_passage_index,
                 is_dirty: s.dirty,
+                num_images: s.plaintext.num_images(),
                 copilot_settings: s.copilot_settings.clone(),
             },
             None => AppStateResponse {
@@ -78,6 +80,7 @@ impl AppState {
                 passages: Vec::new(),
                 current_passage_index: 0,
                 is_dirty: false,
+                num_images: 0,
                 copilot_settings: CopilotSettings::default(),
             },
         }

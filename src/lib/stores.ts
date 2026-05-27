@@ -7,6 +7,7 @@ export const currentFile = writable<string | null>(null);
 export const passages = writable<Passage[]>([]);
 export const currentPassageIndex = writable<number>(0);
 export const isDirty = writable<boolean>(false);
+export const numImages = writable<number>(0);
 export const config = writable<Config>({
   font_size: 24,
   data_dir: '',
@@ -26,6 +27,7 @@ export const copilotSettings = writable<CopilotSettings>({
   messages: []
 });
 export const copilotVisible = writable<boolean>(false);
+export const galleryVisible = writable<boolean>(false);
 export const isLoading = writable<boolean>(false);
 export const error = writable<string | null>(null);
 export const success = writable<string | null>(null);

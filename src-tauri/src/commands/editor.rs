@@ -264,6 +264,73 @@ pub fn get_image_metadata(index: usize, state: tauri::State<'_, AppState>) -> Re
 }
 
 #[tauri::command]
+pub fn delete_image(
+    app: tauri::AppHandle,
+    digest: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let mut current_session = state.current_session.lock().map_err(|e| e.to_string())?;
+    match current_session.as_mut() {
+        Some(session) => {
+            let idx = session
+                .image_digests
+                .remove(&digest)
+                .ok_or_else(|| format!("Image digest {} not found", digest))?;
+            session.plaintext.images_mut().remove(idx);
+            // Shift indices for digests that moved
+            let shifted: Vec<(String, usize)> = session
+                .image_digests
+                .drain()
+                .map(|(d, i)| (d, if i > idx { i - 1 } else { i }))
+                .collect();
+            for (d, i) in shifted {
+                session.image_digests.insert(d, i);
+            }
+            session.dirty = true;
+            drop(current_session);
+            emit_state_change(&app, &state);
+            Ok(())
+        }
+        None => Err("No file is currently open".to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn find_referenced_digests(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<String>, String> {
+    let current_session = state.current_session.lock().map_err(|e| e.to_string())?;
+    match current_session.as_ref() {
+        Some(session) => {
+            let mut refs = std::collections::HashSet::new();
+            for passage in session.plaintext.passages() {
+                let content = &passage.content;
+                let mut pos = 0;
+                while let Some(start) = content[pos..].find("![") {
+                    let abs_start = pos + start;
+                    // Find the closing ](
+                    if let Some(close_alt) = content[abs_start..].find("](") {
+                        let paren_start = abs_start + close_alt + 2;
+                        if let Some(close_paren) = content[paren_start..].find(')') {
+                            let digest = &content[paren_start..paren_start + close_paren];
+                            // Validate 64-char hex digest
+                            if digest.len() == 64 && digest.chars().all(|c| c.is_ascii_hexdigit()) {
+                                refs.insert(digest.to_lowercase());
+                            }
+                            pos = paren_start + close_paren + 1;
+                            continue;
+                        }
+                    }
+                    pos = abs_start + 2;
+                }
+            }
+            Ok(refs.into_iter().collect())
+        }
+        None => Err("No file is currently open".to_string()),
+    }
+}
+
+#[tauri::command]
 pub fn get_current_file(state: tauri::State<'_, AppState>) -> Result<String, String> {
     let current_session = state.current_session.lock().map_err(|e| e.to_string())?;
     match current_session.as_ref() {

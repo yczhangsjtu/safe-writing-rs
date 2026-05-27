@@ -121,14 +121,10 @@
   // Process image files: encrypt and insert into editor
   async function processImageFiles(files: FileList | File[]) {
     const arr = Array.from(files);
-    console.log('[processImageFiles] got', arr.length, 'files:', arr.map(f => ({ name: f.name, type: f.type, size: f.size })));
     let inserted = false;
     for (const file of arr) {
       const isImage = file.type?.startsWith('image/') || file.name?.match(/\.(png|jpg|jpeg|gif|webp|bmp)$/i);
-      if (!isImage) {
-        console.log('[processImageFiles] skipping non-image:', file.name, file.type);
-        continue;
-      }
+      if (!isImage) continue;
       try {
         // Create blob URL from File — instant, tiny string (~40 bytes)
         const blobUrl = URL.createObjectURL(file);
@@ -165,15 +161,10 @@
 
     const files: File[] = [];
     for (const item of Array.from(items)) {
-      if (item.kind !== 'file') {
-        console.log('[imageFilesFromItems] skipping item kind=', item.kind, 'type=', item.type);
-        continue;
-      }
+      if (item.kind !== 'file') continue;
       const file = item.getAsFile();
-      console.log('[imageFilesFromItems] kind=file type=', item.type, 'getAsFile()=', file ? `${file.name} (${file.type}, ${file.size}b)` : 'null');
       if (file && isImageFile(file)) files.push(file);
     }
-    console.log('[imageFilesFromItems] returning', files.length, 'files');
     return files;
   }
 
@@ -219,12 +210,9 @@
   // Process image URIs from backend (drop or clipboard fallback for Linux)
   async function processImageUris(uris: string[]) {
     try {
-      console.log('[processImageUris] input URIs:', uris);
       const imageUris = uris.filter(u => /\.(png|jpg|jpeg|gif|webp|bmp)$/i.test(u));
-      console.log('[processImageUris] filtered image URIs:', imageUris);
       if (!imageUris.length) return;
       const images = await api.readImageFiles(imageUris);
-      console.log('[processImageUris] readImageFiles returned', images?.length ?? 0, 'images');
       if (!images?.length) return;
       for (const img of images) {
         const b64 = img.data;
@@ -251,32 +239,24 @@
     const isInside = (e: Event) => el.contains(e.target as Node);
 
     const dragOver = (e: DragEvent) => {
-      if (!isInside(e)) {
-        return;
-      }
+      if (!isInside(e)) return;
       const data = e.dataTransfer;
       if (!data) return;
-      console.log('[dragOver] types:', [...data.types], 'items:', data.items?.length ?? 0, 'files:', data.files?.length ?? 0);
-      // Accept all drops over the editor — we inspect types in the drop handler.
       e.preventDefault();
       e.stopPropagation();
       data.dropEffect = 'copy';
     };
 
     const drop = (e: DragEvent) => {
-      if (!isInside(e)) {
-        return;
-      }
+      if (!isInside(e)) return;
       const data = e.dataTransfer;
       if (!data) return;
-
-      console.log('[drop] types:', [...data.types], 'items:', data.items?.length ?? 0, 'files:', data.files?.length ?? 0);
       e.preventDefault();
       e.stopPropagation();
 
       // 1) Try File objects (kind=file items)
       const files = imageFilesFromTransfer(data);
-      console.log('[drop] imageFilesFromTransfer returned', files.length, 'files');
+      // Check if any File objects are available
       if (files.length > 0) {
         void processImageFiles(files);
         return;
@@ -315,15 +295,12 @@
           if (type.includes('Files')) continue;
           try {
             const text = data.getData(type);
-            console.log(`[drop] getData("${type}") len=${text?.length ?? 0}:`, text ? `head=[${text.substring(0, 150)}] tail=[${text.substring(Math.max(0, text.length - 200))}]` : '(empty)');
             const uris = tryExtractUris(text, `getData(${type})`);
             if (uris.length > 0) {
               void processImageUris(uris);
               return;
             }
-          } catch (err) {
-            console.log(`[drop] getData("${type}") threw:`, err);
-          }
+          } catch (_) {}
         }
 
         // Second pass: getAsString with timeout for stubborn types
@@ -331,26 +308,21 @@
           for (let i = 0; i < data.items.length; i++) {
             const item = data.items[i];
             if (item.kind !== 'string') continue;
-            console.log(`[drop] item[${i}]: kind=${item.kind} type="${item.type}"`);
             try {
               const text = await new Promise<string>((resolve) => {
                 let settled = false;
                 const timer = setTimeout(() => { if (!settled) { settled = true; resolve(''); } }, 200);
                 item.getAsString((s) => { if (!settled) { settled = true; clearTimeout(timer); resolve(s); } });
               });
-              console.log(`[drop] getAsString("${item.type}") len=${text?.length ?? 0}:`, text ? `head=[${text.substring(0, 150)}] tail=[${text.substring(Math.max(0, text.length - 200))}]` : '(empty/timeout)');
               if (!text) continue;
               const uris = tryExtractUris(text, `getAsString(${item.type})`);
               if (uris.length > 0) {
                 void processImageUris(uris);
                 return;
               }
-            } catch (err) {
-              console.log(`[drop] getAsString threw:`, err);
-            }
+            } catch (_) {}
           }
         }
-        console.log('[drop] no image data found');
       })();
     };
 

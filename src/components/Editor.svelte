@@ -1,13 +1,16 @@
 <script lang="ts">
+  import { galleryVisible } from '../lib/stores';
   import * as api from '../lib/tauri';
   import PassageList from './PassageList.svelte';
   import MarkdownEditor from './MarkdownEditor.svelte';
   import AISettingsEditor from './AISettingsEditor.svelte';
+  import ImageGallery from './ImageGallery.svelte';
 
   let {
     passagesProp,
     currentIndex,
     isDirtyProp,
+    numImages,
     onSave,
     onLock,
     passageListWidth,
@@ -17,6 +20,7 @@
     passagesProp: any[];
     currentIndex: number;
     isDirtyProp: boolean;
+    numImages: number;
     onSave: () => Promise<void>;
     onLock: () => void;
     passageListWidth: number;
@@ -81,6 +85,7 @@
     passagesProp={passagesProp}
     currentIndex={currentIndex}
     isDirtyProp={isDirtyProp}
+    numImages={numImages}
     onSave={onSave}
     onLock={onLock}
     width={passageListWidth}
@@ -89,7 +94,9 @@
   />
 
   <div class="editor-area">
-    {#if passagesProp && passagesProp.length > 0 && currentIndex < passagesProp.length}
+    {#if $galleryVisible}
+      <ImageGallery />
+    {:else if passagesProp && passagesProp.length > 0 && currentIndex < passagesProp.length}
       {#if isAIPassage}
         <AISettingsEditor bind:this={aiSettingsEditor} />
       {:else}

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { passages, currentPassageIndex } from '../lib/stores';
+  import { passages, currentPassageIndex, galleryVisible } from '../lib/stores';
   import * as api from '../lib/tauri';
   import ConfirmDialog from './ConfirmDialog.svelte';
   import Resizable from './Resizable.svelte';
@@ -10,6 +10,7 @@
     isDirtyProp,
     onSave,
     onLock,
+    numImages,
     width,
     onWidthResize,
     onWidthSave
@@ -19,10 +20,17 @@
     isDirtyProp: boolean;
     onSave: () => void;
     onLock: () => void;
+    numImages: number;
     width: number;
     onWidthResize: (width: number) => void;
     onWidthSave: (width: number) => void;
   } = $props();
+
+  // Regular passages (exclude special .ai passage — shown in system section)
+  let regularPassages = $derived(passagesProp.filter((p: any) => p.title !== '.ai' && p.title !== '.gallery'));
+  // Find .ai passage index for navigation
+  let aiPassageIdx = $derived(passagesProp.findIndex((p: any) => p.title === '.ai'));
+  let showGallery = $derived(numImages > 0);
 
   let confirmDelete = $state(false);
   let pendingDeleteIndex = $state(-1);
@@ -43,8 +51,20 @@
   }
 
   async function handleSelect(index: number) {
+    galleryVisible.set(false);
     await api.setCurrentPassage(index);
     showItemMenu = null;
+  }
+
+  function handleOpenGallery() {
+    galleryVisible.set(true);
+  }
+
+  function handleOpenAISettings() {
+    galleryVisible.set(false);
+    if (aiPassageIdx >= 0) {
+      api.setCurrentPassage(aiPassageIdx);
+    }
   }
 
   async function handleAdd() {
@@ -146,41 +166,39 @@
 
   <div class="passages">
     {#each passagesProp as passage, i}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        class="passage-item"
-        class:selected={i === currentIndex}
-        class:dragging={draggedIndex === i}
-        class:drag-over={dragOverIndex === i}
-        draggable={passage.title !== '.ai'}
-        onclick={() => handleSelect(i)}
-        ondragstart={(e) => handleDragStart(e, i)}
-        ondragover={(e) => handleDragOver(e, i)}
-        ondragleave={handleDragLeave}
-        ondrop={(e) => handleDrop(e, i)}
-        ondragend={handleDragEnd}
-      >
-        <span class="passage-title" class:ai-settings={passage.title === '.ai'}>{passage.title === '.ai' ? 'AI Settings' : passage.title}</span>
+      {#if passage.title === '.ai' || passage.title === '.gallery'}
+        <!-- Skip special passages — shown in system section below -->
+      {:else}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        {#if passage.title !== '.ai'}
-        <button
-          class="btn-more"
-          onclick={(e) => { e.stopPropagation(); toggleItemMenu(i); }}
-        >⋮</button>
-        {/if}
-        {#if showItemMenu === i}
-          <div class="item-menu">
-            <button class="menu-item danger" onclick={() => handleDeleteClick(i)}>Delete</button>
-          </div>
-        {/if}
-      </div>
+        <div
+          class="passage-item"
+          class:selected={i === currentIndex && !$galleryVisible}
+          class:dragging={draggedIndex === i}
+          class:drag-over={dragOverIndex === i}
+          draggable={true}
+          onclick={() => handleSelect(i)}
+          ondragstart={(e) => handleDragStart(e, i)}
+          ondragover={(e) => handleDragOver(e, i)}
+          ondragleave={handleDragLeave}
+          ondrop={(e) => handleDrop(e, i)}
+          ondragend={handleDragEnd}
+        >
+          <span class="passage-title">{passage.title}</span>
+          <button
+            class="btn-more"
+            onclick={(e) => { e.stopPropagation(); toggleItemMenu(i); }}
+          >⋮</button>
+          {#if showItemMenu === i}
+            <div class="item-menu">
+              <button class="menu-item danger" onclick={() => handleDeleteClick(i)}>Delete</button>
+            </div>
+          {/if}
+        </div>
+      {/if}
     {/each}
 
-    {#if passagesProp.length > 0}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
+    {#if regularPassages.length > 0}
       <div
         class="drop-zone"
         class:drag-over-bottom={dragOverIndex === -1}
@@ -190,9 +208,36 @@
       ></div>
     {/if}
 
-    {#if passagesProp.length === 0}
+    {#if regularPassages.length === 0}
       <div class="empty-state">
         <button class="btn-link" onclick={handleAdd}>Create first passage</button>
+      </div>
+    {/if}
+  </div>
+
+  <!-- System section: AI Settings + Image Gallery at the bottom -->
+  <div class="system-section">
+    <div class="system-divider"></div>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="passage-item system-item"
+      class:selected={aiPassageIdx >= 0 && aiPassageIdx === currentIndex && !$galleryVisible}
+      onclick={handleOpenAISettings}
+    >
+      <span class="material-icons system-icon">smart_toy</span>
+      <span class="passage-title">AI Settings</span>
+    </div>
+    {#if showGallery}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="passage-item system-item"
+        class:selected={$galleryVisible}
+        onclick={handleOpenGallery}
+      >
+        <span class="material-icons system-icon">image</span>
+        <span class="passage-title">Image Gallery</span>
       </div>
     {/if}
   </div>
@@ -372,12 +417,12 @@
     color: var(--text-primary);
   }
 
-  .passage-title.ai-settings {
+  .passage-title.special {
     font-weight: 600;
     color: var(--text-faint);
   }
 
-  .passage-item.selected .passage-title.ai-settings {
+  .passage-item.selected .passage-title.special {
     color: var(--text-muted);
   }
 
@@ -479,5 +524,43 @@
     &:hover {
       background: var(--bg-hover);
     }
+  }
+
+  .system-section {
+    padding: 0 var(--spacing-sm) var(--spacing-sm);
+    flex-shrink: 0;
+  }
+
+  .system-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: var(--spacing-sm) 0;
+  }
+
+  .system-item {
+    opacity: 0.7;
+    padding: 4px 10px;
+  }
+
+  .system-item:hover {
+    opacity: 1;
+  }
+
+  .system-item.selected {
+    opacity: 1;
+    background: var(--bg-hover-active);
+  }
+
+  .system-icon {
+    font-size: 14px;
+    margin-right: 6px;
+    color: var(--text-faint);
+    line-height: 1;
+    width: 18px;
+    text-align: center;
+  }
+
+  .system-item.selected .system-icon {
+    color: var(--text-muted);
   }
 </style>
