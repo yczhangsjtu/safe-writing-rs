@@ -68,8 +68,8 @@ export async function movePassage(from: number, to: number): Promise<void> {
   return invoke('move_passage', { from, to });
 }
 
-export async function insertImage(imageData: number[]): Promise<string> {
-  return invoke('insert_image', { imageData });
+export async function insertImage(imageDataB64: string): Promise<string> {
+  return invoke('insert_image', { imageDataB64 });
 }
 
 export async function getImages(): Promise<ImageInfo[]> {
@@ -128,7 +128,7 @@ export async function updateCopilotSettings(settings: CopilotSettings): Promise<
   return invoke('update_copilot_settings', { settings });
 }
 
-export async function readClipboardImages(): Promise<{ name: string; data: number[] }[]> {
+export async function readClipboardImages(): Promise<{ name: string; data: string }[]> {
   return invoke('read_clipboard_images');
 }
 

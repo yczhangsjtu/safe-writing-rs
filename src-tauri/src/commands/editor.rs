@@ -186,9 +186,14 @@ pub fn move_passage(
 #[tauri::command]
 pub fn insert_image(
     app: tauri::AppHandle,
-    image_data: Vec<u8>,
+    image_data_b64: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
+    use base64::Engine;
+    let image_data = base64::engine::general_purpose::STANDARD
+        .decode(&image_data_b64)
+        .map_err(|e| format!("Failed to decode base64 image: {}", e))?;
+
     let mut current_session = state.current_session.lock().map_err(|e| e.to_string())?;
     match current_session.as_mut() {
         Some(session) => {
@@ -367,7 +372,8 @@ pub fn append_file(
 #[derive(serde::Serialize)]
 pub struct ClipboardImage {
     pub name: String,
-    pub data: Vec<u8>,
+    /// base64-encoded image bytes (avoids sending large arrays via JSON)
+    pub data: String,
 }
 
 fn run_cli_uris() -> Option<Vec<String>> {
@@ -401,7 +407,9 @@ pub fn read_clipboard_images() -> Result<Vec<ClipboardImage>, String> {
             let name = std::path::Path::new(&path)
                 .file_name().and_then(|n| n.to_str()).unwrap_or("image.png").to_string();
             if let Ok(data) = std::fs::read(&path) {
-                images.push(ClipboardImage { name, data });
+                use base64::Engine;
+                let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
+                images.push(ClipboardImage { name, data: b64 });
             }
         }
         if images.is_empty() { Err("No image files found".to_string()) }

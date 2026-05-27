@@ -19,8 +19,28 @@
   let vditor = $state<Vditor>();
   let initialized = $state(false);
   let prevStoredContent = $state('');
-  let imageMap: Map<string, string> = new Map();
+  let imageMap: Map<string, string> = new Map();          // digest → base64
+  let digestToBlob: Map<string, string> = new Map();       // digest → blobUrl
+  let blobToDigest: Map<string, string> = new Map();       // blobUrl → digest
   let suppressInput = $state(false);
+
+  function base64ToBytes(b64: string): Uint8Array {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  function getOrCreateBlobUrl(digest: string, b64: string): string {
+    let url = digestToBlob.get(digest);
+    if (!url) {
+      const blob = new Blob([base64ToBytes(b64)], { type: 'image/png' });
+      url = URL.createObjectURL(blob);
+      digestToBlob.set(digest, url);
+      blobToDigest.set(url, digest);
+    }
+    return url;
+  }
 
   function fileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -42,18 +62,29 @@
     } catch (_) {}
   }
 
+  // Convert digests → blob URLs for display (tiny strings, fast for Vditor)
   function toDisplay(md: string): string {
     if (imageMap.size === 0) return md;
     return md.replace(
       /!\[([^\]]*)\]\(([a-fA-F0-9]{64})\)/g,
       (_m, alt, digest) => {
         const b64 = imageMap.get(digest.toLowerCase());
-        return b64 ? `![${alt}](data:image/png;base64,${b64})` : _m;
+        return b64 ? `![${alt}](${getOrCreateBlobUrl(digest, b64)})` : _m;
       }
     );
   }
 
+  // Convert blob URLs (and legacy data URIs) → digests for storage
   function toStorage(md: string): string {
+    // 1) blob: URLs (current path)
+    md = md.replace(
+      /!\[([^\]]*)\]\((blob:[^)\s]+)\)/g,
+      (_m, alt, blobUrl) => {
+        const digest = blobToDigest.get(blobUrl);
+        return digest ? `![${alt}](${digest})` : _m;
+      }
+    );
+    // 2) Legacy data: URIs
     return md.replace(
       /!\[([^\]]*)\]\(data:image\/[^;]+;base64,([A-Za-z0-9+/=]+)\)/g,
       (_m, _alt, b64) => {
@@ -95,19 +126,24 @@
       const isImage = file.type?.startsWith('image/') || file.name?.match(/\.(png|jpg|jpeg|gif|webp|bmp)$/i);
       if (!isImage) continue;
       try {
-        const buffer = await file.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
-        const b64 = await fileToBase64(file);
-        const digest = await api.insertImage(Array.from(bytes));
-        imageMap.set(digest, b64);
-        vditor!.insertValue(`![image](data:image/png;base64,${b64})`);
+        // Create blob URL from File — instant, tiny string (~40 bytes)
+        const blobUrl = URL.createObjectURL(file);
+        // Insert blob URL immediately (user sees image right away, no freeze)
+        vditor!.insertValue(`![image](${blobUrl})`);
         inserted = true;
+        // In parallel: compute base64 → send to backend → get digest
+        const b64 = await fileToBase64(file);
+        const digest = await api.insertImage(b64);
+        imageMap.set(digest, b64);
+        blobToDigest.set(blobUrl, digest);
+        digestToBlob.set(digest, blobUrl);
       } catch (e) {
         console.error('[MarkdownEditor] image insert failed:', e);
       }
     }
 
     if (inserted && vditor) {
+      // Save content — blob URLs are converted to digests by toStorage
       const stored = toStorage(vditor.getValue());
       if (stored !== prevStoredContent) {
         prevStoredContent = stored;
@@ -152,16 +188,16 @@
       const images = await api.readClipboardImages();
       if (!images?.length) return;
       for (const img of images) {
-        const bytes = new Uint8Array(img.data);
-        const b64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve((reader.result as string).split(',')[1]);
-          reader.onerror = reject;
-          reader.readAsDataURL(new Blob([bytes]));
-        });
-        const digest = await api.insertImage(Array.from(bytes));
+        const b64 = img.data; // already base64 from Rust
+        // Create blob URL from decoded bytes — renders instantly in Vditor
+        const blob = new Blob([base64ToBytes(b64)], { type: 'image/png' });
+        const blobUrl = URL.createObjectURL(blob);
+        vditor!.insertValue(`![image](${blobUrl})`);
+
+        const digest = await api.insertImage(b64);
         imageMap.set(digest, b64);
-        vditor!.insertValue(`![image](data:image/png;base64,${b64})`);
+        blobToDigest.set(blobUrl, digest);
+        digestToBlob.set(digest, blobUrl);
       }
       const stored = toStorage(vditor!.getValue());
       if (stored !== prevStoredContent) {
