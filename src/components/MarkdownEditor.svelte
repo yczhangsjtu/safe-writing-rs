@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import Vditor from 'vditor';
   import 'vditor/dist/index.css';
   import { config } from '../lib/stores';
@@ -121,10 +121,14 @@
   // Process image files: encrypt and insert into editor
   async function processImageFiles(files: FileList | File[]) {
     const arr = Array.from(files);
+    console.log('[processImageFiles] got', arr.length, 'files:', arr.map(f => ({ name: f.name, type: f.type, size: f.size })));
     let inserted = false;
     for (const file of arr) {
       const isImage = file.type?.startsWith('image/') || file.name?.match(/\.(png|jpg|jpeg|gif|webp|bmp)$/i);
-      if (!isImage) continue;
+      if (!isImage) {
+        console.log('[processImageFiles] skipping non-image:', file.name, file.type);
+        continue;
+      }
       try {
         // Create blob URL from File — instant, tiny string (~40 bytes)
         const blobUrl = URL.createObjectURL(file);
@@ -161,10 +165,15 @@
 
     const files: File[] = [];
     for (const item of Array.from(items)) {
-      if (item.kind !== 'file' || !item.type.startsWith('image/')) continue;
+      if (item.kind !== 'file') {
+        console.log('[imageFilesFromItems] skipping item kind=', item.kind, 'type=', item.type);
+        continue;
+      }
       const file = item.getAsFile();
-      if (file) files.push(file);
+      console.log('[imageFilesFromItems] kind=file type=', item.type, 'getAsFile()=', file ? `${file.name} (${file.type}, ${file.size}b)` : 'null');
+      if (file && isImageFile(file)) files.push(file);
     }
+    console.log('[imageFilesFromItems] returning', files.length, 'files');
     return files;
   }
 
@@ -207,25 +216,152 @@
     } catch (_) {}
   }
 
-  // Use capture phase to intercept drop/paste BEFORE Vditor's handlers
-  function setupImageHandlers(el: HTMLElement) {
-    el.addEventListener('dragover', (e: DragEvent) => {
-      const data = e.dataTransfer;
-      if (data && (data.types.includes('Files') || imageFilesFromItems(data.items).length > 0)) {
-        e.preventDefault();
-        e.stopPropagation();
-        data.dropEffect = 'copy';
-      }
-    }, true); // capture phase
+  // Process image URIs from backend (drop or clipboard fallback for Linux)
+  async function processImageUris(uris: string[]) {
+    try {
+      console.log('[processImageUris] input URIs:', uris);
+      const imageUris = uris.filter(u => /\.(png|jpg|jpeg|gif|webp|bmp)$/i.test(u));
+      console.log('[processImageUris] filtered image URIs:', imageUris);
+      if (!imageUris.length) return;
+      const images = await api.readImageFiles(imageUris);
+      console.log('[processImageUris] readImageFiles returned', images?.length ?? 0, 'images');
+      if (!images?.length) return;
+      for (const img of images) {
+        const b64 = img.data;
+        const blob = new Blob([base64ToBytes(b64)], { type: 'image/png' });
+        const blobUrl = URL.createObjectURL(blob);
+        vditor!.insertValue(`![image](${blobUrl})`);
 
-    el.addEventListener('drop', (e: DragEvent) => {
-      const files = imageFilesFromTransfer(e.dataTransfer);
-      if (files.length > 0) {
-        e.preventDefault();
-        e.stopPropagation();
-        void processImageFiles(files);
+        const digest = await api.insertImage(b64);
+        imageMap.set(digest, b64);
+        blobToDigest.set(blobUrl, digest);
+        digestToBlob.set(digest, blobUrl);
       }
-    }, true); // capture phase
+      const stored = toStorage(vditor!.getValue());
+      if (stored !== prevStoredContent) {
+        prevStoredContent = stored;
+        await onContentChange(stored);
+      }
+    } catch (_) {}
+  }
+
+  // Use capture phase to intercept drop/paste BEFORE Vditor's handlers.
+  // Listen on document for dragover/drop to guarantee we fire before Vditor-internal handlers.
+  function setupImageHandlers(el: HTMLElement) {
+    const isInside = (e: Event) => el.contains(e.target as Node);
+
+    const dragOver = (e: DragEvent) => {
+      if (!isInside(e)) {
+        return;
+      }
+      const data = e.dataTransfer;
+      if (!data) return;
+      console.log('[dragOver] types:', [...data.types], 'items:', data.items?.length ?? 0, 'files:', data.files?.length ?? 0);
+      // Accept all drops over the editor — we inspect types in the drop handler.
+      e.preventDefault();
+      e.stopPropagation();
+      data.dropEffect = 'copy';
+    };
+
+    const drop = (e: DragEvent) => {
+      if (!isInside(e)) {
+        return;
+      }
+      const data = e.dataTransfer;
+      if (!data) return;
+
+      console.log('[drop] types:', [...data.types], 'items:', data.items?.length ?? 0, 'files:', data.files?.length ?? 0);
+      e.preventDefault();
+      e.stopPropagation();
+
+      // 1) Try File objects (kind=file items)
+      const files = imageFilesFromTransfer(data);
+      console.log('[drop] imageFilesFromTransfer returned', files.length, 'files');
+      if (files.length > 0) {
+        void processImageFiles(files);
+        return;
+      }
+
+      // 2) Try getData first (works for text/html on WebKitGTK), then getAsString
+      void (async () => {
+        const extractUriFromHtml = (html: string): string | null => {
+          // href="file://..." (standard link)
+          for (const re of [/href="(file:\/\/[^"]+)"/i, /href='(file:\/\/[^']+)'/i]) {
+            const m = html.match(re);
+            if (m) return m[1];
+          }
+          // Nautilus/GNOME: <a style="...">file:///path</a> (URI as text content)
+          const m = html.match(/>(file:\/\/[^<]+)<\/a>/i);
+          return m ? m[1] : null;
+        };
+
+        const tryExtractUris = (text: string, source: string): string[] => {
+          if (!text) return [];
+          // Direct URI-list format
+          let uris = text.split(/[\r\n]+/).map(s => s.trim()).filter(s =>
+            s.startsWith('file://') && /\.(png|jpg|jpeg|gif|webp|bmp)$/i.test(s)
+          );
+          // Try extracting from HTML
+          if (!uris.length) {
+            const uri = extractUriFromHtml(text);
+            if (uri && /\.(png|jpg|jpeg|gif|webp|bmp)$/i.test(uri)) uris = [uri];
+          }
+          if (uris.length > 0) console.log(`[drop] found URIs via ${source}:`, uris);
+          return uris;
+        };
+
+        // First pass: try getData (works for text/html in WebKitGTK)
+        for (const type of data.types) {
+          if (type.includes('Files')) continue;
+          try {
+            const text = data.getData(type);
+            console.log(`[drop] getData("${type}") len=${text?.length ?? 0}:`, text ? `head=[${text.substring(0, 150)}] tail=[${text.substring(Math.max(0, text.length - 200))}]` : '(empty)');
+            const uris = tryExtractUris(text, `getData(${type})`);
+            if (uris.length > 0) {
+              void processImageUris(uris);
+              return;
+            }
+          } catch (err) {
+            console.log(`[drop] getData("${type}") threw:`, err);
+          }
+        }
+
+        // Second pass: getAsString with timeout for stubborn types
+        if (data.items) {
+          for (let i = 0; i < data.items.length; i++) {
+            const item = data.items[i];
+            if (item.kind !== 'string') continue;
+            console.log(`[drop] item[${i}]: kind=${item.kind} type="${item.type}"`);
+            try {
+              const text = await new Promise<string>((resolve) => {
+                let settled = false;
+                const timer = setTimeout(() => { if (!settled) { settled = true; resolve(''); } }, 200);
+                item.getAsString((s) => { if (!settled) { settled = true; clearTimeout(timer); resolve(s); } });
+              });
+              console.log(`[drop] getAsString("${item.type}") len=${text?.length ?? 0}:`, text ? `head=[${text.substring(0, 150)}] tail=[${text.substring(Math.max(0, text.length - 200))}]` : '(empty/timeout)');
+              if (!text) continue;
+              const uris = tryExtractUris(text, `getAsString(${item.type})`);
+              if (uris.length > 0) {
+                void processImageUris(uris);
+                return;
+              }
+            } catch (err) {
+              console.log(`[drop] getAsString threw:`, err);
+            }
+          }
+        }
+        console.log('[drop] no image data found');
+      })();
+    };
+
+    document.addEventListener('dragover', dragOver, true);
+    document.addEventListener('drop', drop, true);
+
+    // Cleanup on component destroy
+    const cleanup = () => {
+      document.removeEventListener('dragover', dragOver, true);
+      document.removeEventListener('drop', drop, true);
+    };
 
     el.addEventListener('paste', (e: ClipboardEvent) => {
       const files = imageFilesFromClipboard(e.clipboardData);
@@ -241,11 +377,15 @@
         void processImagesFromBackend();
       }
     }, true); // capture phase
+
+    return cleanup;
   }
+
+  let handlersCleanup: (() => void) | undefined;
 
   onMount(async () => {
     if (!editorRoot) return;
-    setupImageHandlers(editorRoot);
+    handlersCleanup = setupImageHandlers(editorRoot);
     await refreshImageMap();
     prevStoredContent = content;
     const displayContent = toDisplay(content);
@@ -279,6 +419,10 @@
         initialized = true;
       },
     });
+  });
+
+  onDestroy(() => {
+    handlersCleanup?.();
   });
 </script>
 

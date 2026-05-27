@@ -132,6 +132,10 @@ export async function readClipboardImages(): Promise<{ name: string; data: strin
   return invoke('read_clipboard_images');
 }
 
+export async function readImageFiles(uris: string[]): Promise<{ name: string; data: string }[]> {
+  return invoke('read_image_files', { uris });
+}
+
 export async function abortGeneration(): Promise<void> {
   return invoke('abort_generation');
 }

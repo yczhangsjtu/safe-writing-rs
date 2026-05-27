@@ -41,6 +41,7 @@ pub fn run() {
             commands::editor::is_dirty,
             commands::editor::append_file,
             commands::editor::read_clipboard_images,
+            commands::editor::read_image_files,
             commands::config::get_config,
             commands::config::update_config,
             commands::config::get_data_dir,

@@ -394,26 +394,38 @@ fn run_cli_uris() -> Option<Vec<String>> {
     None
 }
 
+fn read_images_from_uris(uris: &[String]) -> Vec<ClipboardImage> {
+    let mut images = Vec::new();
+    for line in uris {
+        let path = if let Some(p) = line.strip_prefix("file://") {
+            p.to_string()
+        } else if line.starts_with('/') {
+            line.clone()
+        } else { continue };
+        let name = std::path::Path::new(&path)
+            .file_name().and_then(|n| n.to_str()).unwrap_or("image.png").to_string();
+        if let Ok(data) = std::fs::read(&path) {
+            use base64::Engine;
+            let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
+            images.push(ClipboardImage { name, data: b64 });
+        }
+    }
+    images
+}
+
 #[tauri::command]
 pub fn read_clipboard_images() -> Result<Vec<ClipboardImage>, String> {
         let uris = run_cli_uris().ok_or("No image in clipboard".to_string())?;
-        let mut images = Vec::new();
-        for line in &uris {
-            let path = if let Some(p) = line.strip_prefix("file://") {
-                p.to_string()
-            } else if line.starts_with('/') {
-                line.clone()
-            } else { continue };
-            let name = std::path::Path::new(&path)
-                .file_name().and_then(|n| n.to_str()).unwrap_or("image.png").to_string();
-            if let Ok(data) = std::fs::read(&path) {
-                use base64::Engine;
-                let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
-                images.push(ClipboardImage { name, data: b64 });
-            }
-        }
+        let images = read_images_from_uris(&uris);
         if images.is_empty() { Err("No image files found".to_string()) }
         else { Ok(images) }
+}
+
+#[tauri::command]
+pub fn read_image_files(uris: Vec<String>) -> Result<Vec<ClipboardImage>, String> {
+    let images = read_images_from_uris(&uris);
+    if images.is_empty() { Err("No image files found".to_string()) }
+    else { Ok(images) }
 }
 
 #[cfg(test)]
