@@ -5,6 +5,7 @@ use sha2::Digest;
 use crate::config::Config;
 use crate::data_structures::PlainText;
 use crate::commands::copilot::CopilotSettings;
+use crate::agent::{Workspace, Session};
 
 pub struct EditorSession {
     pub filename: String,
@@ -55,6 +56,8 @@ pub struct AppStateResponse {
     pub is_dirty: bool,
     pub num_images: usize,
     pub copilot_settings: CopilotSettings,
+    pub workspace: Workspace,
+    pub session: Session,
 }
 
 pub struct AppState {
@@ -74,6 +77,8 @@ impl AppState {
                 is_dirty: s.dirty,
                 num_images: s.plaintext.num_images(),
                 copilot_settings: s.copilot_settings.clone(),
+                workspace: s.plaintext.workspace.clone(),
+                session: s.plaintext.session.clone(),
             },
             None => AppStateResponse {
                 current_file: None,
@@ -82,6 +87,8 @@ impl AppState {
                 is_dirty: false,
                 num_images: 0,
                 copilot_settings: CopilotSettings::default(),
+                workspace: Workspace::default(),
+                session: Session::default(),
             },
         }
     }

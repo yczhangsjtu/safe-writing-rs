@@ -8,6 +8,7 @@ pub mod png;
 pub mod safe_note;
 pub mod config;
 pub mod state;
+pub mod agent;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -53,7 +54,31 @@ pub fn run() {
             commands::copilot::save_ai_settings,
             commands::copilot::load_ai_settings,
             commands::copilot::clear_copilot,
+            commands::copilot::reset_copilot_settings,
             commands::state::get_app_state,
+            // Agent commands
+            commands::agent::get_workspace,
+            commands::agent::get_characters,
+            commands::agent::add_character,
+            commands::agent::update_character,
+            commands::agent::remove_character,
+            commands::agent::get_relationships,
+            commands::agent::add_relationship,
+            commands::agent::update_relationship,
+            commands::agent::remove_relationship,
+            commands::agent::get_kv_store,
+            commands::agent::set_kv,
+            commands::agent::delete_kv,
+            commands::agent::get_session,
+            commands::agent::edit_session_message,
+            commands::agent::delete_session_message,
+            commands::agent::compress_session,
+            commands::agent::clear_session,
+            commands::agent::get_tool_definitions,
+            commands::agent::confirm_tool_call,
+            commands::agent::execute_confirmed_tool,
+            commands::agent::get_pending_tool_calls,
+            commands::agent::send_agent_message,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

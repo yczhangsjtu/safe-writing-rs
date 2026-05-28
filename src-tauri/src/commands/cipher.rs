@@ -21,7 +21,23 @@ pub fn decrypt_file(
     password: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<DecryptResult, String> {
-    let plaintext = PlainText::decrypt(&password, &ciphertext)
+    // If ciphertext is empty, read from file
+    let actual_ciphertext = if ciphertext.is_empty() {
+        let config = state.config.lock().map_err(|e| e.to_string())?;
+        let data_dir = crate::config::ensure_data_dir(&config.data_dir)?;
+        drop(config);
+
+        let file_path = data_dir.join(format!("{}.safe", filename));
+        if !file_path.exists() {
+            return Err(format!("File '{}' does not exist", filename));
+        }
+        std::fs::read_to_string(&file_path)
+            .map_err(|e| format!("Failed to read file: {}", e))?
+    } else {
+        ciphertext
+    };
+
+    let plaintext = PlainText::decrypt(&password, &actual_ciphertext)
         .map_err(|e| format!("Decryption failed: {:?}", e))?;
 
     let session = EditorSession::new(filename.clone(), plaintext.clone(), password);

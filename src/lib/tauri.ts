@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { Passage, Config, FileInfo, OpenFileResult, DecryptResult, ImageInfo, CopilotSettings, CopilotMessage } from '../types';
+import type { Passage, Config, FileInfo, OpenFileResult, DecryptResult, ImageInfo, CopilotSettings, CopilotMessage, Workspace, Session, Character, Relationship, KeyValueEntry, SessionMessage, ToolDefinition, ToolCall, ToolResult } from '../types';
 
 // Check if running in Tauri environment
 const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
@@ -11,6 +11,8 @@ export interface AppStateResponse {
   is_dirty: boolean;
   num_images: number;
   copilot_settings: CopilotSettings;
+  workspace?: Workspace;
+  session?: Session;
 }
 
 export async function listFiles(): Promise<string[]> {
@@ -149,18 +151,128 @@ export async function abortGeneration(): Promise<void> {
   return invoke('abort_generation');
 }
 
+export async function resetCopilotSettings(): Promise<CopilotSettings> {
+  return invoke('reset_copilot_settings');
+}
+
 export async function sendMessage(
   prompt: string,
-  currentPassage: string,
-  buffers: string[],
-  systemPrompt: string,
-  messages: CopilotMessage[]
+  currentPassage: string
 ): Promise<void> {
   return invoke('send_message', {
     prompt,
-    currentPassage,
-    buffers,
-    systemPrompt,
-    messages
+    currentPassage
   });
+}
+
+// ========== Workspace API ==========
+
+export async function getWorkspace(): Promise<Workspace> {
+  return invoke('get_workspace');
+}
+
+export async function getCharacters(): Promise<Character[]> {
+  return invoke('get_characters');
+}
+
+export async function addCharacter(name: string, description: string): Promise<Character> {
+  return invoke('add_character', { name, description });
+}
+
+export async function updateCharacter(
+  characterId: number,
+  name?: string,
+  description?: string,
+  aliases?: string[],
+  traits?: string[],
+  notes?: string
+): Promise<Character> {
+  return invoke('update_character', { characterId, name, description, aliases, traits, notes });
+}
+
+export async function removeCharacter(characterId: number): Promise<Character> {
+  return invoke('remove_character', { characterId });
+}
+
+export async function getRelationships(): Promise<Relationship[]> {
+  return invoke('get_relationships');
+}
+
+export async function addRelationship(
+  characterAId: number,
+  characterBId: number,
+  relationshipType: string,
+  description: string
+): Promise<Relationship> {
+  return invoke('add_relationship', { characterAId, characterBId, relationshipType, description });
+}
+
+export async function updateRelationship(
+  relationshipId: number,
+  relationshipType?: string,
+  description?: string
+): Promise<Relationship> {
+  return invoke('update_relationship', { relationshipId, relationshipType, description });
+}
+
+export async function removeRelationship(relationshipId: number): Promise<Relationship> {
+  return invoke('remove_relationship', { relationshipId });
+}
+
+export async function getKvStore(): Promise<KeyValueEntry[]> {
+  return invoke('get_kv_store');
+}
+
+export async function setKv(key: string, value: string, category: string, notes: string): Promise<void> {
+  return invoke('set_kv', { key, value, category, notes });
+}
+
+export async function deleteKv(key: string): Promise<KeyValueEntry> {
+  return invoke('delete_kv', { key });
+}
+
+// ========== Session API ==========
+
+export async function getSession(): Promise<Session> {
+  return invoke('get_session');
+}
+
+export async function editSessionMessage(messageId: number, newContent: string): Promise<void> {
+  return invoke('edit_session_message', { messageId, newContent });
+}
+
+export async function deleteSessionMessage(messageId: number): Promise<SessionMessage> {
+  return invoke('delete_session_message', { messageId });
+}
+
+export async function compressSession(summary: string): Promise<void> {
+  return invoke('compress_session', { summary });
+}
+
+export async function clearSession(): Promise<void> {
+  return invoke('clear_session');
+}
+
+// ========== Agent API ==========
+
+export async function getToolDefinitions(): Promise<ToolDefinition[]> {
+  return invoke('get_tool_definitions');
+}
+
+export async function confirmToolCall(toolCallId: string, confirmed: boolean): Promise<void> {
+  return invoke('confirm_tool_call', { toolCallId, confirmed });
+}
+
+export async function executeConfirmedTool(toolCallId: string): Promise<ToolResult> {
+  return invoke('execute_confirmed_tool', { toolCallId });
+}
+
+export async function getPendingToolCalls(): Promise<ToolCall[]> {
+  return invoke('get_pending_tool_calls');
+}
+
+// ========== Agent Message ==========
+
+export async function sendAgentMessage(prompt: string, currentPassage: string): Promise<void> {
+  return invoke('send_agent_message', { prompt, currentPassage });
 }

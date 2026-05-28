@@ -3,7 +3,11 @@ use crate::{
     error::Error,
 };
 
+use crate::agent::{Workspace, Session};
+
 pub(crate) const IMAGE_SEP: u8 = 0x88;
+pub(crate) const WORKSPACE_SEP: &str = ":WORKSPACE";
+pub(crate) const SESSION_SEP: &str = ":SESSION";
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Passage {
@@ -38,6 +42,8 @@ pub struct PlainText {
     pub content: Vec<Passage>,
     #[serde(skip)]
     pub images: Vec<Vec<u8>>,
+    pub workspace: Workspace,
+    pub session: Session,
 }
 
 impl PlainText {
@@ -46,6 +52,24 @@ impl PlainText {
             next_id,
             content,
             images,
+            workspace: Workspace::default(),
+            session: Session::default(),
+        }
+    }
+
+    pub fn new_with_workspace_session(
+        next_id: usize,
+        content: Vec<Passage>,
+        images: Vec<Vec<u8>>,
+        workspace: Workspace,
+        session: Session,
+    ) -> Self {
+        Self {
+            next_id,
+            content,
+            images,
+            workspace,
+            session,
         }
     }
 
@@ -59,6 +83,22 @@ impl PlainText {
 
     pub fn from_passages_images(content: Vec<Passage>, images: Vec<Vec<u8>>) -> Self {
         Self::new(0, content, images)
+    }
+
+    pub fn workspace(&self) -> &Workspace {
+        &self.workspace
+    }
+
+    pub fn workspace_mut(&mut self) -> &mut Workspace {
+        &mut self.workspace
+    }
+
+    pub fn session(&self) -> &Session {
+        &self.session
+    }
+
+    pub fn session_mut(&mut self) -> &mut Session {
+        &mut self.session
     }
 
     pub fn num_passages(&self) -> usize {
@@ -137,20 +177,38 @@ impl PlainText {
     }
 
     pub fn encode(&self) -> Vec<u8> {
-        let passages_data = (self
+        // Encode passages
+        let passages_data = self
             .content
             .iter()
             .map(|p| p.encode())
             .collect::<Vec<_>>()
-            .join("|")
-            + ":FontSize=24")
-            .as_bytes()
-            .to_vec();
+            .join("|");
+
+        // Build the text portion with workspace and session (base64 encoded)
+        let workspace_json = self.workspace.to_json();
+        let session_json = self.session.to_json();
+
+        // Base64 encode the JSON to avoid special characters interfering with parsing
+        let workspace_b64 = crate::encode::base64_encode(workspace_json.as_bytes());
+        let session_b64 = crate::encode::base64_encode(session_json.as_bytes());
+
+        let text_data = format!(
+            "{}{}{}{}{}:FontSize=24",
+            passages_data,
+            WORKSPACE_SEP,
+            workspace_b64,
+            SESSION_SEP,
+            session_b64
+        );
+
+        let text_bytes = text_data.as_bytes().to_vec();
+
         if self.images.is_empty() {
-            passages_data
+            text_bytes
         } else {
             vec![
-                passages_data,
+                text_bytes,
                 vec![IMAGE_SEP],
                 (self.images.len() as u32).to_le_bytes().to_vec(),
                 self.images

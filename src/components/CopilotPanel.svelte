@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { copilotSettings, passages, currentPassageIndex } from '../lib/stores';
+  import { session, pendingToolCalls, passages, currentPassageIndex } from '../lib/stores';
   import { listen } from '@tauri-apps/api/event';
   import * as api from '../lib/tauri';
-  import { isCommandKey, commandKeyName } from '../lib/platform';
+  import { isCommandKey } from '../lib/platform';
   import Resizable from './Resizable.svelte';
   import { onMount } from 'svelte';
 
@@ -19,85 +19,48 @@
   let userInput = $state('');
   let output = $state('');
   let waiting = $state(false);
-  let selectedText = $state('');
-  let cursorPosition = $state(Infinity); // Default to end of content
-
-  // Reset cursor position to end when passage changes (user hasn't clicked yet)
-  $effect(() => {
-    // Track passage index changes
-    $currentPassageIndex;
-    cursorPosition = Infinity;
-  });
-  let collapsedBuffers = $state(false);
-  let collapsedConversation = $state(false);
-  let editingIndex = $state<number | null>(null);
+  let editingId = $state<number | null>(null);
   let editText = $state('');
-  let showFavoriteDropdown = $state(false);
 
-  function closeDropdownOnClick(e: MouseEvent) {
-    if (showFavoriteDropdown) {
-      const target = e.target as HTMLElement;
-      if (!target.closest('.favorite-prompts-bar')) {
-        showFavoriteDropdown = false;
-      }
-    }
-  }
+  // Track which tool cards are expanded
+  let expandedTools = $state<Set<string>>(new Set());
 
-  onMount(() => {
-    window.addEventListener('click', closeDropdownOnClick);
-    return () => {
-      window.removeEventListener('click', closeDropdownOnClick);
-    };
-  });
-
-  function makeBriefSummary(text: string, maxLen: number): string {
-    if (text.length <= maxLen) return text;
-    const half = maxLen / 2;
-    return text.slice(0, half) + '...' + text.slice(text.length - half);
-  }
-
-  // Listen for selected text and cursor position changes from Editor
+  // Listen for streaming events
   $effect(() => {
-    const unlisten = listen<{ selected: string; cursorPos: number }>('editor-selection', (event) => {
-      selectedText = event.payload.selected;
-      cursorPosition = event.payload.cursorPos;
-    });
-    return async () => {
-      (await unlisten)();
-    };
-  });
-
-  // Listen for streaming events from backend
-  $effect(() => {
-    const unlistenUserMessage = listen<{role: string; content: string; display: string}>('copilot-user-message', (event) => {
-      copilotSettings.update(s => {
-        s.messages = [...s.messages, event.payload];
-        return s;
-      });
-    });
-
-    const unlistenStart = listen('copilot-start', () => {
+    const unlistenStart = listen('agent-start', () => {
       output = '';
     });
 
-    const unlistenChunk = listen<string>('copilot-chunk', (event) => {
+    const unlistenChunk = listen<string>('agent-chunk', (event) => {
       output += event.payload;
     });
 
-    const unlistenDone = listen<{role: string; content: string; display: string}>('copilot-done', (event) => {
-      copilotSettings.update(s => {
-        s.messages = [...s.messages, event.payload];
+    const unlistenDone = listen<{id: number, role: string, content: string, tool_calls?: any[]}>('agent-done', (event) => {
+      session.update(s => {
+        s.messages.push({
+          id: event.payload.id,
+          role: event.payload.role,
+          content: event.payload.content,
+          tool_calls: event.payload.tool_calls,
+          tool_call_id: undefined,
+          timestamp: Date.now() / 1000,
+          compressed: false,
+        });
         return s;
       });
       output = '';
       waiting = false;
     });
 
+    const unlistenToolCall = listen<any>('agent-tool-call', (event) => {
+      pendingToolCalls.update(p => [...p, event.payload]);
+    });
+
     return async () => {
-      (await unlistenUserMessage)();
       (await unlistenStart)();
       (await unlistenChunk)();
       (await unlistenDone)();
+      (await unlistenToolCall)();
     };
   });
 
@@ -114,13 +77,22 @@
     output = '';
 
     try {
-      await api.sendMessage(
-        prompt,
-        getCurrentPassageContent(),
-        $copilotSettings.buffers,
-        $copilotSettings.system_prompt,
-        $copilotSettings.messages
-      );
+      // Add user message to session
+      session.update(s => {
+        s.messages.push({
+          id: s.next_message_id,
+          role: 'user',
+          content: prompt,
+          tool_calls: undefined,
+          tool_call_id: undefined,
+          timestamp: Date.now() / 1000,
+          compressed: false,
+        });
+        s.next_message_id++;
+        return s;
+      });
+
+      await api.sendAgentMessage(prompt, getCurrentPassageContent());
     } catch (e: any) {
       output = `Error: ${e?.message || e}`;
       waiting = false;
@@ -134,713 +106,579 @@
     }
   }
 
-  async function handleInsert() {
-    if (!output) return;
-    const currentContent = $passages[$currentPassageIndex]?.content || '';
-    // Insert at cursor position, or at end if position is Infinity
-    const insertPos = cursorPosition === Infinity ? currentContent.length : cursorPosition;
-    const beforeCursor = currentContent.slice(0, insertPos);
-    const afterCursor = currentContent.slice(insertPos);
-    const newContent = beforeCursor + '\n' + output + '\n' + afterCursor;
-    await api.updatePassageContent($currentPassageIndex, newContent);
-    output = '';
-  }
-
-  async function handleInsertFromHistory(index: number) {
-    const msg = $copilotSettings.messages[index];
-    if (!msg || msg.role !== 'assistant') return;
-    const currentContent = $passages[$currentPassageIndex]?.content || '';
-    // Insert at cursor position, or at end if position is Infinity
-    const insertPos = cursorPosition === Infinity ? currentContent.length : cursorPosition;
-    const beforeCursor = currentContent.slice(0, insertPos);
-    const afterCursor = currentContent.slice(insertPos);
-    const newContent = beforeCursor + '\n' + msg.content + '\n' + afterCursor;
-    await api.updatePassageContent($currentPassageIndex, newContent);
-  }
-
-  function handleClearHistory() {
-    copilotSettings.update(s => {
-      s.messages = [];
-      return s;
-    });
-  }
-
-  // Save copilot settings (will trigger state-changed which updates .ai passage)
-  async function saveSettings() {
-    await api.saveCopilotSettings($copilotSettings);
-  }
-
-  async function handleAddBuffer() {
-    const textToAdd = selectedText || getCurrentPassageContent();
-    if (!textToAdd) return;
-
-    copilotSettings.update(s => {
-      const emptyIndex = s.buffers.findIndex((b: string) => b === '');
-      if (emptyIndex >= 0) {
-        s.buffers[emptyIndex] = textToAdd.slice(0, 100);
-      }
-      return s;
-    });
-    await saveSettings();
-  }
-
-  async function handleRemoveBuffer(index: number) {
-    copilotSettings.update(s => {
-      s.buffers[index] = '';
-      return s;
-    });
-    await saveSettings();
-  }
-
-  async function handleStopGeneration() {
+  async function handleStop() {
     await api.abortGeneration();
     waiting = false;
   }
 
-  function selectFavoritePrompt(prompt: string) {
-    userInput = prompt;
-    showFavoriteDropdown = false;
-  }
-
-  function isFavoritePrompt(content: string): boolean {
-    return $copilotSettings.favorite_prompts.some(f => f.prompt === content);
-  }
-
-  async function toggleFavoritePrompt(index: number) {
-    const msg = $copilotSettings.messages[index];
-    if (msg.role !== 'user') return;
-
-    const content = msg.content;
-    const isFavorite = isFavoritePrompt(content);
-
-    copilotSettings.update(s => {
-      if (isFavorite) {
-        // Remove from favorites
-        s.favorite_prompts = s.favorite_prompts.filter(f => f.prompt !== content);
-      } else {
-        // Add to favorites with a brief name
-        const name = content.slice(0, 30) + (content.length > 30 ? '...' : '');
-        s.favorite_prompts = [...s.favorite_prompts, { name, prompt: content }];
-      }
-      return s;
-    });
-    await saveSettings();
-  }
-
-  function handleDeleteMessage(index: number) {
-    copilotSettings.update(s => {
-      s.messages = s.messages.filter((_, i) => i !== index);
-      return s;
-    });
-  }
-
-  // ===== Regenerate: remove assistant reply and re-send the preceding user message =====
-  async function handleRegenerate(assistantIndex: number) {
-    if (waiting) return;
-
-    const userIndex = assistantIndex - 1;
-    if (userIndex < 0) return;
-
-    const allMessages = $copilotSettings.messages;
-    const userMsg = allMessages[userIndex];
-    if (!userMsg || userMsg.role !== 'user') return;
-
-    // Remove the user message + assistant response (and anything after).
-    // sendMessage on the backend will emit a fresh user message from the prompt.
-    copilotSettings.update(s => {
-      s.messages = s.messages.slice(0, userIndex);
-      return s;
-    });
-
-    waiting = true;
-    output = '';
-
+  async function handleConfirmTool(tc: any) {
     try {
-      await api.sendMessage(
-        userMsg.display,
-        getCurrentPassageContent(),
-        $copilotSettings.buffers,
-        $copilotSettings.system_prompt,
-        $copilotSettings.messages
-      );
-    } catch (e: any) {
-      output = `Error: ${e?.message || e}`;
-      waiting = false;
+      await api.confirmToolCall(tc.id, true);
+      const result = await api.executeConfirmedTool(tc.id);
+      pendingToolCalls.update(p => p.filter(t => t.id !== tc.id));
+    } catch (e) {
+      console.error('Tool execution failed:', e);
     }
   }
 
-  // ===== Edit message inline =====
-  function startEditMessage(index: number) {
-    const msg = $copilotSettings.messages[index];
-    if (!msg || msg.role !== 'user') return;
-    editingIndex = index;
-    editText = msg.display;
+  async function handleCancelTool(tc: any) {
+    try {
+      await api.confirmToolCall(tc.id, false);
+      pendingToolCalls.update(p => p.filter(t => t.id !== tc.id));
+    } catch (e) {
+      console.error('Tool cancellation failed:', e);
+    }
   }
 
-  function saveEditMessage(index: number) {
-    if (editingIndex === null) return;
-    copilotSettings.update(s => {
-      s.messages[index] = {
-        ...s.messages[index],
-        display: editText,
-        content: editText, // For user messages, content === display (no buffer markup applied yet)
-      };
+  function toggleToolExpand(id: string) {
+    expandedTools.update(s => {
+      if (s.has(id)) {
+        s.delete(id);
+      } else {
+        s.add(id);
+      }
       return s;
     });
-    editingIndex = null;
+  }
+
+  function startEdit(id: number, content: string) {
+    editingId = id;
+    editText = content;
+  }
+
+  async function saveEdit() {
+    if (editingId === null) return;
+    await api.editSessionMessage(editingId, editText);
+    editingId = null;
     editText = '';
   }
 
-  function cancelEditMessage() {
-    editingIndex = null;
+  function cancelEdit() {
+    editingId = null;
     editText = '';
   }
 
+  async function deleteMessage(id: number) {
+    await api.deleteSessionMessage(id);
+  }
+
+  // Format tool name for display
+  function formatToolName(name: string): string {
+    const names: Record<string, string> = {
+      'read_passage': '📖 Read Passage',
+      'list_passages': '📋 List Passages',
+      'continue_writing': '✍️ Continue Writing',
+      'insert_text': '➕ Insert Text',
+      'replace_text': '🔄 Replace Text',
+      'create_character': '👤 Create Character',
+      'update_character': '📝 Update Character',
+      'delete_character': '🗑️ Delete Character',
+      'list_characters': '👥 List Characters',
+      'get_character': '🔍 Get Character',
+      'create_relationship': '🔗 Create Relationship',
+      'update_relationship': '📝 Update Relationship',
+      'delete_relationship': '🗑️ Delete Relationship',
+      'list_relationships': '📋 List Relationships',
+      'query_character_relationships': '🔍 Query Relationships',
+      'set_kv': '💾 Set Key-Value',
+      'get_kv': '🔍 Get Key-Value',
+      'delete_kv': '🗑️ Delete Key-Value',
+      'list_kv': '📋 List Key-Values',
+      'get_ai_settings': '⚙️ Get AI Settings',
+      'update_ai_settings': '📝 Update AI Settings',
+    };
+    return names[name] || name;
+  }
+
+  // Get status badge
+  function getStatusBadge(status: string): { text: string; class: string } {
+    switch (status) {
+      case 'Pending': return { text: '⏳ Pending', class: 'pending' };
+      case 'Confirmed': return { text: '✓ Confirmed', class: 'confirmed' };
+      case 'Executed': return { text: '✅ Done', class: 'executed' };
+      case 'Failed': return { text: '❌ Failed', class: 'failed' };
+      case 'Cancelled': return { text: '⊘ Cancelled', class: 'cancelled' };
+      default: return { text: status, class: '' };
+    }
+  }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="copilot-panel" style="width: {width}px;">
+<div class="agent-panel" style="width: {width}px;">
   <Resizable width={width} side="left" onResize={onWidthResize} onSave={onWidthSave} />
 
-  <!-- Section 1: Buffers (green-ish background) -->
-  <div class="section buffers-section" class:collapsed={collapsedBuffers}>
-    <div class="section-header">
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <div class="header-left clickable" onclick={() => collapsedBuffers = !collapsedBuffers} role="button" tabindex="0">
-        <h4>Buffers <span class="hint">#0-#9</span></h4>
-        <span class="collapse-icon">{collapsedBuffers ? '▸' : '▾'}</span>
-      </div>
-      {#if !collapsedBuffers}
-        <button class="btn-small" onclick={handleAddBuffer}>
-          {#if selectedText}Add Selection{:else}Add Current{/if}
-        </button>
-      {/if}
-    </div>
-    {#if !collapsedBuffers}
-      <div class="buffer-list">
-        {#each $copilotSettings.buffers as buf, i}
-          {#if buf}
-            <div class="buffer-item">
-              <button class="btn-remove" onclick={() => handleRemoveBuffer(i)}>×</button>
-              <span class="buffer-info">#{i}: {makeBriefSummary(buf, 25)}</span>
+  <!-- Messages -->
+  <div class="messages-area">
+    {#each $session.messages as msg}
+      <div class="msg" class:user={msg.role === 'user'} class:agent={msg.role === 'assistant'} class:tool={msg.role === 'tool'}>
+        {#if editingId === msg.id}
+          <div class="edit-box">
+            <textarea bind:value={editText} rows="3"></textarea>
+            <div class="edit-btns">
+              <button onclick={saveEdit}>Save</button>
+              <button onclick={cancelEdit}>Cancel</button>
+            </div>
+          </div>
+        {:else}
+          <div class="msg-header">
+            <span class="role">{msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'Agent' : msg.role === 'tool' ? 'Tool Result' : msg.role}</span>
+            {#if msg.role === 'user'}
+              <button class="btn-icon" onclick={() => startEdit(msg.id, msg.content)}>✎</button>
+              <button class="btn-icon" onclick={() => deleteMessage(msg.id)}>×</button>
+            {/if}
+          </div>
+
+          <!-- Tool calls embedded in message -->
+          {#if msg.tool_calls && msg.tool_calls.length > 0}
+            <div class="tool-calls-list">
+              {#each msg.tool_calls as tc}
+                <div class="tool-block" class:expanded={expandedTools.has(tc.id)} class:pending={tc.status === 'Pending'}>
+                  <div class="tool-summary" onclick={() => toggleToolExpand(tc.id)}>
+                    <span class="tool-icon">🔧</span>
+                    <span class="tool-title">{formatToolName(tc.tool_name)}</span>
+                    <span class="tool-status {getStatusBadge(tc.status).class}">{getStatusBadge(tc.status).text}</span>
+                    <span class="expand-arrow">{expandedTools.has(tc.id) ? '▼' : '▶'}</span>
+                  </div>
+
+                  {#if expandedTools.has(tc.id)}
+                    <div class="tool-details">
+                      <div class="tool-args-section">
+                        <span class="detail-label">Arguments:</span>
+                        <pre class="tool-args">{JSON.stringify(tc.arguments, null, 2)}</pre>
+                      </div>
+
+                      {#if tc.status === 'Pending'}
+                        <div class="tool-actions">
+                          <button class="btn-confirm" onclick={() => handleConfirmTool(tc)}>✓ Confirm</button>
+                          <button class="btn-reject" onclick={() => handleCancelTool(tc)}>✕ Reject</button>
+                        </div>
+                      {/if}
+                    </div>
+                  {/if}
+                </div>
+              {/each}
             </div>
           {/if}
-        {/each}
-        {#if $copilotSettings.buffers.every(b => b === '')}
-          <span class="empty-hint">No buffers</span>
+
+          <!-- Message content (hide if it's just tool call markers) -->
+          {#if msg.content && !msg.content.startsWith('<<TOOL_CALL')}
+            <div class="msg-content">{msg.content}</div>
+          {/if}
         {/if}
+      </div>
+    {/each}
+
+    <!-- Pending tool calls that haven't been added to a message yet -->
+    {#if $pendingToolCalls && $pendingToolCalls.length > 0}
+      {#each $pendingToolCalls as tc}
+        <div class="msg agent">
+          <div class="msg-header">
+            <span class="role">Agent</span>
+          </div>
+          <div class="tool-calls-list">
+            <div class="tool-block pending expanded">
+              <div class="tool-summary" onclick={() => toggleToolExpand(tc.id)}>
+                <span class="tool-icon">🔧</span>
+                <span class="tool-title">{formatToolName(tc.tool_name)}</span>
+                <span class="tool-status pending">⏳ Pending approval</span>
+                <span class="expand-arrow">▼</span>
+              </div>
+              <div class="tool-details">
+                <div class="tool-args-section">
+                  <span class="detail-label">Arguments:</span>
+                  <pre class="tool-args">{JSON.stringify(tc.arguments, null, 2)}</pre>
+                </div>
+                <div class="tool-actions">
+                  <button class="btn-confirm" onclick={() => handleConfirmTool(tc)}>✓ Confirm</button>
+                  <button class="btn-reject" onclick={() => handleCancelTool(tc)}>✕ Reject</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      {/each}
+    {/if}
+
+    {#if waiting || output}
+      <div class="msg agent streaming">
+        <div class="msg-header">
+          <span class="role">Agent</span>
+          {#if waiting && !output}
+            <span class="thinking-indicator">Thinking...</span>
+          {/if}
+        </div>
+        {#if output}
+          <div class="msg-content">{output}</div>
+        {/if}
+      </div>
+    {/if}
+
+    {#if $session.summary}
+      <div class="summary-box">
+        <span class="summary-label">Previous summary:</span>
+        {$session.summary}
       </div>
     {/if}
   </div>
 
-  <!-- Section 2: Conversation (purple-ish background) -->
-  <div class="section conversation-section" class:collapsed={collapsedConversation}>
-    <div class="section-header">
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <div class="header-left clickable" onclick={() => collapsedConversation = !collapsedConversation} role="button" tabindex="0">
-        <h4>Conversation</h4>
-        <span class="collapse-icon">{collapsedConversation ? '▸' : '▾'}</span>
-      </div>
-      {#if !collapsedConversation}
-        <button class="btn-small" onclick={handleClearHistory}>Clear</button>
-      {/if}
-    </div>
-
-    {#if !collapsedConversation}
-      <div class="messages">
-        {#each $copilotSettings.messages as msg, i}
-          <div class="message" class:user={msg.role === 'user'} class:assistant={msg.role === 'assistant'}>
-            <div class="message-header">
-              <strong>{msg.role === 'user' ? 'You' : 'AI'}</strong>
-              <div class="message-actions">
-                {#if msg.role === 'user'}
-                  <button
-                    class="btn-tiny edit"
-                    onclick={() => startEditMessage(i)}
-                    title="Edit message"
-                  >Edit</button>
-                  <button
-                    class="btn-tiny favorite"
-                    class:active={isFavoritePrompt(msg.content)}
-                    onclick={() => toggleFavoritePrompt(i)}
-                    title={isFavoritePrompt(msg.content) ? 'Remove from favorites' : 'Add to favorites'}
-                  >
-                    <span class="material-icons icon-tiny">{isFavoritePrompt(msg.content) ? 'star' : 'star_border'}</span>
-                  </button>
-                {/if}
-                {#if msg.role === 'assistant'}
-                  <button class="btn-tiny accent" onclick={() => handleInsertFromHistory(i)}>Insert</button>
-                  <button
-                    class="btn-tiny regenerate"
-                    onclick={() => handleRegenerate(i)}
-                    title="Regenerate response"
-                    disabled={waiting}
-                  >↻</button>
-                {/if}
-                <button class="btn-tiny danger" onclick={() => handleDeleteMessage(i)}>×</button>
-              </div>
-            </div>
-            {#if editingIndex === i}
-              <div class="edit-area">
-                <textarea
-                  bind:value={editText}
-                  rows="3"
-                  class="edit-textarea"
-                ></textarea>
-                <div class="edit-actions">
-                  <button class="btn-tiny accent" onclick={() => saveEditMessage(i)}>Save</button>
-                  <button class="btn-tiny" onclick={cancelEditMessage}>Cancel</button>
-                </div>
-              </div>
-            {:else}
-              <p class="message-content">{msg.role === 'user' ? msg.display : msg.content}</p>
-            {/if}
-          </div>
-        {/each}
-
-        {#if waiting || output}
-          <div class="message assistant streaming">
-            <div class="message-header">
-              <strong>AI</strong>
-              {#if !waiting && output}
-                <button class="btn-tiny accent" onclick={handleInsert}>Insert</button>
-              {/if}
-            </div>
-            <p class="message-content">{output}</p>
-          </div>
-        {/if}
-      </div>
-    {/if}
-
-    {#if !collapsedConversation}
-      <div class="input-area">
-        {#if $copilotSettings.favorite_prompts && $copilotSettings.favorite_prompts.length > 0}
-          <div class="favorite-prompts-bar">
-            <button class="btn-favorites" onclick={() => showFavoriteDropdown = !showFavoriteDropdown}>
-              <span class="material-icons icon-small">star</span>
-              Favorites
-            </button>
-            {#if showFavoriteDropdown}
-              <!-- svelte-ignore a11y_click_events_have_key_events -->
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <div class="favorite-dropdown" onclick={(e) => e.stopPropagation()}>
-                {#each $copilotSettings.favorite_prompts as fav}
-                  <button class="favorite-item" onclick={() => selectFavoritePrompt(fav.prompt)}>
-                    {fav.name}
-                  </button>
-                {/each}
-              </div>
-            {/if}
-          </div>
-        {/if}
-        <textarea
-          bind:value={userInput}
-          placeholder="Ask AI... ({commandKeyName()}+Enter)"
-          rows="2"
-        ></textarea>
-        {#if waiting}
-          <button class="btn-send danger" onclick={handleStopGeneration}>Stop</button>
-        {:else}
-          <button class="btn-send" onclick={handleSend}>Send</button>
-        {/if}
-      </div>
+  <!-- Input -->
+  <div class="input-box">
+    <textarea
+      bind:value={userInput}
+      placeholder="Message Agent..."
+      rows="2"
+      disabled={waiting}
+    ></textarea>
+    {#if waiting}
+      <button class="btn-stop" onclick={handleStop}>Stop</button>
+    {:else}
+      <button class="btn-send" onclick={handleSend}>Send</button>
     {/if}
   </div>
 </div>
 
 <style>
-  .copilot-panel {
-    background: var(--bg-card);
-    border-radius: var(--card-radius);
+  .agent-panel {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-sm);
-    overflow-y: auto;
+    height: 100%;
+    background: var(--bg-card);
+    border-radius: var(--card-radius);
     overflow: hidden;
     position: relative;
   }
 
-  .section {
-    border-radius: var(--radius-md);
-    padding: var(--spacing-md);
+  /* Messages area */
+  .messages-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--spacing-sm);
     display: flex;
     flex-direction: column;
     gap: var(--spacing-sm);
-    transition: all 0.2s ease;
   }
 
-  .section.collapsed {
-    padding: var(--spacing-md);
+  .msg {
+    padding: var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    background: var(--bg-hover);
   }
 
-  /* Section 1: Buffers - green tint */
-  .buffers-section {
-    background: rgba(22, 163, 74, 0.1);
-    border: 1px solid rgba(22, 163, 74, 0.2);
-    max-height: 120px;
-    overflow-y: auto;
+  .msg.user {
+    background: rgba(var(--accent-color-rgb), 0.1);
   }
 
-  /* Section 2: Conversation - purple tint */
-  .conversation-section {
-    background: rgba(124, 58, 237, 0.1);
-    border: 1px solid rgba(124, 58, 237, 0.2);
-    flex: 1;
+  .msg.agent {
+    background: var(--bg-hover);
+  }
+
+  .msg.tool {
+    background: rgba(var(--success-color-rgb), 0.05);
+  }
+
+  .msg.streaming {
+    background: rgba(var(--accent-color-rgb), 0.15);
+  }
+
+  .msg-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+  }
+
+  .role {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .thinking-indicator {
+    font-size: var(--font-size-xs);
+    color: var(--accent-color);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
+
+  .btn-icon {
+    padding: 2px 6px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  .btn-icon:hover {
+    color: var(--text-primary);
+  }
+
+  .msg-content {
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    line-height: 1.5;
+    margin-top: var(--spacing-sm);
+  }
+
+  /* Tool calls styling */
+  .tool-calls-list {
     display: flex;
     flex-direction: column;
+    gap: var(--spacing-xs);
+    margin-top: var(--spacing-sm);
+  }
+
+  .tool-block {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color-faint);
     overflow: hidden;
   }
 
-  .conversation-section.collapsed {
-    flex: 0 0 auto;
-    overflow: visible;
+  .tool-block.pending {
+    border-color: rgba(var(--warning-color-rgb), 0.3);
+    background: rgba(var(--warning-color-rgb), 0.05);
   }
 
-  .section-header {
+  .tool-block.expanded {
+    background: var(--bg-secondary);
+  }
+
+  .tool-summary {
     display: flex;
-    justify-content: space-between;
     align-items: center;
     gap: var(--spacing-sm);
-  }
-
-  .header-left {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-  }
-
-  .clickable {
+    padding: var(--spacing-xs) var(--spacing-sm);
     cursor: pointer;
     user-select: none;
   }
 
-  .clickable:hover h4 {
-    color: var(--text-primary);
+  .tool-summary:hover {
+    background: var(--bg-hover);
   }
 
-  .collapse-icon {
-    font-size: 12px;
-    color: var(--text-muted);
+  .tool-icon {
+    font-size: var(--font-size-sm);
   }
 
-  .section-header h4 {
+  .tool-title {
     font-size: var(--font-size-sm);
     font-weight: 500;
-    color: var(--text-secondary);
-    margin: 0;
-  }
-
-  .hint {
-    font-size: 12px;
-    color: var(--text-faint);
-  }
-
-  .btn-small {
-    padding: 4px 8px;
-    border: none;
-    background: transparent;
-    color: var(--text-muted);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    font-size: var(--font-size-sm);
-    transition: all 0.15s ease;
-  }
-
-  .btn-small:hover {
-    background: var(--bg-hover);
     color: var(--text-primary);
-  }
-
-  .buffer-list {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .buffer-item {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    background: rgba(22, 163, 74, 0.2);
-    border-radius: var(--radius-sm);
-  }
-
-  .btn-remove {
-    padding: 0 4px;
-    border: none;
-    background: transparent;
-    color: var(--danger-color);
-    cursor: pointer;
-    font-size: 14px;
-    line-height: 1;
-  }
-
-  .buffer-info {
-    font-size: var(--font-size-sm);
-    color: var(--text-secondary);
-  }
-
-  .empty-hint {
-    font-size: var(--font-size-sm);
-    color: var(--text-faint);
-  }
-
-  .messages {
     flex: 1;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-xs);
-    min-height: 0;
   }
 
-  .message {
-    padding: var(--spacing-sm);
+  .tool-status {
+    font-size: var(--font-size-xs);
+    padding: 2px 8px;
     border-radius: var(--radius-sm);
-    background: rgba(124, 58, 237, 0.15);
-  }
-
-  .message.user {
-    background: rgba(168, 85, 247, 0.2);
-  }
-
-  .message.assistant {
-    background: rgba(139, 92, 246, 0.15);
-  }
-
-  .message.streaming {
-    background: rgba(139, 92, 246, 0.25);
-  }
-
-  .message-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .message-header strong {
-    font-size: var(--font-size-sm);
     color: var(--text-muted);
+    background: var(--bg-input);
   }
 
-  .message-actions {
-    display: flex;
-    gap: 2px;
-  }
-
-  .btn-tiny {
-    padding: 2px 6px;
-    border: none;
-    background: var(--bg-hover);
-    color: var(--text-secondary);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    font-size: 12px;
-  }
-
-  .btn-tiny.accent {
-    background: var(--accent-color);
-    color: var(--text-inverse);
-  }
-
-  .btn-tiny.danger {
-    background: var(--danger-color);
-    color: var(--text-inverse);
-  }
-
-  .btn-tiny.favorite {
-    background: transparent;
-    color: var(--text-muted);
-    padding: 2px 4px;
-  }
-
-  .btn-tiny.favorite:hover {
+  .tool-status.pending {
     color: var(--warning-color);
+    background: rgba(var(--warning-color-rgb), 0.1);
   }
 
-  .btn-tiny.favorite.active {
-    color: var(--warning-color);
-  }
-
-  .btn-tiny.edit {
-    background: transparent;
-    color: var(--text-muted);
-    padding: 2px 5px;
-  }
-
-  .btn-tiny.edit:hover {
-    color: var(--text-primary);
-  }
-
-  .btn-tiny.regenerate {
-    background: transparent;
-    color: var(--text-muted);
-    padding: 2px 5px;
-    font-size: 14px;
-  }
-
-  .btn-tiny.regenerate:hover:not(:disabled) {
+  .tool-status.confirmed {
     color: var(--accent-color);
   }
 
-  .btn-tiny.regenerate:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
+  .tool-status.executed {
+    color: var(--success-color);
+    background: rgba(var(--success-color-rgb), 0.1);
   }
 
-  .edit-area {
+  .tool-status.failed {
+    color: var(--danger-color);
+    background: rgba(var(--danger-color-rgb), 0.1);
+  }
+
+  .tool-status.cancelled {
+    color: var(--text-muted);
+  }
+
+  .expand-arrow {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+  }
+
+  .tool-details {
+    padding: var(--spacing-sm);
+    border-top: 1px solid var(--border-color-faint);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .tool-args-section {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-xs);
-    margin-top: 6px;
   }
 
-  .edit-textarea {
-    width: 100%;
-    padding: 6px;
-    border: 1px solid var(--border-color);
+  .detail-label {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .tool-args {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
     background: var(--bg-input);
-    color: var(--text-primary);
+    padding: var(--spacing-sm);
     border-radius: var(--radius-sm);
-    resize: vertical;
-    font-size: var(--font-size-sm);
-    line-height: 1.4;
-    font-family: inherit;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+    max-height: 200px;
+    overflow-y: auto;
   }
 
-  .edit-textarea:focus {
-    outline: none;
-    border-color: var(--accent-color);
-  }
-
-  .edit-actions {
+  .tool-actions {
     display: flex;
-    gap: 4px;
+    gap: var(--spacing-sm);
     justify-content: flex-end;
   }
 
-  .icon-tiny {
-    font-size: 14px;
-    line-height: 1;
-  }
-
-  .message-content {
+  .btn-confirm {
+    padding: 6px 16px;
+    background: var(--success-color);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
     font-size: var(--font-size-sm);
-    color: var(--text-primary);
-    white-space: pre-wrap;
-    line-height: 1.4;
-    margin: 4px 0 0 0;
+    font-weight: 500;
   }
 
-  .input-area {
+  .btn-confirm:hover {
+    opacity: 0.9;
+  }
+
+  .btn-reject {
+    padding: 6px 16px;
+    background: transparent;
+    color: var(--danger-color);
+    border: 1px solid var(--danger-color);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+  }
+
+  .btn-reject:hover {
+    background: rgba(var(--danger-color-rgb), 0.1);
+  }
+
+  /* Summary box */
+  .summary-box {
+    padding: var(--spacing-sm);
+    background: var(--bg-hover);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+  }
+
+  .summary-label {
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+
+  /* Edit box */
+  .edit-box {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-xs);
   }
 
-  .input-area textarea {
+  .edit-box textarea {
     width: 100%;
     padding: var(--spacing-sm);
-    border: 1px solid rgba(124, 58, 237, 0.3);
     background: var(--bg-input);
-    color: var(--text-primary);
+    border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
-    resize: none;
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+    resize: vertical;
+  }
+
+  .edit-btns {
+    display: flex;
+    gap: var(--spacing-xs);
+    justify-content: flex-end;
+  }
+
+  .edit-btns button {
+    padding: 4px 12px;
+    background: var(--bg-hover);
+    border: none;
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
     font-size: var(--font-size-sm);
   }
 
-  .input-area textarea:focus {
+  /* Input box */
+  .input-box {
+    padding: var(--spacing-sm);
+    background: var(--bg-card);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+
+  .input-box textarea {
+    width: 100%;
+    padding: var(--spacing-sm);
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+    resize: none;
+  }
+
+  .input-box textarea:focus {
     outline: none;
     border-color: var(--accent-color);
+  }
+
+  .input-box textarea:disabled {
+    opacity: 0.5;
   }
 
   .btn-send {
     padding: var(--spacing-sm);
+    background: var(--accent-color);
+    color: var(--text-inverse);
     border: none;
-    background: rgba(124, 58, 237, 0.3);
-    color: var(--text-primary);
     border-radius: var(--radius-sm);
     cursor: pointer;
     font-size: var(--font-size-sm);
-    transition: all 0.15s ease;
+    font-weight: 500;
   }
 
   .btn-send:hover {
-    background: rgba(124, 58, 237, 0.4);
-  }
-
-  .btn-send.danger {
-    background: var(--danger-color);
-    color: var(--text-inverse);
-  }
-
-  .btn-send.danger:hover {
     opacity: 0.9;
   }
 
-  .favorite-prompts-bar {
-    display: flex;
-    align-items: center;
-    position: relative;
-  }
-
-  .btn-favorites {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
+  .btn-stop {
+    padding: var(--spacing-sm);
+    background: var(--danger-color);
+    color: var(--text-inverse);
     border: none;
-    background: transparent;
-    color: var(--text-muted);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    font-size: var(--font-size-xs);
-    transition: all 0.15s ease;
-  }
-
-  .btn-favorites:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
-  .icon-small {
-    font-size: 14px;
-  }
-
-  .favorite-dropdown {
-    position: absolute;
-    bottom: 100%;
-    left: 0;
-    margin-bottom: 4px;
-    background: var(--bg-modal);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: 4px;
-    min-width: 150px;
-    max-width: 250px;
-    box-shadow: var(--shadow-md);
-    z-index: 100;
-  }
-
-  .favorite-item {
-    display: block;
-    width: 100%;
-    padding: 6px 10px;
-    border: none;
-    background: transparent;
-    color: var(--text-secondary);
-    text-align: left;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    font-size: var(--font-size-xs);
-    transition: all 0.15s ease;
-  }
-
-  .favorite-item:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
   }
 </style>

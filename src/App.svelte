@@ -1,12 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { theme, files, currentFile, passages, currentPassageIndex, config, isLoading, error, success, copilotVisible, isDirty, copilotSettings, sidebarWidth, passageListWidth, copilotWidth, numImages } from './lib/stores';
+  import { theme, files, currentFile, passages, currentPassageIndex, config, isLoading, error, success, copilotVisible, isDirty, copilotSettings, sidebarWidth, passageListWidth, copilotWidth, numImages, workspace, session, pendingToolCalls, workspacePanelVisible, sessionPanelVisible } from './lib/stores';
   import * as api from './lib/tauri';
   import { listen } from '@tauri-apps/api/event';
   import Sidebar from './components/Sidebar.svelte';
   import Editor from './components/Editor.svelte';
   import PasswordDialog from './components/PasswordDialog.svelte';
   import CopilotPanel from './components/CopilotPanel.svelte';
+  import WorkspacePanel from './components/WorkspacePanel.svelte';
+  import SessionPanel from './components/SessionPanel.svelte';
   import ThemeToggle from './components/ThemeToggle.svelte';
   import SettingsDialog from './components/SettingsDialog.svelte';
 
@@ -59,13 +61,26 @@
       isDirty.set(state.is_dirty);
       numImages.set(state.num_images);
 
+      // Update workspace and session if available
+      if (state.workspace) {
+        workspace.set(state.workspace);
+      }
+      if (state.session) {
+        session.set(state.session);
+        pendingToolCalls.set(state.session.messages
+          .filter(m => m.tool_calls)
+          .flatMap(m => m.tool_calls!.filter(tc => tc.status === 'Pending')));
+      }
+
       copilotSettings.update(s => {
-        s.system_prompt = state.copilot_settings.system_prompt;
-        s.buffers = state.copilot_settings.buffers;
-        s.favorite_prompts = state.copilot_settings.favorite_prompts;
-        if (fileChanged) {
-          s.messages = [];
-        }
+        s.background = state.copilot_settings.background;
+        s.settings = state.copilot_settings.settings;
+        s.notes = state.copilot_settings.notes;
+        s.requirements = state.copilot_settings.requirements;
+        s.writing_style = state.copilot_settings.writing_style;
+        s.custom_system_prompt = state.copilot_settings.custom_system_prompt;
+        s.use_custom_prompt = state.copilot_settings.use_custom_prompt;
+        s.custom_skills = state.copilot_settings.custom_skills || [];
         return s;
       });
     }).then(fn => { unlistenState = fn; });
@@ -210,6 +225,20 @@
     copilotVisible.update(v => !v);
   }
 
+  function toggleWorkspace() {
+    workspacePanelVisible.update(v => {
+      if (!v) sessionPanelVisible.set(false);
+      return !v;
+    });
+  }
+
+  function toggleSession() {
+    sessionPanelVisible.update(v => {
+      if (!v) workspacePanelVisible.set(false);
+      return !v;
+    });
+  }
+
   function handleOpenSettings() {
     showSettingsDialog = true;
   }
@@ -262,20 +291,43 @@
         <div class="editor-container">
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <button class="floating-ai-btn" class:active={$copilotVisible} title="AI Copilot" onclick={toggleCopilot}>
-            <span class="material-icons icon">auto_awesome</span>
-          </button>
-          <Editor
-            passagesProp={$passages}
-            currentIndex={$currentPassageIndex}
-            isDirtyProp={$isDirty}
-            numImages={$numImages}
-            onSave={handleSave}
-            onLock={handleLock}
-            passageListWidth={$passageListWidth}
-            onPassageListWidthResize={handlePassageListWidthResize}
-            onPassageListWidthSave={handlePassageListWidthSave}
-          />
+          <div class="floating-buttons">
+            <button class="floating-btn" class:active={$copilotVisible} title="AI Copilot" onclick={toggleCopilot}>
+              <span class="material-icons icon">auto_awesome</span>
+            </button>
+            <button class="floating-btn" class:active={$workspacePanelVisible} title="Workspace" onclick={toggleWorkspace}>
+              <span class="material-icons icon">group</span>
+            </button>
+            <button class="floating-btn" class:active={$sessionPanelVisible} title="Session" onclick={toggleSession}>
+              <span class="material-icons icon">history</span>
+            </button>
+          </div>
+
+          <div class="main-content">
+            <Editor
+              passagesProp={$passages}
+              currentIndex={$currentPassageIndex}
+              isDirtyProp={$isDirty}
+              numImages={$numImages}
+              onSave={handleSave}
+              onLock={handleLock}
+              passageListWidth={$passageListWidth}
+              onPassageListWidthResize={handlePassageListWidthResize}
+              onPassageListWidthSave={handlePassageListWidthSave}
+            />
+
+            {#if $workspacePanelVisible}
+              <div class="side-panel">
+                <WorkspacePanel />
+              </div>
+            {/if}
+
+            {#if $sessionPanelVisible}
+              <div class="side-panel">
+                <SessionPanel />
+              </div>
+            {/if}
+          </div>
         </div>
       {:else}
         <div class="empty-state">
@@ -374,10 +426,16 @@
     position: relative;
   }
 
-  .floating-ai-btn {
+  .floating-buttons {
     position: absolute;
     top: var(--spacing-md);
     right: var(--spacing-md);
+    display: flex;
+    gap: 4px;
+    z-index: 5; /* Lower z-index to not block panels */
+  }
+
+  .floating-btn {
     width: 32px;
     height: 32px;
     border: none;
@@ -389,21 +447,40 @@
     align-items: center;
     justify-content: center;
     transition: all 0.15s ease;
-    z-index: 10;
   }
 
-  .floating-ai-btn:hover {
+  .floating-btn:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
   }
 
-  .floating-ai-btn.active {
+  .floating-btn.active {
     background: var(--accent-color);
     color: var(--text-inverse);
   }
 
-  .floating-ai-btn.active:hover {
+  .floating-btn.active:hover {
     opacity: 0.9;
+  }
+
+  .main-content {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    gap: var(--card-gap);
+    padding-top: 40px; /* Make space for floating buttons */
+  }
+
+  .side-panel {
+    width: 400px;
+    min-width: 300px;
+    max-width: 500px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg-card);
+    border-radius: var(--card-radius);
+    flex-shrink: 0;
   }
 
   .icon {

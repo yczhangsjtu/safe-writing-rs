@@ -3,10 +3,11 @@ use hmac::{Hmac, Mac};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 
 use crate::{
-    data_structures::{Passage, PlainText, IMAGE_SEP},
+    data_structures::{Passage, PlainText, IMAGE_SEP, WORKSPACE_SEP, SESSION_SEP},
     encode::{base64_decode, base64_decode_to_bytes, base64_encode},
     error::Error,
 };
+use crate::agent::{Workspace, Session};
 
 pub fn key_derive(password: &str) -> [u8; 16] {
     let mut out = [0u8; 16];
@@ -100,17 +101,14 @@ pub fn decrypt(password: &str, iv: &str, data: &str, mac: &str) -> Result<PlainT
         splitted_images
     };
 
-    let plaintexts: Vec<_> = plaintext.split(":").collect();
-    if plaintexts.len() < 2 {
-        return Err(Error::InvalidPlaintextFormat);
-    }
-    let plaintext_encodings = plaintexts[0];
+    // Parse workspace and session from plaintext
+    let (passages_text, workspace, session) = parse_workspace_session(&plaintext)?;
 
-    if plaintext_encodings.is_empty() {
-        return Ok(PlainText::empty());
+    if passages_text.is_empty() {
+        return Ok(PlainText::new_with_workspace_session(0, vec![], images, workspace, session));
     };
 
-    let plaintext_encodings: Vec<_> = plaintext_encodings.split("|").collect();
+    let plaintext_encodings: Vec<_> = passages_text.split("|").collect();
 
     let passages = plaintext_encodings
         .iter()
@@ -130,7 +128,71 @@ pub fn decrypt(password: &str, iv: &str, data: &str, mac: &str) -> Result<PlainT
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    Ok(PlainText::new(passages.len(), passages, images))
+    Ok(PlainText::new_with_workspace_session(passages.len(), passages, images, workspace, session))
+}
+
+/// Parse workspace and session from the plaintext string
+/// Returns (passages_text, workspace, session)
+fn parse_workspace_session(plaintext: &str) -> Result<(String, Workspace, Session), Error> {
+    // Find :FontSize=24 to determine the end
+    let font_size_idx = plaintext.find(":FontSize=24");
+
+    // Check if this is a new format file (has :WORKSPACE and :SESSION)
+    let workspace_idx = plaintext.find(WORKSPACE_SEP);
+    let session_idx = plaintext.find(SESSION_SEP);
+
+    // Determine the end of passages section
+    let passages_end = match (workspace_idx, session_idx) {
+        (Some(w), _) => w,  // Workspace marker starts after passages
+        (_, Some(s)) => s,  // Session marker (legacy: no workspace but has session)
+        _ => {
+            // Old format - no workspace or session
+            match font_size_idx {
+                Some(idx) => idx,
+                None => plaintext.len(),
+            }
+        }
+    };
+
+    let passages_text = plaintext[..passages_end].to_string();
+
+    // Parse workspace if present
+    let workspace = if let Some(w_idx) = workspace_idx {
+        let workspace_start = w_idx + WORKSPACE_SEP.len();
+        let workspace_end = session_idx.unwrap_or_else(|| {
+            font_size_idx.unwrap_or(plaintext.len())
+        });
+        if workspace_start < workspace_end {
+            let workspace_b64 = &plaintext[workspace_start..workspace_end];
+            // Try base64 decode first (new format), fall back to raw JSON (old format)
+            let workspace_json = base64_decode(workspace_b64)
+                .or_else(|_| Ok(workspace_b64.to_string()))?;
+            Workspace::from_json(&workspace_json).unwrap_or_default()
+        } else {
+            Workspace::default()
+        }
+    } else {
+        Workspace::default()
+    };
+
+    // Parse session if present
+    let session = if let Some(s_idx) = session_idx {
+        let session_start = s_idx + SESSION_SEP.len();
+        let session_end = font_size_idx.unwrap_or(plaintext.len());
+        if session_start < session_end {
+            let session_b64 = &plaintext[session_start..session_end];
+            // Try base64 decode first (new format), fall back to raw JSON (old format)
+            let session_json = base64_decode(session_b64)
+                .or_else(|_| Ok(session_b64.to_string()))?;
+            Session::from_json(&session_json).unwrap_or_default()
+        } else {
+            Session::default()
+        }
+    } else {
+        Session::default()
+    };
+
+    Ok((passages_text, workspace, session))
 }
 
 #[cfg(test)]
