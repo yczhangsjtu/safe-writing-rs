@@ -1,10 +1,9 @@
 <script lang="ts">
-  import { session, pendingToolCalls, passages, currentPassageIndex } from '../lib/stores';
+  import { session, passages, currentPassageIndex } from '../lib/stores';
   import { listen } from '@tauri-apps/api/event';
   import * as api from '../lib/tauri';
   import { isCommandKey } from '../lib/platform';
   import Resizable from './Resizable.svelte';
-  import { onMount } from 'svelte';
 
   let {
     width,
@@ -25,7 +24,7 @@
   // Track which tool cards are expanded
   let expandedTools = $state<Set<string>>(new Set());
 
-  // Listen for streaming events
+  // Listen for streaming events only (content display)
   $effect(() => {
     const unlistenStart = listen('agent-start', () => {
       output = '';
@@ -35,32 +34,17 @@
       output += event.payload;
     });
 
-    const unlistenDone = listen<{id: number, role: string, content: string, tool_calls?: any[]}>('agent-done', (event) => {
-      session.update(s => {
-        s.messages.push({
-          id: event.payload.id,
-          role: event.payload.role,
-          content: event.payload.content,
-          tool_calls: event.payload.tool_calls,
-          tool_call_id: undefined,
-          timestamp: Date.now() / 1000,
-          compressed: false,
-        });
-        return s;
-      });
+    const unlistenDone = listen('agent-done', (event) => {
+      // agent-done event is handled by App.svelte's state-changed listener
+      // We just clear output and waiting here
       output = '';
       waiting = false;
-    });
-
-    const unlistenToolCall = listen<any>('agent-tool-call', (event) => {
-      pendingToolCalls.update(p => [...p, event.payload]);
     });
 
     return async () => {
       (await unlistenStart)();
       (await unlistenChunk)();
       (await unlistenDone)();
-      (await unlistenToolCall)();
     };
   });
 
@@ -77,21 +61,6 @@
     output = '';
 
     try {
-      // Add user message to session
-      session.update(s => {
-        s.messages.push({
-          id: s.next_message_id,
-          role: 'user',
-          content: prompt,
-          tool_calls: undefined,
-          tool_call_id: undefined,
-          timestamp: Date.now() / 1000,
-          compressed: false,
-        });
-        s.next_message_id++;
-        return s;
-      });
-
       await api.sendAgentMessage(prompt, getCurrentPassageContent());
     } catch (e: any) {
       output = `Error: ${e?.message || e}`;
@@ -114,8 +83,8 @@
   async function handleConfirmTool(tc: any) {
     try {
       await api.confirmToolCall(tc.id, true);
-      const result = await api.executeConfirmedTool(tc.id);
-      pendingToolCalls.update(p => p.filter(t => t.id !== tc.id));
+      await api.executeConfirmedTool(tc.id);
+      // State will be updated by emit_state_change -> App.svelte -> session store
     } catch (e) {
       console.error('Tool execution failed:', e);
     }
@@ -124,7 +93,7 @@
   async function handleCancelTool(tc: any) {
     try {
       await api.confirmToolCall(tc.id, false);
-      pendingToolCalls.update(p => p.filter(t => t.id !== tc.id));
+      // State will be updated by emit_state_change
     } catch (e) {
       console.error('Tool cancellation failed:', e);
     }
@@ -201,6 +170,13 @@
       default: return { text: status, class: '' };
     }
   }
+
+  // Get all pending tool calls from session (derived from session store)
+  function getPendingToolCalls(): any[] {
+    return $session.messages
+      .filter(m => m.tool_calls)
+      .flatMap(m => m.tool_calls!.filter(tc => tc.status === 'Pending'));
+  }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -269,12 +245,12 @@
       </div>
     {/each}
 
-    <!-- Pending tool calls that haven't been added to a message yet -->
-    {#if $pendingToolCalls && $pendingToolCalls.length > 0}
-      {#each $pendingToolCalls as tc}
+    <!-- Pending tool calls from getPendingToolCalls() (all Pending status from session) -->
+    {#if getPendingToolCalls().length > 0}
+      {#each getPendingToolCalls() as tc}
         <div class="msg agent">
           <div class="msg-header">
-            <span class="role">Agent</span>
+            <span class="role">Tool Request</span>
           </div>
           <div class="tool-calls-list">
             <div class="tool-block pending expanded">
