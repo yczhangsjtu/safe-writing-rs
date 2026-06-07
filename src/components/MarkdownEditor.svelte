@@ -370,6 +370,7 @@
       outline: { enable: false, position: 'left' },
       counter: { enable: false },
       cache: { enable: false },
+      resize: { enable: false },
       placeholder: 'Start writing...',
       height: '100%',
       theme: $config.theme === 'dark' ? 'dark' : 'classic',
@@ -538,5 +539,18 @@
     outline: none !important;
     box-shadow: none !important;
     --border-color: transparent !important;
+  }
+
+  /* Hide toolbar completely - no 5px line, no hover expansion */
+  :global(.vditor-toolbar),
+  :global(.vditor-toolbar--hide),
+  :global(.vditor-toolbar--hide:hover) {
+    display: none !important;
+    height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    overflow: hidden !important;
   }
 </style>

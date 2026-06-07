@@ -54,7 +54,7 @@
 
   async function handleTitleChange() {
     if (currentIndex < passagesProp.length && editorTitle.trim()) {
-      await api.updatePassageTitle(currentIndex, editorTitle.trim());
+      await api.updatePassageTitle(currentIndex, editorTitle);
     }
   }
 
@@ -154,7 +154,7 @@
 
   .title-input {
     width: 100%;
-    border: none;
+    border: none !important;
     background: transparent;
     color: var(--text-primary);
     font-size: 28px;
@@ -162,14 +162,15 @@
     font-family: 'LXGW WenKai', sans-serif;
     padding: 0 0 var(--spacing-lg) 0;
     margin-bottom: var(--spacing-lg);
-    outline: none;
-    border-bottom: 1px solid transparent;
-    transition: border-color 0.15s ease;
+    outline: none !important;
+    box-shadow: none !important;
     flex-shrink: 0;
   }
 
   .title-input:focus {
-    border-bottom-color: var(--border-color);
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
   }
 
   .title-input::placeholder {
