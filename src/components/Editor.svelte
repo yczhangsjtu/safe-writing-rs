@@ -15,7 +15,13 @@
     onLock,
     passageListWidth,
     onPassageListWidthResize,
-    onPassageListWidthSave
+    onPassageListWidthSave,
+    copilotVisible,
+    workspacePanelVisible,
+    sessionPanelVisible,
+    onToggleCopilot,
+    onToggleWorkspace,
+    onToggleSession
   }: {
     passagesProp: any[];
     currentIndex: number;
@@ -26,6 +32,12 @@
     passageListWidth: number;
     onPassageListWidthResize: (width: number) => void;
     onPassageListWidthSave: (width: number) => void;
+    copilotVisible: boolean;
+    workspacePanelVisible: boolean;
+    sessionPanelVisible: boolean;
+    onToggleCopilot: () => void;
+    onToggleWorkspace: () => void;
+    onToggleSession: () => void;
   } = $props();
 
   let editorTitle = $state('');
@@ -101,13 +113,26 @@
         <AISettingsEditor bind:this={aiSettingsEditor} />
       {:else}
         <div class="editor-content">
-          <input
-            type="text"
-            class="title-input"
-            bind:value={editorTitle}
-            oninput={handleTitleChange}
-            placeholder="Untitled"
-          />
+          <div class="title-row">
+            <input
+              type="text"
+              class="title-input"
+              bind:value={editorTitle}
+              oninput={handleTitleChange}
+              placeholder="Untitled"
+            />
+            <div class="title-buttons">
+              <button class="btn-icon" class:active={copilotVisible} title="AI Copilot" onclick={onToggleCopilot}>
+                <span class="material-icons icon">auto_awesome</span>
+              </button>
+              <button class="btn-icon" class:active={workspacePanelVisible} title="Workspace" onclick={onToggleWorkspace}>
+                <span class="material-icons icon">group</span>
+              </button>
+              <button class="btn-icon" class:active={sessionPanelVisible} title="Session" onclick={onToggleSession}>
+                <span class="material-icons icon">history</span>
+              </button>
+            </div>
+          </div>
           <MarkdownEditor
             content={editorContent}
             onContentChange={handleContentChange}
@@ -152,19 +177,79 @@
     width: 100%;
   }
 
+  .title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+    flex-shrink: 0;
+  }
+
   .title-input {
-    width: 100%;
+    flex: 1;
     border: none !important;
     background: transparent;
     color: var(--text-primary);
     font-size: 28px;
     font-weight: 600;
     font-family: 'LXGW WenKai', sans-serif;
-    padding: 0 0 var(--spacing-lg) 0;
-    margin-bottom: var(--spacing-lg);
+    padding: 0;
     outline: none !important;
     box-shadow: none !important;
+  }
+
+  .title-buttons {
+    display: flex;
+    gap: 4px;
     flex-shrink: 0;
+  }
+
+  .btn-icon {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+  }
+
+  .btn-icon:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .btn-icon.active {
+    background: var(--accent-color);
+    color: var(--text-inverse);
+  }
+
+  .btn-icon.active:hover {
+    opacity: 0.9;
+  }
+
+  .icon {
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  .material-icons {
+    font-family: 'Material Icons';
+    font-weight: normal;
+    font-style: normal;
+    display: inline-block;
+    line-height: 1;
+    text-transform: none;
+    letter-spacing: normal;
+    word-wrap: normal;
+    white-space: nowrap;
+    direction: ltr;
+    -webkit-font-smoothing: antialiased;
   }
 
   .title-input:focus {

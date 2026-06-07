@@ -289,20 +289,6 @@
 
       {#if $currentFile}
         <div class="editor-container">
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div class="floating-buttons">
-            <button class="floating-btn" class:active={$copilotVisible} title="AI Copilot" onclick={toggleCopilot}>
-              <span class="material-icons icon">auto_awesome</span>
-            </button>
-            <button class="floating-btn" class:active={$workspacePanelVisible} title="Workspace" onclick={toggleWorkspace}>
-              <span class="material-icons icon">group</span>
-            </button>
-            <button class="floating-btn" class:active={$sessionPanelVisible} title="Session" onclick={toggleSession}>
-              <span class="material-icons icon">history</span>
-            </button>
-          </div>
-
           <div class="main-content">
             <Editor
               passagesProp={$passages}
@@ -314,6 +300,12 @@
               passageListWidth={$passageListWidth}
               onPassageListWidthResize={handlePassageListWidthResize}
               onPassageListWidthSave={handlePassageListWidthSave}
+              copilotVisible={$copilotVisible}
+              workspacePanelVisible={$workspacePanelVisible}
+              sessionPanelVisible={$sessionPanelVisible}
+              onToggleCopilot={toggleCopilot}
+              onToggleWorkspace={toggleWorkspace}
+              onToggleSession={toggleSession}
             />
 
             {#if $workspacePanelVisible}
@@ -426,49 +418,11 @@
     position: relative;
   }
 
-  .floating-buttons {
-    position: absolute;
-    top: var(--spacing-md);
-    right: var(--spacing-md);
-    display: flex;
-    gap: 4px;
-    z-index: 5; /* Lower z-index to not block panels */
-  }
-
-  .floating-btn {
-    width: 32px;
-    height: 32px;
-    border: none;
-    background: transparent;
-    color: var(--text-muted);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s ease;
-  }
-
-  .floating-btn:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
-  .floating-btn.active {
-    background: var(--accent-color);
-    color: var(--text-inverse);
-  }
-
-  .floating-btn.active:hover {
-    opacity: 0.9;
-  }
-
   .main-content {
     flex: 1;
     display: flex;
     overflow: hidden;
     gap: var(--card-gap);
-    padding-top: 40px; /* Make space for floating buttons */
   }
 
   .side-panel {
