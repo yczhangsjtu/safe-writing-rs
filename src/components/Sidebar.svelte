@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { files, theme } from '../lib/stores';
+  import { files, theme, isDirty } from '../lib/stores';
   import * as api from '../lib/tauri';
   import NameDialog from './NameDialog.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
@@ -33,7 +33,7 @@
   let pendingFilename = $state('');
 
   async function handleRefresh() {
-    if (isDirtyProp) return;
+    if ($isDirty) return;
     try {
       const fileList = await api.listFiles();
       files.set(fileList);
@@ -57,7 +57,7 @@
   function handleFileClick(filename: string) {
     if (filename === currentFile) return;
 
-    if (isDirtyProp) {
+    if ($isDirty) {
       pendingFilename = filename;
       showUnsavedDialog = true;
     } else {
@@ -96,7 +96,7 @@
     <button class="btn-icon" title="New File" onclick={handleNewFile}>
       <span class="material-icons icon">add</span>
     </button>
-    <button class="btn-icon" title="Refresh" onclick={handleRefresh} disabled={isDirtyProp}>
+    <button class="btn-icon" title="Refresh" onclick={handleRefresh} disabled={$isDirty}>
       <span class="material-icons icon">refresh</span>
     </button>
   </div>

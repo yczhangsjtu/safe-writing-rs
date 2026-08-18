@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { galleryVisible } from '../lib/stores';
+  import { galleryVisible, isDirty } from '../lib/stores';
   import * as api from '../lib/tauri';
   import PassageList from './PassageList.svelte';
   import MarkdownEditor from './MarkdownEditor.svelte';
@@ -66,8 +66,15 @@
 
   async function handleTitleChange() {
     if (currentIndex < passagesProp.length && editorTitle.trim()) {
+      isDirty.set(true);
       await api.updatePassageTitle(currentIndex, editorTitle);
     }
+  }
+
+  function handleDirtyChange() {
+    console.log('[Editor] handleDirtyChange called', performance.now());
+    isDirty.set(true);
+    console.log('[Editor] isDirty.set(true) done', performance.now());
   }
 
   async function handleContentChange(markdown: string) {
@@ -81,7 +88,7 @@
   function handleKeydown(e: KeyboardEvent) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'l') {
       e.preventDefault();
-      if (isDirtyProp) {
+      if ($isDirty) {
         onSave().then(() => onLock());
       } else {
         onLock();
@@ -96,7 +103,6 @@
   <PassageList
     passagesProp={passagesProp}
     currentIndex={currentIndex}
-    isDirtyProp={isDirtyProp}
     numImages={numImages}
     onSave={onSave}
     onLock={onLock}
@@ -136,6 +142,7 @@
           <MarkdownEditor
             content={editorContent}
             onContentChange={handleContentChange}
+            onDirtyChange={handleDirtyChange}
             onSave={onSave}
           />
         </div>

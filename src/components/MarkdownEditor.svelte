@@ -8,10 +8,12 @@
   let {
     content,
     onContentChange,
+    onDirtyChange,
     onSave,
   }: {
     content: string;
     onContentChange: (markdown: string) => Promise<void>;
+    onDirtyChange: () => void;
     onSave: () => Promise<void>;
   } = $props();
 
@@ -23,6 +25,9 @@
   let digestToBlob: Map<string, string> = new Map();       // digest → blobUrl
   let blobToDigest: Map<string, string> = new Map();       // blobUrl → digest
   let suppressInput = $state(false);
+  let pendingContentChange: Promise<void> | null = null;  // Track pending content change
+  let debounceTimer: number | null = null;                // Debounce timer for API calls
+  let lastStoredContent: string = '';                     // Last content to send to API
 
   function base64ToBytes(b64: string): Uint8Array {
     const binary = atob(b64);
@@ -146,8 +151,16 @@
       // Save content — blob URLs are converted to digests by toStorage
       const stored = toStorage(vditor.getValue());
       if (stored !== prevStoredContent) {
+        // Clear any pending debounce timer
+        if (debounceTimer !== null) {
+          clearTimeout(debounceTimer);
+          debounceTimer = null;
+        }
         prevStoredContent = stored;
-        await onContentChange(stored);
+        lastStoredContent = stored;
+        pendingContentChange = onContentChange(stored).then(() => {
+          pendingContentChange = null;
+        });
       }
     }
   }
@@ -201,8 +214,16 @@
       }
       const stored = toStorage(vditor!.getValue());
       if (stored !== prevStoredContent) {
+        // Clear any pending debounce timer
+        if (debounceTimer !== null) {
+          clearTimeout(debounceTimer);
+          debounceTimer = null;
+        }
         prevStoredContent = stored;
-        await onContentChange(stored);
+        lastStoredContent = stored;
+        pendingContentChange = onContentChange(stored).then(() => {
+          pendingContentChange = null;
+        });
       }
     } catch (_) {}
   }
@@ -227,8 +248,16 @@
       }
       const stored = toStorage(vditor!.getValue());
       if (stored !== prevStoredContent) {
+        // Clear any pending debounce timer
+        if (debounceTimer !== null) {
+          clearTimeout(debounceTimer);
+          debounceTimer = null;
+        }
         prevStoredContent = stored;
-        await onContentChange(stored);
+        lastStoredContent = stored;
+        pendingContentChange = onContentChange(stored).then(() => {
+          pendingContentChange = null;
+        });
       }
     } catch (_) {}
   }
@@ -362,6 +391,30 @@
     prevStoredContent = content;
     const displayContent = toDisplay(content);
 
+    // Add native keydown listener to immediately mark dirty on any key input
+    // This bypasses Vditor's internal processing delay
+    const nativeKeydown = (e: KeyboardEvent) => {
+      // Check for keys that modify content
+      const isContentKey = e.key.length === 1 ||
+                           e.key === 'Backspace' ||
+                           e.key === 'Delete' ||
+                           e.key === 'Enter';
+      // Allow Ctrl+V (paste), Ctrl+X (cut), Ctrl+Z (undo)
+      const isEditCombo = (e.ctrlKey || e.metaKey) &&
+                          (e.key === 'v' || e.key === 'V' ||
+                           e.key === 'x' || e.key === 'X' ||
+                           e.key === 'z' || e.key === 'Z');
+      if ((isContentKey && !e.ctrlKey && !e.metaKey && !e.altKey) || isEditCombo) {
+        console.log('[MarkdownEditor] native keydown', performance.now());
+        // Use queueMicrotask to update in same tick before Vditor's processing
+        queueMicrotask(() => {
+          console.log('[MarkdownEditor] microtask onDirtyChange', performance.now());
+          onDirtyChange();
+        });
+      }
+    };
+    editorRoot.addEventListener('keydown', nativeKeydown, true);
+
     vditor = new Vditor(editorRoot, {
       mode: 'ir',
       value: displayContent,
@@ -379,19 +432,52 @@
         const stored = toStorage(value);
         if (stored !== prevStoredContent) {
           prevStoredContent = stored;
-          onContentChange(stored);
+          lastStoredContent = stored;
+          // Note: Don't call onDirtyChange() here - native keydown already handles it
+          // Debounce API calls - clear previous timer
+          if (debounceTimer !== null) {
+            clearTimeout(debounceTimer);
+          }
+          // Set new timer (150ms debounce)
+          debounceTimer = setTimeout(() => {
+            pendingContentChange = onContentChange(lastStoredContent).then(() => {
+              pendingContentChange = null;
+              debounceTimer = null;
+            });
+          }, 150);
         }
       },
       keydown(event) {
         if ((event.metaKey || event.ctrlKey) && event.key === 's') {
           event.preventDefault();
-          onSave();
+          // Clear debounce timer and send immediately
+          if (debounceTimer !== null) {
+            clearTimeout(debounceTimer);
+            debounceTimer = null;
+          }
+          // Wait for pending content change before saving
+          if (pendingContentChange) {
+            void pendingContentChange.then(() => onSave());
+          } else {
+            // If no pending change but we have unsent content, send it now
+            if (lastStoredContent !== prevStoredContent) {
+              void onContentChange(lastStoredContent).then(() => onSave());
+            } else {
+              onSave();
+            }
+          }
         }
       },
       after() {
         initialized = true;
       },
     });
+
+    // Return cleanup function
+    return () => {
+      handlersCleanup?.();
+      editorRoot.removeEventListener('keydown', nativeKeydown, true);
+    };
   });
 
   onDestroy(() => {

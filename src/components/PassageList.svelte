@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { passages, currentPassageIndex, galleryVisible } from '../lib/stores';
+  import { onMount } from 'svelte';
+  import { passages, currentPassageIndex, galleryVisible, isDirty } from '../lib/stores';
   import * as api from '../lib/tauri';
   import ConfirmDialog from './ConfirmDialog.svelte';
   import Resizable from './Resizable.svelte';
@@ -7,7 +8,6 @@
   let {
     passagesProp,
     currentIndex,
-    isDirtyProp,
     onSave,
     onLock,
     numImages,
@@ -17,7 +17,6 @@
   }: {
     passagesProp: any[];
     currentIndex: number;
-    isDirtyProp: boolean;
     onSave: () => void;
     onLock: () => void;
     numImages: number;
@@ -31,6 +30,13 @@
   // Find .ai passage index for navigation
   let aiPassageIdx = $derived(passagesProp.findIndex((p: any) => p.title === '.ai'));
   let showGallery = $derived(numImages > 0);
+
+  // Debug: use subscribe instead of $effect for store
+  onMount(() => {
+    return isDirty.subscribe((value) => {
+      console.log('[PassageList] isDirty.subscribe callback:', value, performance.now());
+    });
+  });
 
   let confirmDelete = $state(false);
   let pendingDeleteIndex = $state(-1);
@@ -140,7 +146,9 @@
     <button class="btn-icon" title="Add Passage" onclick={handleAdd}>
       <span class="material-icons icon">add</span>
     </button>
-    {#if isDirtyProp}
+    <!-- Debug: show raw value -->
+    <span style="color: red; font-size: 10px;">dirty={$isDirty}</span>
+    {#if $isDirty}
       <button class="btn-icon" title="Save" onclick={onSave}>
         <span class="material-icons icon">save</span>
       </button>

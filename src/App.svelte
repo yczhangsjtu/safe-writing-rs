@@ -50,6 +50,7 @@
     // Listen for state-changed events from backend
     listen<api.AppStateResponse>('state-changed', (event) => {
       const state = event.payload;
+      console.log('[App] state-changed received, is_dirty:', state.is_dirty, performance.now());
 
       const fileChanged = (lastCurrentFile === null && state.current_file !== null) ||
                           (lastCurrentFile !== null && state.current_file === null);
